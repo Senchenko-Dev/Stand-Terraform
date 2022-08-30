@@ -1,0 +1,32 @@
+- name: Common task for master and replica
+  block:
+
+    - name: ensure {{ backup.doc }} directory exist
+      file:
+        path: "{{ item.src }}"
+        state: "{{ item.state }}"
+        mode: 0750
+      with_items:
+        - { src: "{{ backup.doc }}", state: "absent" }
+        - { src: "{{ backup.doc }}", state: "directory" }
+
+    - name: backup old doc version directory
+      copy:
+        src: "{{ PGHOME_OLD }}/doc"
+        dest: "{{ backup.doc }}"
+        owner: postgres
+        group: postgres
+        mode: 0750
+        remote_src: yes
+
+    - name: copy readme.txt and releasenotes.json
+      copy:
+        src: "{{ item }}"
+        dest: "{{ backup.doc }}"
+        remote_src: yes
+      with_items:
+        - "{{ PGHOME_OLD }}/readme.txt"
+        - "{{ PGHOME_OLD }}/releasenotes.json"
+          
+  become: true
+  when: inventory_hostname != 'etcd'

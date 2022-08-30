@@ -1,0 +1,106 @@
+
+- name: Get IP from fact
+  set_fact:
+    ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+
+- name: Create nginx_group
+  group:
+    name: "{{ nginx_group | default('nginx') }}"
+    state: present
+  become: yes
+
+- name: Define PWD
+  set_fact:
+    nginx_pwd: "{{ secrets.nginx.nginx_os_user_pwd }}"
+  no_log: true
+  ignore_errors: yes
+
+- name: Define PWD - debug info when previous step failed
+  debug:
+    msg: "{{ nginx_os_user_pwd }}"
+  when: nginx_pwd is not defined
+
+- name: Create nginx_user
+  user:
+    name: "{{ nginx | default('nginx') }}"
+    group: "{{ nginx_group | default('nginx')}}"
+    password: "{{ nginx_pwd | password_hash('sha512') }}"
+    state: present
+    system: no
+    createhome: yes
+  become: yes
+
+- name: Create directories
+  block:
+    - name: Create docroot directory
+      file:
+        path: "{{item}}"
+        state: directory
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_group }}"
+        mode: 0755
+      become: yes
+      with_items:
+        - "{{ install_dir }}"
+        - "{{ install_dir }}/html"
+        - "{{ install_dir }}/sites-available"
+        - "{{ install_dir }}/upstreams"
+
+    - name: Create log directory
+      file:
+        path: "{{ nginx_log_dir }}"
+        state: directory
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_group }}"
+        mode: 0700
+      become: yes
+
+    - name: Create modules_location directory
+      file:
+        path: "{{ nginx_conf_dir }}/conf.d/modules_location"
+        state: directory
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_group }}"
+        mode: 0700
+      become: yes
+
+- name: Enable Nginx autostart
+  systemd:
+    enabled: yes
+    force: yes
+    name: nginx
+#    state: started
+  become: yes
+
+########-проверка на существующий файл-##########
+- name: Check if "nginx file" exists
+  stat:
+    path: "/etc/sudoers.d/nginx"
+  register: file_nginx_conf
+
+- name: Copy template
+  template:
+    src: nginx.sudoers.j2
+    dest: /etc/sudoers.d/nginx
+    owner: "root"
+    group: "root"
+  when: file_nginx_conf.stat.exists == false
+###############################################
+
+#- name: Add iptables rules for Nginx
+#  iptables:
+#    action: append
+#    chain: IN_public_allow
+#    state: present
+#    comment: added by ansible for Nginx
+#    ctstate: NEW,UNTRACKED
+#    jump: ACCEPT
+#    protocol: tcp
+##    destination_port: "{{ item }}"
+##  loop:
+##    - "{{nginx_http_port}}"
+#  become: yes
+#
+
+- debug:
+    msg: "  Сервис: nginx, порт {{ ip }}:{{ nginx_http_port }}, системный пользователь: {{ nginx_user }}, установлен в: {{ nginx_conf_dir }}, веб директория: {{ nginx_docroot }}"

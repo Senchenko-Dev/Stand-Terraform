@@ -1,0 +1,118 @@
+- name: Revert etcd
+  block:
+
+    - name: clean etcd db
+      include_role:
+        name: etcd
+        tasks_from: revert_clean_etcd_db.yml
+
+    - name: install prev etcd version
+      block:
+
+        - name: check prev saved version of etcd
+          find:
+            paths: "{{ backup.etcd }}/"
+            use_regex: no
+            patterns:  '*rpm'
+          register: etcd_distributive_exists
+
+        - name: remove installed new etcd
+          yum:
+            name: etcd
+            state: absent
+          ignore_errors: yes
+
+        - name: install prev etcd rpm from a local file
+          yum:
+            name: "{{ etcd_distributive_exists.files.0.path }}"
+            state: present
+          when: etcd_distributive_exists.matched|int != 0
+
+        - name: install prev etcd rpm from repo
+          yum:
+            name: etcd-{{ installed_version_etcd.json.etcdserver }}
+            state: latest
+          when: etcd_distributive_exists.matched|int == 0
+
+    - name: copy etcd files from {{ backup.etcd }}
+      copy:
+        src: "{{ backup.etcd }}{{ etcd_files.conf_dir }}/{{ item }}"
+        dest: "{{ etcd_files.conf_dir }}"
+        owner: postgres
+        group: postgres
+        mode: 0600
+        remote_src: yes
+      with_items:
+        - etcd.conf
+        - etcd.conf.base
+
+    - name: check exists backup shell profile
+      stat: path="{{ backup.etcd_intermediate }}{{ shell_profile_file }}"
+      register: bash_profile_exists
+
+    - name: revert shell profile
+      copy:
+        src: "{{ backup.etcd_intermediate }}{{ shell_profile_file }}"
+        dest: "{{ shell_profile_file }}"
+        remote_src: yes
+        owner: postgres
+        group: postgres
+      when: bash_profile_exists.stat.exists
+
+    - name: revert etcd service
+      copy:
+        src: "{{ backup_root_dir }}{{ service_path_dir }}/etcd.service"
+        dest: "{{ service_path_dir }}/etcd.service"
+        remote_src: yes
+        owner: root
+        group: root
+
+    - name: backup etcd data for current node
+      copy:
+        src: "{{ backup.etcd }}/db_backup/etcd"
+        dest: "/var/lib/"
+        owner: etcd
+        group: etcd
+        mode: 0700
+        remote_src: yes
+
+    - name: reload systemd and start service
+      systemd:
+        name: etcd
+        state: restarted
+        daemon_reload: yes
+        enabled: yes
+
+    - name: loop wait for etcd started
+      command:
+        cmd:  etcdctl cluster-health
+      register: result
+      until: result.stdout.find("cluster is healthy") != -1
+      retries: 10
+      delay: 1
+
+    - name: start patroni service
+      service:
+        name: patroni
+        state: started
+      when: "(inventory_hostname == 'master' and not (update_errors.hosts.master and update_errors.components.patroni)) or \
+             (inventory_hostname == 'replica' and not (update_errors.hosts.replica and update_errors.components.patroni))"
+
+    - name: turn off pause mode
+      block:
+
+        - name: turn on pause mode
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: false"
+          when: "inventory_hostname == 'master' and not (update_errors.hosts.master and update_errors.components.patroni)"
+      
+      rescue:
+
+        - name: it is normal
+          debug:
+            msg: "It is normal"
+
+  become: true

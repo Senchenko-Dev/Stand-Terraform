@@ -1,0 +1,59 @@
+- name: Ensure {{ backup_root_dir }}
+  file:
+    path: "{{ item.src }}"
+    state: "{{ item.state }}"
+    owner: postgres
+    group: postgres
+    mode: 0700
+  with_items:
+    - { src: "{{ backup_root_dir }}",                         state: absent }
+    - { src: "{{ backup_root_dir }}/{{ service_path_dir }}",  state: directory }
+  become: true
+
+- name: Backup all
+  block:
+    
+    - name: backup postgresql se
+      include_role:
+        name: postgresql
+        tasks_from: backup
+      when: postgres
+
+    - name: backup patroni
+      include_role:
+        name: patroni
+        tasks_from: backup
+      when: patroni
+
+    - name: backup HAProxy
+      include_role:
+        name: HAProxy
+        tasks_from: backup
+      when: haproxy
+
+    - name: backup pgbouncer
+      include_role:
+        name: pgbouncer
+        tasks_from: backup
+      when: pgbouncer
+
+    - name: backup doc
+      include_role:
+        name: doc
+        tasks_from: backup
+      when: documentations
+
+    - name: backup src scripts
+      include_role:
+        name: SRC
+        tasks_from: backup
+      when: SRC
+
+  become: true
+  when: inventory_hostname != 'etcd'
+
+- name: Backup etcd
+  include_role:
+    name: etcd
+    tasks_from: backup
+  when: etcd

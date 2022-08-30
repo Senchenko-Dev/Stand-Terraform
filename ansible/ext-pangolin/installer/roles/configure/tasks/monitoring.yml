@@ -1,0 +1,47 @@
+- name: Add host to monitoring master without patroni
+  uri:
+    url: "{{ monitoring_params.monitoring_url }}"
+    method: POST
+    body: '{"env": "{{ stand }}", "tag": "{{ monitoring_params.tag }}" , "os": "linuxdi", "diuid": "{{ diuid }}","hostname": "{{ item.hostname }}", "ip":"{{ item.address }}", "postfix":"postgres", "macro":[{"macro":"{$PGSQL_PORT}", "value":"{{ ports.pg }}" }]}'
+    body_format: json
+    headers:
+      Accept: "application/json"
+      Content-Type: "application/json"
+      Authorization: "{{ monitoring_params.token_main }"
+  with_items:
+    - { hostname: "{{ hostvars['master'].ansible_hostname }}", address: "{{ hostvars['master'].ansible_default_ipv4.address }}" }
+  delegate_to: localhost
+  run_once: true
+  when: not patroni
+
+- name: Add host to monitoring master with patroni
+  uri:
+    url: "{{ monitoring_params.monitoring_url }}"
+    method: POST
+    body: '{"env": "{{ stand }}", "tag": "{{ monitoring_params.tag }}" , "os": "linuxdi", "diuid": "{{ diuid }}","hostname": "{{ item.hostname }}", "ip":"{{ item.address }}", "postfix":"Patroni", "macro":[{"macro":"{$PGSQL_PORT}", "value":"{{ ports.pg }}" }]}'
+    body_format: json
+    headers:
+      Accept: "application/json"
+      Content-Type: "application/json"
+      Authorization: "{{ monitoring_params.token_main }"
+  with_items:
+    - { hostname: "{{ hostvars['master'].ansible_hostname }}", address: "{{ hostvars['master'].ansible_default_ipv4.address }}" }
+  delegate_to: localhost
+  run_once: true
+  when: patroni
+
+- name: Add host to monitoring replica
+  uri:
+    url: "{{ monitoring_params.monitoring_url }}"
+    method: POST
+    body: '{"env": "{{ stand }}", "tag": "{{ monitoring_params.tag }}" , "os": "linuxdi", "diuid": "{{ diuid }}","hostname": "{{ item.hostname }}", "ip":"{{ item.address }}", "postfix":"Patroni", "macro":[{"macro":"{$PGSQL_PORT}", "value":"{{ ports.pg }}" }]}'
+    body_format: json
+    headers:
+      Accept: "application/json"
+      Content-Type: "application/json"
+      Authorization: "{{ monitoring_params.token_main }"
+  with_items:
+    - { hostname: "{{ hostvars['replica'].ansible_hostname }}", address: "{{ hostvars['replica'].ansible_default_ipv4.address }}" }
+  delegate_to: localhost
+  run_once: true
+  when: installation_type == 'cluster'

@@ -1,0 +1,17 @@
+- name: Create Folder
+  file:
+    path: "{{mount_point}}"
+    state: directory
+
+- name: Create filesystem
+  filesystem:
+    fstype: ext4
+    dev: "{{device}}"
+
+- name: Mount Disk
+  mount:
+    path: "{{mount_point}}"
+    src: "{{device}}"
+    opts: defaults,nofail
+    state: mounted
+    fstype: ext4

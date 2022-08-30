@@ -1,0 +1,108 @@
+- name: Define version of current python interpreter
+  set_fact:
+    previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+- name: Define default old_ver
+  set_fact:
+    _useamerge_old_ver: "00.00.00"
+  when: _useamerge_old_ver is undefined
+
+- name: Define default new_ver
+  set_fact:
+    _useamerge_new_ver: "00.00.00"
+  when: _useamerge_new_ver is undefined
+
+- name: Define default root_path
+  set_fact:
+    _useamerge_root_path: ""
+  when: _useamerge_root_path is undefined
+  
+- name: Define default result_cfg_file
+  set_fact:
+    _useamerge_result_cfg_file: ""
+  when: _useamerge_result_cfg_file is undefined
+  
+- name: Define default new_cfg_file
+  set_fact:
+    _useamerge_new_cfg_file: ""
+  when: _useamerge_new_cfg_file is undefined
+
+- name: Define default only_pgse
+  set_fact:
+    _useamerge_only_pgse: False
+  when: _useamerge_only_pgse is undefined
+
+- name: Define default pghba_mode
+  set_fact:
+    _useamerge_pghba_mode: "merge"
+  when: _useamerge_pghba_mode is undefined
+
+- name: Define default pghba_users
+  set_fact:
+    _useamerge_pghba_users: ""
+  when: _useamerge_pghba_users is undefined
+
+- name: Clear result
+  set_fact:
+    _useamerge_result: ""
+
+- name: Run auto merge config module
+  block:
+
+    - name: copy merge config data
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dst }}"
+        owner: postgres
+        group: postgres
+        mode: 0600
+      with_items:
+        - { src: "{{ playbook_dir }}/library/config_auto_merge", dst: "{{ REMOTE_TMP }}/"}
+        - { src: "{{ custom_config }}",                          dst: "{{ merge_cfg_root_dir }}/"}
+
+    - name: copy differ template
+      template:
+        src: diff_cfg.txt.j2
+        dest: "{{ merge_cfg_root_dir }}/diff_cfg.txt"
+        owner: postgres
+        group: postgres
+        mode: 0600
+
+    - name: save custom_config name
+      set_fact:
+        custom_config_name: "{{ custom_config.split('/')[-1] }}"
+
+    - name: use merge config module
+      config_auto_merge:
+        old_cfg_file: "{{ _useamerge_old_cfg_file }}"
+        new_cfg_file: "{{ _useamerge_new_cfg_file }}"
+        result_cfg_file: "{{ _useamerge_result_cfg_file }}"
+        old_ver: "{{ _useamerge_old_ver }}"
+        new_ver: "{{ _useamerge_new_ver }}"
+        root_path: "{{ _useamerge_root_path }}"
+        only_pgse: "{{ _useamerge_only_pgse }}"
+        pghba_mode: "{{ _useamerge_pghba_mode }}"
+        pghba_users: "{{ _useamerge_pghba_users }}"
+        custom_cfg_name: "{{ custom_config_name }}"
+      register: is_success      
+      become_user: postgres
+
+  become: true
+
+- name: Check auto merge result
+  assert:
+    that: is_success.message == 0
+    fail_msg: "Result auto merge is incorrect"
+    success_msg: "Result auto merge is correct"
+
+- name: Save auto merge result
+  set_fact:
+    _useamerge_result: "{{ is_success.original_message }}"
+
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ previous_python_interpreter }}'

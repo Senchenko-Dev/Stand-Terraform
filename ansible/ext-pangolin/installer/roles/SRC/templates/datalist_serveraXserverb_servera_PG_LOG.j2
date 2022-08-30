@@ -1,0 +1,62 @@
+DATALIST "{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}_{{ hostvars['master'].ansible_hostname }}_PG_LOG"
+GROUP "DININFRA"
+DESCRIPTION PostgreSQL_SE"
+RECONNECT
+DYNAMIC 2 2
+PREEXEC "{{ pg_major_version }}_pg_se_archlogs.sh -o start" -on_host "{{ hostvars['master'].ansible_fqdn }}"
+POSTEXEC "{{ pg_major_version }}_pg_se_archlogs.sh -o stop" -on_host "{{ hostvars['master'].ansible_fqdn }}"
+DEFAULTS
+{
+    FILESYSTEM
+    {
+        -vss    no_fallback
+    } -protect days 3 -keepcatalog same_as_dataprotection
+    RAWDISK
+    {
+
+    }
+}
+
+DEVICE "{{ device }}"
+{
+}
+
+FILESYSTEM "{{ db_logs_fs }}_1" {{ hostvars['master'].ansible_fqdn }}:"{{ db_logs_fs }}"
+{
+    -trees
+        "{{ PGBACKUP }}/wal"
+	-only
+        "*0.gz"
+        "*1.gz"
+        "*2.gz"
+        "*3.gz"
+        "*4.gz"
+        "*5.gz"
+        "*6.gz"
+        "*7.gz"
+}
+
+FILESYSTEM "{{ db_logs_fs }}_other" {{ hostvars['master'].ansible_fqdn }}:"{{ db_logs_fs }}"
+{
+    -trees
+        "{{ PGBACKUP }}/wal"
+	-skip
+        "*.gz.part"
+        "*0.gz"
+        "*1.gz"
+        "*2.gz"
+        "*3.gz"
+        "*4.gz"
+        "*5.gz"
+        "*6.gz"
+        "*7.gz"
+}
+
+FILESYSTEM "{{ db_logs_fs }}_label" {{ hostvars['master'].ansible_fqdn }}:"{{ db_logs_fs }}" 
+{
+    -trees
+        "{{PGBACKUP}}"
+                -only
+                "backup_label"
+                "tablespace_map"
+}

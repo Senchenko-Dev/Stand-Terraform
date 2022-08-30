@@ -1,0 +1,138 @@
+- name: Check important cases before start database scenario
+  block:
+
+    - name: check file with information about stopped hosts
+      stat:
+        path: "{{ control_files.tmp_dir }}/{{ control_files.json_file }}"
+      register: json_with_stopped_nodes
+
+    - name: set error flag if file is not exists
+      set_fact:
+        control_error_flag: true
+      when: not json_with_stopped_nodes.stat.exists
+
+    - name: check that json file is exists
+      assert:
+        that: json_with_stopped_nodes.stat.exists
+        fail_msg: "{{ control_msgs.fails.json_not_exists }}"
+
+  become: true
+  become_user: postgres
+
+- name: Fetch file
+  block:
+
+    - name: fetch json file from master
+      fetch:
+        src: '{{ control_files.tmp_dir }}/{{ control_files.json_file }}'
+        dest: '{{ REMOTE_TMP }}'
+
+    - name: read json file with roles of nodes
+      include_vars:
+        file: "{{ REMOTE_TMP }}/master/{{ control_files.tmp_dir }}/{{ control_files.json_file }}"
+        name: nodes
+
+    - name: define variables with roles of nodes if cluster stopped
+      set_fact:
+        previous_master: "{{ nodes.previous_master }}"
+        stopped_hosts: "{{ nodes.stopped_hosts }}"
+      when: nodes.previous_master is defined
+
+    - name: define variables for standalone
+      set_fact:
+        stopped_hosts: "{{ nodes.stopped_hosts }}"
+      when: nodes.previous_master is undefined
+
+    - name: import role for check that database and patroni stopped
+      include_tasks: control_pre_check.yml
+      vars:
+        _controlprecheck_is_db_and_patroni_stopped: true
+      with_items: '{{ stopped_hosts }}'
+      when: ansible_fqdn == item
+
+  become: true
+  when: not control_error_flag
+
+- name: Start scenario start database
+  block:
+
+    - name: start database on master
+      block:
+
+        - name: start patroni service on master
+          service:
+            name: patroni
+            state: started
+          with_items: '{{ stopped_hosts }}'
+          when: ansible_fqdn == item
+
+        - name: check that postgresql is started
+          shell: '{{ PGHOME }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ ports.pg }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 10
+          become_user: postgres
+
+      when: previous_master is defined and ansible_fqdn == previous_master
+
+    - name: start database on replica or standalone host
+      block:
+
+        - name: start patroni service on replica or standalone server
+          service:
+            name: patroni
+            state: started
+          with_items: '{{ stopped_hosts }}'
+          when: ansible_fqdn == item and patroni
+
+        - name: start database service on replica on standalone server
+          service:
+            name: postgresql
+            state: started
+          with_items: '{{ stopped_hosts }}'
+          when: ansible_fqdn == item and not patroni
+
+        - name: check that postgresql is started
+          shell: '{{ PGHOME }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ ports.pg }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 10
+          become_user: postgres
+          with_items: '{{ stopped_hosts }}'
+          when: ansible_fqdn == item
+
+        - name: turn on synchronous mode and check lag
+          include_role:
+            name: patroni
+            tasks_from: update_wait_cluster_synchronization
+          run_once: true
+
+      when: previous_master is undefined or ansible_fqdn != previous_master
+
+    - name: enable technical users and monitoring
+      import_tasks: control_monitoring_operations.yml
+      vars:
+        operation: enable
+      when: "monitoring_zabbix is defined and monitoring_zabbix"
+
+    - name: print result message
+      debug:
+        msg: "{{ control_msgs.ok.start_database }}"
+      run_once: true
+
+  become: true
+  when: not control_error_flag
+
+  rescue:
+
+    - name: print variable with message
+      debug:
+        msg: "{{ control_msgs.fails.unexpected }}"
+      run_once: true
+
+  always:
+
+    - name: clear remote tmp directory
+      file:
+        path: "{{ control_files.tmp_dir }}"
+        state: absent

@@ -1,0 +1,386 @@
+- name: Get IP from fact
+  set_fact:
+    ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+
+- name: Create folder for log
+  file:
+    path: /mnt/log
+    state: directory
+
+- name: Start and enable firewalld.
+  service:
+     name: firewalld
+     state: started
+     enabled: true
+
+- name: Settings firewall
+  firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    state: enabled
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+  loop:
+     - 6443/tcp
+     - 2379-2380/tcp
+     - 10250/tcp
+     - 10251/tcp
+     - 10252/tcp
+     - 10255/tcp
+     - 8472/udp
+     - 30000-32767/tcp
+
+- firewalld:
+    masquerade: yes
+    state: enabled
+    permanent: yes
+
+- name: reload service firewalld
+  systemd:
+    name: firewalld
+    state: reloaded
+
+- name: install unzip | docker | container-selinux | selinux-policy-base
+  yum:
+    name:
+      - unzip
+      - docker
+      - container-selinux
+      - selinux-policy-base
+    state: present
+
+- name: Enable Docker
+  systemd:
+    name: docker
+    enabled: yes
+
+- name: Start Docker
+  systemd:
+    name: docker
+    state: started
+
+- name: Download k3s
+  get_url:
+    url: http://10.42.4.125/mirror/docker/images/k3s/k3s
+    dest: /usr/bin
+    mode: '0777'
+
+
+- name: Download k3s-selinux
+  get_url:
+    url: http://10.42.4.125/mirror/docker/images/k3s/k3s-selinux-0.4-1.el7.noarch.rpm
+    dest: /usr/bin
+    mode: '0777'
+
+
+- name: Install k3s-selinux
+  shell: rpm -ivh --nodeps --force k3s-selinux-0.4-1.el7.noarch.rpm
+  args:
+    chdir: /usr/bin
+
+
+- name: Download install.sh
+  get_url:
+    url: http://10.42.4.125/mirror/docker/images/k3s/install.sh
+    dest: /usr/bin
+    mode: '0777'
+
+
+- name: INSTALL k3s
+  shell: ./install.sh
+  args:
+    chdir: /usr/bin
+  environment:
+    INSTALL_K3S_BIN_DIR: /usr/bin
+    INSTALL_K3S_SKIP_DOWNLOAD: "true"
+
+
+- name: delete string
+  lineinfile:
+    dest: /etc/docker/daemon.json
+    state: absent
+    regexp: "{}"
+
+- name: settings docker
+  blockinfile:
+    path: /etc/docker/daemon.json
+    block: |
+      {
+        "insecure-registries" : ["10.42.4.125:5000"],
+        "registry-mirrors": ["10.42.4.125:5000"]
+      }
+
+- name: delete string
+  lineinfile:
+    dest: /etc/docker/daemon.json
+    state: absent
+    regexp: "#"
+
+- name: Create file register.yaml
+  file:
+    path: /etc/rancher/k3s/registries.yaml
+    state: touch
+
+- name: add in file register.yaml settings
+  blockinfile:
+    path: /etc/rancher/k3s/registries.yaml
+    block: |
+      mirrors:
+        docker.io:
+          endpoint:
+            - "http://10.42.4.125:5000"
+        "10.42.4.125:5000":
+          endpoint:
+            - "http://10.42.4.125:5000"
+        quay.io:
+          endpoint:
+            - "http://10.42.4.125:5000"
+        gcr.io:
+          endpoint:
+            - "http://10.42.4.125:5000"
+
+- name: Restart Docker
+  systemd:
+    name: docker
+    state: restarted
+
+- name: Restart k3s
+  systemd:
+    name: k3s
+    state: restarted
+
+- name: cluster name
+  shell: kubectl get nodes | awk '{print $1}' | sed 's/NAME//' |  tr -d '\n'
+  register: node
+
+- debug:
+    msg: "Имя кластера: {{node.stdout}}"
+
+- name: Download images nginx
+  shell: docker pull 10.42.4.125:5000/nginx
+
+- name: Download AWX
+  get_url:
+    url: http://10.42.4.125/mirror/docker/images/awx/other/awx-operator.zip
+    dest: /root
+
+- name: unzip awx-operator
+  unarchive:
+    src: /root/awx-operator.zip
+    dest: /root
+    remote_src: yes
+
+- name: replace all quay.io
+  shell: grep -Rl quay.io * | xargs sed -i "s|quay.io|10.42.4.125:5000|g"
+  args:
+    chdir: /root/awx-operator
+
+- name: Download kustomize
+  get_url:
+    url: http://10.42.4.125/mirror/docker/images/k3s/kustomize
+    dest: /usr/bin
+    mode: '0777'
+
+- name: Crete file kustomization.yaml
+  file:
+    path: /root/awx-operator/kustomization.yaml
+    state: touch
+
+- name: Add in file kustomization.yaml
+  blockinfile:
+    path: /root/awx-operator/kustomization.yaml
+    block: |
+      apiVersion: kustomize.config.k8s.io/v1beta1
+      kind: Kustomization
+      resources:
+        - config/default/
+      images:
+        - name: 10.42.4.125:5000/ansible/awx-operator
+          newTag: 0.21.0
+      namespace: awx
+
+- name: Delete string
+  lineinfile:
+    dest: /root/awx-operator/kustomization.yaml
+    state: absent
+    regexp: "#"
+
+- name: Kustomize Build
+  shell: kustomize build . > 111.yml
+  args:
+    chdir: /root/awx-operator
+
+- name: kubectl Apply
+  shell: kubectl apply -f 111.yml
+  args:
+    chdir: /root/awx-operator
+
+- name: namespace for kubectl
+  shell: kubectl config set-context --current --namespace=awx
+
+- name: Check it is Apply
+  stat:
+    path: /root/awx-operator/awx-deploy.yaml
+  register: awx
+
+- name: Create file awx-deploy.yaml
+  file:
+    path: /root/awx-operator/awx-deploy.yaml
+    state: touch
+
+- name: Apply
+  shell: |
+    cat <<EOF | kubectl create -f -
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: static-data-pvc
+      namespace: awx
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 5Gi
+    EOF
+  when: awx.stat.exists == false
+
+- name:  Add in file awx-deploy.yaml
+  blockinfile:
+    path: /root/awx-operator/awx-deploy.yaml
+    block: |
+      ---
+      apiVersion: awx.ansible.com/v1beta1
+      kind: AWX
+      metadata:
+        name: awx
+      spec:
+        service_type: nodeport
+        nodeport_port: {{awx_port}}
+        projects_persistence: true
+        projects_storage_access_mode: ReadWriteOnce
+        web_extra_volume_mounts: |
+          - name: static-data
+            mountPath: /var/lib/projects
+        extra_volumes: |
+          - name: static-data
+            persistentVolumeClaim:
+              claimName: static-data-pvc
+
+- name: kubectl apply -f awx-deploy.yaml
+  shell: kubectl apply -f awx-deploy.yaml
+  args:
+    chdir: /root/awx-operator
+
+- name: Create POD Nginx
+  shell: |
+    cat <<EOF | kubectl create -f -
+    apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+      name: my-pv
+    spec:
+      capacity:
+        storage: 10Gi
+      volumeMode: Filesystem
+      accessModes:
+      - ReadWriteOnce
+      persistentVolumeReclaimPolicy: Delete
+      storageClassName: local-storage
+      local:
+        path: /mnt/log
+      nodeAffinity:
+        required:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+              - {{node.stdout}}
+    ---
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: my-pv-claim
+    spec:
+      storageClassName: local-storage
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: nginx-deployment
+      labels:
+        name: nginx
+    spec:
+      revisionHistoryLimit: 10
+      selector:
+        matchLabels:
+          name: nginx
+      strategy:
+        rollingUpdate:
+          maxSurge: 1
+          maxUnavailable: 1
+        type: RollingUpdate
+      template:
+        metadata:
+          creationTimestamp: null
+          labels:
+            name: nginx
+        spec:
+          volumes:
+          - name: my-pv
+            persistentVolumeClaim:
+              claimName: my-pv-claim
+          containers:
+            - name: nginx
+              image: 10.42.4.125:5000/nginx
+              ports:
+              - containerPort: 80
+              volumeMounts:
+              - mountPath: "/mnt/log"
+                name: my-pv
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: nginx
+      labels:
+        name: nginx
+    spec:
+      type: NodePort
+      ports:
+        - port: 80
+          nodePort: {{pod_nginx_port}}
+          name: http
+      selector:
+        name: nginx
+    EOF
+
+- name: Wait for WEB UI come up ~700 seconds left....
+  uri:
+    url: "http://{{ip}}:{{ awx_port }}/api/"
+    follow_redirects: none
+    method: GET
+  register: result
+  until: result.status == 200
+  retries: 70 # 70*10=700 sec
+  delay: 10
+
+- name: Create Admin Password
+  shell: "kubectl exec -i deploy/awx -c awx-web -- awx-manage update_password --username admin --password {{ secrets.awx.admin }}"
+
+- debug:
+    msg: "Логин: admin   Пароль: {{ secrets.awx.admin }}"
+
+- debug:
+    msg: "AWX Web UI на сокете http://{{ip}}:{{awx_port}} "
+
+- debug:
+    msg: "Nginx Web UI на сокете http://{{ip}}:{{pod_nginx_port}} "
+
+

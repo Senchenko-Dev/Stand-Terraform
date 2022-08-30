@@ -1,0 +1,11 @@
+#!/bin/bash
+ 
+for ii in $({{ PGHOME_OLD }}/bin/psql -h 127.0.0.1 -p {{ PGPORT_OLD }} -tc "select datname from pg_database where datallowconn")
+do
+{{ PGHOME_OLD }}/bin/psql -h 127.0.0.1 -p {{ PGPORT_OLD }} -tc "SELECT rpad(e.extname, 30) AS Name \
+                        , rpad(e.extversion, 10) AS Version \
+                        , rpad('$ii', 50) \
+                FROM pg_catalog.pg_extension e\
+                WHERE e.extname not in ('plpgsql', 'pgse_backup', 'pg_cron', 'pgaudit', 'pg_pathman', 'pg_repack', 'pgstattuple', 'pg_stat_statements', 'auto_explain')" \
+        $ii
+done

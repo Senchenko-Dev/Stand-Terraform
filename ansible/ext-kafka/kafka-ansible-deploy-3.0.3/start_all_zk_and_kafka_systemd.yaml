@@ -1,0 +1,29 @@
+- hosts: KafkaNodes:ZookeeperNodes
+  gather_facts: no
+  become: yes
+  roles:
+     - select_deploy_mode
+     - check_deploy_config_settings
+     - custom_jdk
+     - get_generate_and_check_ports
+     - cleanup_work_dirs
+     - copy_distro_to_server
+     - deploy_config
+     - kafka_se_distro_check
+     - set_zookeeper_props
+     - set_zookeeper_jmx_props
+     - start_zookeeper_systemd
+     - set_kafka_props
+     - set_kafka_jmx_props
+     - set_kafka_cert
+- hosts: localhost
+  connection: local
+  roles:
+     - generate_keys_for_ssl_configs
+- hosts: KafkaNodes:ZookeeperNodes
+  gather_facts: no
+  become: yes
+  roles:
+     - set_security_configs_for_ssl
+     - start_kafka_systemd
+     - summary_information

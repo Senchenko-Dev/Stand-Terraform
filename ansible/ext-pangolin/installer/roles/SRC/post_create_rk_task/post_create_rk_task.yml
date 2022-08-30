@@ -1,0 +1,7 @@
+---
+- hosts: cell_server
+  vars:
+    ansible_user: "{{ server_user_name }}"
+    ansible_ssh_pass: "{{ server_user_pass }}"
+  roles:
+    - roles/post_create_rk_task

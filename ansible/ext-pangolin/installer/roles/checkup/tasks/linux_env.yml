@@ -1,0 +1,85 @@
+- name: Prepare linux host
+  block:
+
+    # When deploing on clean machine ansible "package" module not available, because python-module-rpm no installed. Install it manually.
+    - name: install required packages on new machine Alt
+      command:
+        cmd: "apt-get -y install python-module-rpm python3-module-rpm python-module-pip python3-module-pip"
+      become: true
+      when: ansible_os_family == 'Altlinux'
+
+    - name: gather packages info
+      package_facts:
+        manager: "auto"
+      no_log: "{{ nolog }}"
+
+    - name: add repos
+      yum_repository:
+        name:        "{{ item.name }}"
+        description: "{{ item.name }}"
+        file:        "{{ item.file }}"
+        baseurl:     "{{ item.baseurl }}"
+        enabled:      yes
+        gpgcheck:     no
+      with_items: "{{ linux_repos }}"
+      when: (ansible_os_family == "RedHat") and item.enabled
+
+    - name: include vars
+      include_vars:
+        file: "{% if ansible_os_family == 'RedHat' %}\
+                required_packages-rhel.yml\
+              {% elif ansible_os_family == 'Altlinux' %}\
+                required_packages-altlinux.yml\
+              {% elif ansible_os_family == 'Debian' %}\
+                required_packages-ubuntu.yml\
+              {% endif %}"
+
+    - name: install packages
+      package:
+        state: present
+        name: "{{ item }}"
+      with_items: "{{ required_packages }}"
+
+    - name: allow loading modules from custom directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "{{ alt_security_dir }}/python-trust"
+        - "{{ alt_security_dir }}/perl-trust"
+      when: ansible_os_family == "Altlinux"
+
+    - name: create reserve storage of free space
+      shell:
+        cmd: "dd if=/dev/zero of=/{{ PGDATA.replace('/', ' ').split().0 }}/sos bs=1M count={{ sos_file_size }}"
+      when: "pgdata_exists.stat.exists and sos_file_size > 0 and inventory_hostname != 'etcd'"
+
+    - name: clear remote tmp directory
+      file:
+        path: "{{ REMOTE_TMP }}"
+        state: absent
+
+    - name: create remote tmp directory
+      file:
+        path: "{{ REMOTE_TMP }}"
+        state: directory
+        mode: '0777'
+        owner: '{{ ansible_user }}'
+        group: '{{ ansible_user }}'
+        recurse: yes
+
+    - name: create new group and user
+      block:
+
+        - name: create postgres group
+          group:
+            name: postgres
+            state: present
+
+        - name: create postgres user on etcd host
+          user:
+            name: postgres
+            group: postgres
+            comment: User for PostgreSQL database
+
+  become: true

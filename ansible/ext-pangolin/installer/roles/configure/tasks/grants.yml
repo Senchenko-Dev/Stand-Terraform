@@ -1,0 +1,459 @@
+---
+- name: Grants
+  block:
+
+    - name: loggin as postgres user
+      block:
+
+        - name: import task for apply sql scripts
+          import_tasks: update_apply_sql_scripts.yml
+          vars:
+            monitoring_php_script: true
+
+        - name: tune technical roles
+          postgresql_query:
+            query: "{{ item }}"
+            port: "{{ ports.pg }}"
+          with_items:
+            - COMMENT ON ROLE zabbix_oasubd IS 'zabbix_oasubd';
+            - ALTER USER zabbix_oasubd SET default_transaction_read_only = on;
+            - ALTER USER zabbix_oasubd WITH NOSUPERUSER connection LIMIT 10;
+            - GRANT USAGE ON SCHEMA backup TO pg_monitor;
+            - GRANT SELECT ON ALL TABLES IN SCHEMA backup TO pg_monitor;
+            - GRANT pg_monitor, pg_read_all_settings, pg_read_all_stats TO zabbix_oasubd;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_ls_dir(text) TO zabbix_oasubd;
+#            - GRANT USAGE on SCHEMA squeeze TO zabbix_oasubd ;
+#            - GRANT SELECT on ALL tables in schema squeeze TO zabbix_oasubd ;
+            - COMMENT ON ROLE monitoring_php IS 'monitoring_php';
+            - ALTER USER monitoring_php WITH nosuperuser CreateRole;
+            - GRANT pg_monitor TO monitoring_php;
+            - GRANT pg_read_all_stats TO monitoring_php;
+            - GRANT pg_read_all_settings TO monitoring_php;
+            - GRANT pg_stat_scan_tables TO monitoring_php;
+            - GRANT pg_signal_backend TO monitoring_php;
+            - GRANT pg_read_server_files TO monitoring_php;
+            - GRANT pg_write_server_files TO monitoring_php;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_reload_conf TO monitoring_php;
+            - GRANT EXECUTE ON FUNCTION get_role_passwd TO monitoring_php;
+            - GRANT EXECUTE ON FUNCTION pg_read_file(filename text) TO monitoring_php;
+            - GRANT EXECUTE ON FUNCTION pg_read_binary_file(filename text) TO monitoring_php;
+            - GRANT EXECUTE ON FUNCTION check_admin_protect_is_on TO monitoring_php;
+            - GRANT EXECUTE ON FUNCTION check_ldap_is_on TO monitoring_php;
+            - GRANT USAGE ON SCHEMA ext TO monitoring_php;
+            - ALTER USER monitoring_php WITH connection LIMIT 10;
+            - COMMENT ON ROLE auditor IS 'ZNO39375262';
+            - ALTER USER auditor SET default_transaction_read_only = on;
+            - GRANT SELECT ON pg_catalog.pg_shadow TO auditor;
+
+        - name: set search path for postgres
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: "{{ item }}"
+          with_items:
+      #TODO - GRANT SELECT ON PG_CATALOG.PG_SHADOW TO {{ sec_admin }};
+            - ALTER ROLE postgres SET search_path TO public;
+
+        - name: tune roles for "{{ as_group }}"
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: "{{ item }}"
+          with_items:
+            - GRANT CREATE ON TABLESPACE "{{ tablespace_name }}" TO "{{ as_group }}";
+            - GRANT CREATE ON DATABASE "{{ db_name }}" TO "{{ as_group }}";
+          when: "'update' not in action_type"
+
+        - name: tune roles for schema public
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ item }}"
+            query: 'REVOKE ALL ON SCHEMA public FROM public;'
+          with_items:
+            - postgres
+            - template1
+            - "{{ db_name }}"
+          when: "'update' not in action_type"
+
+        - name: revoke previus rights for ext schema
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ item.datname }}"
+            query: REVOKE ALL ON SCHEMA ext FROM public
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: add search_path
+          include_role:
+            name: configure
+            tasks_from: search_path.yml
+          vars:
+            install_users: '{{ users_for.install }}'
+            update_users:  '{{ users_for.update }}'
+          loop:
+            - { install: "{{ as_admins }}", update: "{{ as_group }}" }
+            - { install: "{{ support }}",   update: "{{ db_admin }}" }
+            - { install: "{{ as_TUZ }}",    update: "{{ TUZ_group }}" }
+          loop_control:
+            loop_var: users_for
+        #- name: grant all privs on DB to as_admins
+        #  postgresql_query:
+        #    port: "{{ ports.pg }}"
+        #    query: 'GRANT ALL PRIVILEGES ON DATABASE "{{ db_name }}" TO "{{ as_group }}";'
+        #  when: "db_name|length > 0 and tablespace_name|length > 0"
+
+        - name: grant all privs on schema to as_admins and db_admins, if DEV
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ db_name }}"
+            query: 'GRANT ALL PRIVILEGES ON SCHEMA "{{ schema_name }}" TO "{{ item }}";'
+          with_items:
+            - "{{ as_group }}"
+            - "{{ db_admin }}"
+          when: "stand == 'dev' and schema_status.changed"
+
+        - name: grant all privs on schema to as_admins, if notDEV
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ db_name }}"
+            query: 'GRANT ALL PRIVILEGES ON SCHEMA "{{ schema_name }}" TO "{{ as_group }}";'
+          when: "stand != 'dev' and schema_status.changed"
+
+        - name: grant USAGE on schema to {{ TUZ_group }}
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ db_name }}"
+            query: 'GRANT USAGE ON SCHEMA "{{ schema_name }}" TO "{{ TUZ_group }}";'
+          when: "schema_status.changed"
+
+        - name: grant USAGE on ext schema to {{ as_group }}
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ item.datname }}"
+            query: GRANT USAGE ON SCHEMA ext TO "{{ as_group }}"
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: grant USAGE on ext schema to {{ TUZ_group }}
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ item.datname }}"
+            query: GRANT USAGE ON SCHEMA ext TO "{{ TUZ_group }}"
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: grant USAGE, SELECT on SEQUENCES schema hint_plan to {{ as_group }}
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ item.datname }}"
+            query: GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA hint_plan TO "{{ as_group }}"
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: grant USAGE on hint_plan schema to {{ TUZ_group }}
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ item.datname }}"
+            query: GRANT USAGE ON SCHEMA hint_plan TO "{{ TUZ_group }}"
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: grant SELECT, INSERT, UPDATE, DELETE on hint_plan.hints to {{ as_group }}
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ item.datname }}"
+            query: GRANT SELECT, INSERT, UPDATE, DELETE ON hint_plan.hints TO "{{ as_group }}"
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: grant SELECT on hint_plan.hints to {{ TUZ_group }}
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ item.datname }}"
+            query: GRANT SELECT ON hint_plan.hints TO "{{ TUZ_group }}"
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: tune PAM roles and as_admin_read
+          postgresql_query:
+            query: "{{ item }}"
+            port: "{{ ports.pg }}"
+            db: "{{ db_name }}"
+          with_items:
+            - GRANT CONNECT ON DATABASE "{{ db_name }}" TO "all-sa-pam19002";
+            - GRANT CONNECT ON DATABASE "{{ db_name }}" TO "all-sa-pam19002_ro";
+            - GRANT USAGE ON SCHEMA "{{ schema_name }}" TO "all-sa-pam19002_ro";
+            - GRANT SELECT ON ALL TABLES IN SCHEMA "{{ schema_name }}" TO "all-sa-pam19002_ro";
+            - GRANT USAGE ON ALL SEQUENCES IN SCHEMA "{{ schema_name }}" TO "all-sa-pam19002_ro";
+            - GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA "{{ schema_name }}" TO "all-sa-pam19002_ro";
+            - ALTER ROLE "all-sa-pam19002_ro" SET SEARCH_PATH = "{{ schema_name }}";
+            - GRANT CONNECT ON DATABASE "{{ db_name }}" TO "as_admin_read";
+            - GRANT USAGE ON SCHEMA "{{ schema_name }}" TO "as_admin_read";
+            - GRANT SELECT ON ALL TABLES IN SCHEMA "{{ schema_name }}" TO "as_admin_read";
+            - GRANT USAGE ON ALL SEQUENCES IN SCHEMA "{{ schema_name }}" TO "as_admin_read";
+            - GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA "{{ schema_name }}" TO "as_admin_read";
+            - ALTER ROLE as_admin_read SET SEARCH_PATH = "{{ schema_name }}";
+          when: "schema_status.changed"
+
+        - name: grant PAM roles
+          postgresql_query:
+            query: "{{ item }}"
+            port: "{{ ports.pg }}"
+          with_items:
+            - GRANT PG_READ_ALL_SETTINGS TO "all-sa-pam19002_ro";
+            - GRANT PG_READ_ALL_STATS TO "all-sa-pam19002_ro";
+            - GRANT PG_STAT_SCAN_TABLES TO "all-sa-pam19002_ro";
+            - GRANT PG_SIGNAL_BACKEND TO "all-sa-pam19002_ro";
+            - GRANT PG_MONITOR TO "all-sa-pam19002_ro";
+            - GRANT "all-sa-pam-group" TO "all-sa-pam19002";
+            - GRANT "{{ db_admin }}" TO "all-sa-pam19002";
+            - GRANT "all-sa-pam-group" TO "all-sa-pam19002_ro";
+            - GRANT PG_READ_ALL_SETTINGS TO "as_admin_read";
+            - GRANT PG_READ_ALL_STATS TO "as_admin_read";
+            - GRANT PG_STAT_SCAN_TABLES TO "as_admin_read";
+            - GRANT PG_SIGNAL_BACKEND TO "as_admin_read";
+            - GRANT PG_MONITOR TO "as_admin_read";
+
+      environment:
+        - PGHOST: "{{ ansible_fqdn }}"
+        - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+        - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+
+    - name: grant privs on schema to {{ TUZ_group }}
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'GRANT SELECT, UPDATE, INSERT, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA "{{ schema_name }}" TO "{{ TUZ_group }}";'
+      when: "schema_status.changed"
+
+    - name: grant all privs on sequences to as_admins and {{ TUZ_group }}
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA "{{ schema_name }}" TO "{{ item }}";'
+      with_items:
+        - "{{ TUZ_group }}"
+        - "{{ as_group }}"
+      when: "schema_status.changed"
+
+    - name: grant all privs on functions to as_admins
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA "{{ schema_name }}" TO "{{ as_group }}";'
+      when: "schema_status.changed"
+
+    - name: grant all privs on functions to {{ TUZ_group }}
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA "{{ schema_name }}" TO "{{ TUZ_group }}";'
+      when: "schema_status.changed"
+
+    - name: grant all privs on routine to as_admins
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'GRANT ALL PRIVILEGES ON ALL ROUTINES IN SCHEMA "{{ schema_name }}" TO "{{ as_group }}";'
+      when: "schema_status.changed"
+
+    - name: grant execute on routine to {{ TUZ_group }}
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'GRANT EXECUTE ON ALL ROUTINES IN SCHEMA "{{ schema_name }}" TO "{{ TUZ_group }}";'
+      when: "schema_status.changed"
+
+    - name: grant all privs on procedures to as_admins
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'GRANT ALL PRIVILEGES ON ALL PROCEDURES IN SCHEMA "{{ schema_name }}" TO "{{ as_group }}";'
+      when: "schema_status.changed"
+
+    - name: grant execute on procedures to {{ TUZ_group }}
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA "{{ schema_name }}" TO "{{ TUZ_group }}";'
+      when: "schema_status.changed"
+
+    - name: alter default privs on schema tables {{ TUZ_group }}
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: "{{ item }}"
+      with_items:
+          - ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO "{{ TUZ_group }}";
+          - ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT SELECT ON TABLES TO "as_admin_read";
+          - ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT SELECT ON TABLES TO "all-sa-pam19002_ro";
+      when: "schema_status.changed"
+
+    - name: alter default privs on schema tables as_admins
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT ALL PRIVILEGES ON TABLES TO "{{ as_group }}";'
+      when: "schema_status.changed"
+
+    - name: alter default privs on ext schema tables {{ as_group }}
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        query: ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT ALL ON TABLES TO "{{ as_group }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: alter default privs on ext schema tables {{ TUZ_group }}
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        query: ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT ALL ON TABLES TO "{{ TUZ_group }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: alter default privs on schema sequences
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT ALL PRIVILEGES ON SEQUENCES TO "{{ item }}";'
+      with_items:
+        - "{{ TUZ_group }}"
+        - "{{ as_group }}"
+      when: "schema_status.changed"
+
+    - name: alter default privs on schema sequences to as_admin_read
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: "{{ item }}"
+      with_items:
+          - ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT USAGE ON SEQUENCES TO "as_admin_read";
+          - ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT USAGE ON SEQUENCES TO "all-sa-pam19002_ro";
+      when: "schema_status.changed"
+
+    - name: alter default privs on ext schema sequances {{ as_group }}
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        query: ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT SELECT, USAGE ON SEQUENCES TO "{{ as_group }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: alter default privs on ext schema sequances {{ TUZ_group }}
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        query: ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT SELECT, USAGE ON SEQUENCES TO "{{ TUZ_group }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: alter default privs on schema functions to as_admins
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT ALL PRIVILEGES ON FUNCTIONS TO "{{ as_group }}";'
+      when: "schema_status.changed"
+
+    - name: alter default privs on schema functions to {{ TUZ_group }}
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: "{{ item }}"
+      with_items:
+          - ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT EXECUTE ON FUNCTIONS TO "{{ TUZ_group }}";
+          - ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT EXECUTE ON FUNCTIONS TO "as_admin_read";
+          - ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT EXECUTE ON FUNCTIONS TO "all-sa-pam19002_ro";
+      when: "schema_status.changed"
+
+    - name: alter default privs on ext schema functions {{ as_group }}
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        query: ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT EXECUTE ON FUNCTIONS TO "{{ as_group }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: alter default privs on ext schema functions {{ TUZ_group }}
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        query: ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT EXECUTE ON FUNCTIONS TO "{{ TUZ_group }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: alter default privs on schema routine to as_admins
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT ALL PRIVILEGES ON ROUTINES TO "{{ as_group }}";'
+      when: "schema_status.changed"
+
+    - name: alter default privs on schema routine to {{ TUZ_group }}
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT EXECUTE ON ROUTINES TO "{{ TUZ_group }}";'
+      when: "schema_status.changed"
+
+    - name: alter default privs on schema types to as_admins
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT ALL PRIVILEGES ON TYPES TO "{{ as_group }}";'
+      when: "schema_status.changed"
+
+    - name: alter default privs on schema types to {{ TUZ_group }}
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ schema_name }}" GRANT USAGE ON TYPES TO "{{ TUZ_group }}";'
+      when: "schema_status.changed"
+
+    - name: alter default privs on ext schema types {{ as_group }}
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        query: ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT USAGE ON TYPES TO "{{ as_group }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: alter default privs on ext schema types {{ TUZ_group }}
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        query: ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT USAGE ON TYPES TO "{{ TUZ_group }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: alter role as_admin NOLOGIN
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER ROLE "{{ as_group }}" NOLOGIN;
+      environment:
+        - PGHOST: "{{ ansible_fqdn }}"
+        - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+        - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+
+  become: true
+  become_user: postgres
+  when: ansible_fqdn == current_master

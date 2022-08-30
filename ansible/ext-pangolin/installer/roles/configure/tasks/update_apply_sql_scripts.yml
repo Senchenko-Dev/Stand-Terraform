@@ -1,0 +1,66 @@
+- name: Apply sql scripts
+  block:
+
+    - name: copy search_path script
+      template:
+        src: search_path_ext.sql.j2
+        dest: "{{ REMOTE_TMP }}/search_path_ext.sql"
+        owner: postgres
+        group: postgres
+        mode: 0644
+      when: search_path_ext is defined
+
+    - name: copy moving script
+      template:
+        src: move_extensions_to_ext.sql.j2
+        dest: "{{ REMOTE_TMP }}/move_extensions_to_ext.sql"
+        owner: postgres
+        group: postgres
+        mode: 0644
+      when: moving_extensions is defined
+
+    - name: copy get_role_passwd script
+      copy:
+        src: "get_role_passwd.sql"
+        dest: "{{ REMOTE_TMP }}/get_role_passwd.sql"
+        owner: postgres
+        group: postgres
+        mode: 0644
+      when: monitoring_php_script is defined
+
+    - name: apply get_role_passwd script
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        path_to_script: "{{ REMOTE_TMP }}/get_role_passwd.sql"
+      when: monitoring_php_script is defined
+
+    - name: apply search_path script
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        path_to_script: "{{ REMOTE_TMP }}/search_path_ext.sql"
+      when: search_path_ext is defined
+
+    - name: apply moving script to all databases
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        path_to_script: "{{ REMOTE_TMP }}/move_extensions_to_ext.sql"
+      with_items: "{{ current_dbs.query_result }}"
+      when: moving_extensions is defined
+
+    - name: clean remote tmp
+      file:
+        state: absent
+        path: "{{ item }}"
+      with_items:
+        - "{{ REMOTE_TMP }}/move_extensions_to_ext.sql"
+        - "{{ REMOTE_TMP }}/search_path_ext.sql"
+        - "{{ REMOTE_TMP }}/get_role_passwd.sql"
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres
+  when: ansible_fqdn == current_master

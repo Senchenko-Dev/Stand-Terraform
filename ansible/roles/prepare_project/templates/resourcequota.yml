@@ -1,0 +1,16 @@
+kind: ResourceQuota
+apiVersion: v1
+metadata:
+  name: core-object-counts
+  namespace: {{ project }}
+  labels:
+{% for key, value in labels.items() %}
+    {{ key }}: {{ value }}
+{% endfor %}
+spec:
+  hard:
+    limits.cpu: {{ quota.cpu }}
+    limits.memory: {{ quota.mem }}Gi
+    persistentvolumeclaims: '0'
+    requests.cpu: {{ quota.cpu }}
+    requests.memory: {{ quota.mem }}Gi

@@ -1,0 +1,43 @@
+- name: Common task for master, replica and haproxy
+  block:
+  
+    - name: ensure {{ backup.haproxy }} directory exist
+      file:
+        path: "{{ item.src }}"
+        state: "{{ item.state }}"
+        mode: 0750
+      with_items:
+        - { src: "{{ backup.haproxy }}",                                state: "absent" }
+        - { src: "{{ backup.haproxy }}{{ haproxy_files.socket_dir }}/", state: "directory" }
+        - { src: "{{ backup.haproxy }}{{ haproxy_files.conf_dir }}/",   state: "directory" }
+
+    - name: check installed HAProxy version
+      shell: |
+        set -o pipefail
+        haproxy -v | head -1 | awk '{print $3}'
+      register: installed_version_haproxy
+      become_user: postgres
+
+    - name: save old haproxy version
+      set_fact:
+        HAPROXY_OLD_VERSION: "{{ installed_version_haproxy.stdout }}"
+
+    - name: backup haproxy files
+      copy:
+        src: "{{ haproxy_files.conf_dir }}/haproxy.cfg"
+        dest: "{{ backup.haproxy }}{{ haproxy_files.conf_dir }}/haproxy.cfg"
+        remote_src: yes
+        owner: postgres
+        group: postgres
+        mode: 0600
+      
+    - name: download the HAProxy package but do not install it
+      yum:
+        name:
+          - "haproxy-{{ HAPROXY_OLD_VERSION }}"
+        state: present
+        download_only: yes
+        download_dir: "{{ backup.haproxy }}/"
+        allow_downgrade: yes
+   
+  become: true

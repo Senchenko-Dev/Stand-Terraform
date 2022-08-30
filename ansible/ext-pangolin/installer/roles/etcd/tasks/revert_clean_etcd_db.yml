@@ -1,0 +1,31 @@
+- name: Clean etcd db
+  block:
+
+    - name: stop patroni service
+      service:
+        name: patroni
+        state: stopped
+      when: inventory_hostname != 'etcd'
+
+    - name: clear cache etcd
+      shell: "ETCDCTL_API=2 etcdctl rm -r /service"
+      ignore_errors: true
+
+    - name: stop etcd service
+      service:
+        name: etcd
+        state: stopped
+
+    - name: remove etcd data dir
+      file:
+        path: "{{ etcd_files.data_dir }}"
+        state: absent
+
+    - name: loop wait for etcd stopped
+      shell: "systemctl show -p ActiveState etcd | cut -d'=' -f2"
+      register: result
+      until: result.stdout == 'inactive'
+      retries: 60
+      delay: 1
+
+  become: true

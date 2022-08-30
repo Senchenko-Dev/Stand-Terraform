@@ -1,0 +1,28 @@
+--- 
+- name: Get ping response
+  hosts: all
+  tasks:
+    - action: ping
+  tags: standalone,cluster
+
+- hosts: master
+  roles:
+    - { role: pre-checkup,         tags: standalone }
+
+- hosts: master:replica
+  roles:
+    - { role: pre-checkup,         tags: cluster }
+
+- name: Write to process status work that scout process finished
+  hosts: all
+  tasks:
+
+    - name: write to process status work that scout process started
+      include_role:
+        name: common
+        tasks_from: add_process_status_logs
+      vars:
+        process_work_status: "{{ process_work_statuses.scout.finish }}"
+        scout_key: true
+
+  tags: standalone,cluster

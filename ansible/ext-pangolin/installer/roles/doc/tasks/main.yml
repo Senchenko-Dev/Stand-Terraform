@@ -1,0 +1,29 @@
+- block:
+  
+  - name: Clear and create doc directory
+    file:
+        path: "{{ PGHOME }}/doc"
+        state: "{{ item }}"
+    with_items:
+      - absent
+      - directory
+
+  - name: Copy doc pdf to nodes
+    copy:
+         src: "{{ item }}"
+         dest: "{{ PGHOME }}/doc"
+    with_fileglob:
+      - "{{ local_distr_path }}/doc/*"
+
+  - name: Copy readme to PGHOME
+    copy:
+        src: "{{ local_distr_path }}/readme.txt"
+        dest: "{{ PGHOME }}"
+
+  - name: Copy releasenotes to PGHOME
+    copy:
+        src: "{{ local_distr_path }}/releasenotes.json"
+        dest: "{{ PGHOME }}"
+
+  become: true
+  become_user: postgres

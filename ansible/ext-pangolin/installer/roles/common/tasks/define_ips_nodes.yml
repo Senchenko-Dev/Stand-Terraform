@@ -1,0 +1,10 @@
+- name: Define ips for cluster nodes
+  set_fact:
+    ip_address_master: "{{ hostvars['master'].ansible_default_ipv4.address }}"
+    ip_address_replica: "{{ hostvars['replica'].ansible_default_ipv4.address }}"
+  when: installation_type == 'cluster'
+
+- name: Define ip for standalone node
+  set_fact:
+    ip_address_master: "{{ hostvars['master'].ansible_default_ipv4.address }}"
+  when: installation_type == 'standalone'

@@ -1,0 +1,17 @@
+[Unit]
+Description=ZooKeeper
+Requires=network.target
+After=network.target
+
+[Service]
+Type=forking
+User={{ systemd_user }}
+Group={{ systemd_user }}
+ExecStart={{ DistroDirs[0] }}/bin/zookeeper-server-start.sh -daemon {{ DistroDirs[0] }}/config/zookeeper.properties
+ExecStop={{ DistroDirs[0] }}/bin/zookeeper-server-stop.sh
+Restart=always
+RestartSec=0s
+SyslogIdentifier=zookeeper
+
+[Install]
+WantedBy=multi-user.target

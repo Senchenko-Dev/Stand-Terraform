@@ -1,0 +1,93 @@
+---
+#clean postgresql se nodes
+- name: Find rpm file in distrib and remember pg se version
+  block:
+    - find:
+        paths: "{{ local_distr_path }}"
+        use_regex: yes
+        patterns:  '.*\.rpm'
+      register: postgresql_rpm
+    - assert:
+        that: postgresql_rpm.matched == 1
+        fail_msg: "RPM file PostgreSQL SE didn't find"
+        success_msg: "RPM file PostgreSQL SE found"
+    - set_fact:
+        postgresql_package_file: "{{ item['path'].replace('/', ' ').split() | last }}"
+      with_items: "{{ postgresql_rpm['files'] }}"
+    - set_fact:
+        pg_version: "{{ postgresql_package_file.split('-').3 }}"
+      with_items: "{{ postgresql_rpm['files'] }}"
+  delegate_to: localhost
+  run_once: true
+
+- block:
+    - name: Stop patroni, pgbouncer,etcd,confd service, if started
+      service:
+        name: "{{ item }}"
+        state: stopped
+      with_items:
+        - patroni
+        - pgbouncer
+        - etcd
+        - confd
+
+    - pause:
+        seconds: 10
+
+    - name: Kill running all postgres user processes
+      shell: pkill -9 -u postgres
+
+    - name: Remove etcd configure
+      shell: etcdctl del service/{{ clustername }}/initialize || true
+      environment:
+        ETCDCTL_API: 3
+
+    - name: Remove {{ packages }}, if exist
+      pip:
+        name: "{{ packages }}"
+        state: absent
+      vars:
+        packages:
+        - psycopg2-binary
+        - patroni
+
+    - name: Remove {{ packages }}, if exist
+      package:
+        name: "{{ item }}"
+        state: absent
+      with_items:
+      - python-psycopg2
+      - postgresql-sber-edition
+      - etcd
+      - confd
+      - haproxy
+      - pg_probackup-11
+
+    - name: Remove postgres user
+      shell: userdel -r postgres
+
+    - name: Remove old directory/files, if exist
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "{{ PGHOME }}"
+        - "{{ etcd_files.conf_dir }}"
+        - "{{ confd_files.conf_dir }}"
+        - "{{ pgbouncer_files.conf_dir }}"
+        - "{{ patroni_files.conf_dir }}"
+        - "{{ haproxy_files.conf_dir }}"
+        - "{{ PGUSERHOME }}"
+        - "{{ PGBACKUP }}"
+        - "{{ PGARCLOGS }}"
+        - "{{ PGDATA }}"
+        - "{{ PGLOGS }}"
+        - "{{ service_path_dir }}/postgresql.service"
+  become_user: root
+  become: true
+  ignore_errors: yes
+
+
+
+
+

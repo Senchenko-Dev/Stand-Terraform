@@ -1,0 +1,185 @@
+- name: Check rlm_data input parameter
+  assert:
+    that: rlm_data.payload is defined
+    fail_msg: "{{ control_msgs.fails.rlm_data_not_exists }}"
+  run_once: true
+
+- name: Run control_pre_check
+  import_tasks: control_pre_check.yml
+  vars:
+    _controlprecheck_is_db_and_patroni_started: true
+
+- name: Define version of current python interpreter
+  set_fact:
+    previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+- name: Unlock and reset users
+  block:
+
+    - name: define roles of nodes
+      include_role:
+        name: patroni
+        tasks_from: update_define_roles_of_nodes.yml
+
+    - name: define variable with scenario error
+      set_fact:
+        scenario_error: false
+
+    - name: create unlock_users_list variable for general list of unlock users
+      set_fact:
+        unlock_users_list: []
+
+    - name: set unlock_users_list variable for general list of unlock users
+      set_fact:
+        unlock_users_list: "{{ unlock_users_list + [item.rolname] }}"
+      with_items: "{{ rlm_data.payload.users }}"
+      when: rlm_data.payload.users.0 is defined and item.unblock
+      no_log: "{{ nolog }}"
+
+    - name: unlock users from list
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: postgres
+        query: "SELECT * FROM unblock_role('{{ item }}') \
+                WHERE (SELECT pp.is_blocked FROM pg_catalog.pg_roles r \
+                JOIN pg_catalog.pp_password_detailed pp ON (pp.roloid=r.oid) \
+                WHERE r.rolname = '{{ item }}');"
+      register: unlock_users_query
+      with_items: "{{ unlock_users_list }}"
+      failed_when: false
+      no_log: "{{ nolog }}"
+
+    - name: create error_messages_unlock_users variable with error messages unlock users
+      set_fact:
+        error_messages_unlock_users: []
+
+    - name: redefine variable with error messages unlock users
+      set_fact:
+        error_messages_unlock_users: "{{ error_messages_unlock_users + [item.item + ': ' + item.msg.split('None:')[1] | trim | replace('\"','')] }}"
+      with_items: "{{ unlock_users_query.results }}"
+      when: unlock_users_query.results.0 is defined and item.msg is defined
+
+    - name: print error message when unlock user on master
+      debug:
+        msg: "{{ control_msgs.fails.unlock_user | replace('user_name_and_msg',item) }}"
+      with_items: "{{ hostvars['master'].error_messages_unlock_users }}"
+      when: hostvars['master'].error_messages_unlock_users.0 is defined
+      run_once: true
+
+    - name: print error message when unlock user on replica
+      debug:
+        msg: "{{ control_msgs.fails.unlock_user | replace('user_name_and_msg',item) }}"
+      with_items: "{{ hostvars['replica'].error_messages_unlock_users }}"
+      when: "installation_type == 'cluster' \
+            and hostvars['master'].error_messages_unlock_users is defined \
+            and hostvars['replica'].error_messages_unlock_users is defined \
+            and item not in hostvars['master'].error_messages_unlock_users"
+      run_once: true
+
+    - name: reset users
+      block:
+
+        - name: create reset_users_list variable for general list of reset users
+          set_fact:
+            reset_users_list: []
+
+        - name: set reset_users_list variable for general list of reset users
+          set_fact:
+            reset_users_list: '{{ reset_users_list + [{"rolname": item.rolname, "new_pass": item.new_pass}] }}'
+          with_items: "{{ rlm_data.payload.users }}"
+          when: rlm_data.payload.users.0 is defined and item.new_pass
+          no_log: "{{ nolog }}"
+
+        - name: reset users from list
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: postgres
+            query: ALTER USER "{{ item.rolname }}" WITH PASSWORD '{{ item.new_pass }}';
+          register: reset_users_query
+          with_items: "{{ reset_users_list }}"
+          failed_when: false
+          no_log: "{{ nolog }}"
+
+        - name: create error_messages_reset_users variable with error messages reset users
+          set_fact:
+            error_messages_reset_users: []
+
+        - name: redefine variable with error messages reset users
+          set_fact:
+            error_messages_reset_users: "{{ error_messages_reset_users + [item.item.rolname + ': ' + item.msg.split('None:')[1] | trim | replace('\"','')] }}"
+          with_items: "{{ reset_users_query.results }}"
+          when: reset_users_query.results.0 is defined and item.msg is defined
+          no_log: "{{ nolog }}"
+
+        - name: print error message when reset user on master
+          debug:
+            msg: "{{ control_msgs.fails.reset_user_password | replace('user_name_and_msg',item) }}"
+          with_items: "{{ error_messages_reset_users }}"
+          when: error_messages_reset_users is defined
+
+        - name: redefine variable with scenario error on standalone
+          set_fact:
+            scenario_error: true
+          when: "installation_type == 'standalone' \
+                and (hostvars['master'].error_messages_unlock_users.0 is defined \
+                or error_messages_reset_users.0 is defined)"
+
+        - name: redefine variable with scenario error on cluster
+          set_fact:
+            scenario_error: true
+          when: "installation_type == 'cluster' \
+                and (hostvars['master'].error_messages_unlock_users.0 is defined \
+                or hostvars['replica'].error_messages_unlock_users.0 is defined \
+                or error_messages_reset_users.0 is defined)"
+
+      when: ansible_fqdn == current_master
+
+  rescue:
+
+    - name: print message when handling unknown error
+      block:
+
+        - name: print variable with message
+          debug:
+            msg: "{{ control_msgs.fails.unexpected }}"
+
+        - name: redefine variable with scenario error
+          set_fact:
+            scenario_error: true
+
+      run_once: true
+
+  always:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ previous_python_interpreter }}'
+
+    - name: check status scenario
+      assert:
+        that: not scenario_error
+        fail_msg: "{{ control_msgs.fails.scenario }}"
+
+    - name: print result message for standalone
+      debug:
+        msg: "{{ control_msgs.ok.unlock_reset_user }}"
+      when: installation_type == 'standalone' and not scenario_error
+
+    - name: print result message for cluster
+      debug:
+        msg: "{{ control_msgs.ok.unlock_reset_user }}"
+      run_once: true
+      when: "installation_type == 'cluster' \
+            and not hostvars['master'].scenario_error \
+            and not hostvars['replica'].scenario_error"
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres

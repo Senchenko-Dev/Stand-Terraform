@@ -1,0 +1,31 @@
+#TODO Вынести удаление пользователя и его объектов в отдельную подроль для удаления и создания УЗ в БД PGSQL-4674
+
+- name: Сheck exists pgbouncer
+  stat:
+    path: "{{ pgbouncer_files.bin_path }}"
+  register: pgbouncer_exists
+
+- name: Drop pgbouncer user and his objects
+  block:
+
+    - name: drop pgbouncer schema from databases
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        query: DROP SCHEMA IF EXISTS pgbouncer CASCADE
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: drop pgbouncer user from databases
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ item.datname }}"
+        query: DROP USER IF EXISTS pgbouncer
+      with_items: "{{ current_dbs.query_result }}"
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres
+  when: pgbouncer_exists.stat.exists and ansible_fqdn == current_master

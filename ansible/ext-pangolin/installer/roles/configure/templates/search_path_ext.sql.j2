@@ -1,0 +1,19 @@
+do $$
+DECLARE
+                rec RECORD;
+                sqlstring varchar;
+                spath varchar;
+BEGIN
+for rec in (SELECT usename, useconf FROM (
+                SELECT usename, unnest(useconfig) useconf FROM pg_user) us
+                WHERE useconf LIKE '%search_path%' and useconf NOT LIKE '%search_path%ext%')
+loop
+                spath := concat(rec.useconf, ', ext');
+                RAISE NOTICE 'change search_path for user % from % to %', rec.usename, rec.useconf, spath;
+                sqlstring := format('alter user %s set %s', quote_ident(rec.usename), spath);
+                execute sqlstring;
+                RAISE NOTICE 'done';
+end loop;
+END;
+$$
+LANGUAGE plpgsql;

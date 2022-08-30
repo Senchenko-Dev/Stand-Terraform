@@ -1,0 +1,38 @@
+- name: Redefine variables
+  block:
+
+    - name: use old PGPORT
+      set_fact:
+        ports: "{{ ports|combine(data, recursive=True) }}"
+      vars:
+        data:
+          pg: "{{ _redefinevars_pgport }}"
+      when: _redefinevars_pgport is defined
+
+    - name: use old PGBOUNCER_PORT
+      set_fact:
+        ports: "{{ ports|combine(data, recursive=True) }}"
+      vars:
+        data:
+          pgbouncer: "{{ _redefinevars_pgbouncer }}"
+      when: pgbouncer and _redefinevars_pgbouncer is defined
+
+    - name: use old HAPROXYPORT
+      set_fact:
+        ports: "{{ ports|combine(data, recursive=True) }}"
+      vars:
+        data:
+          haproxy: "{{ _redefinevars_haproxyport }}"
+      when: haproxy and _redefinevars_haproxyport is defined
+
+    - name: use old PGHOME
+      set_fact:
+        PGHOME: "{{ _redefinevars_pghome }}"
+      when: _redefinevars_pghome is defined
+
+    - name: use old PGDATA
+      set_fact:
+        PGDATA: "{{ _redefinevars_pgdata }}"
+      when: _redefinevars_pgdata is defined
+
+  when: "inventory_hostname != 'etcd'"

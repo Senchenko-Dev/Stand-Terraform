@@ -1,0 +1,152 @@
+
+- name: Get IP from fact
+  set_fact:
+    ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+
+
+- name: Delete nginx_user
+  user:
+    name: "{{ nginx | default('nginx') }}"
+    state: absent
+  become: yes
+  ignore_errors: yes
+
+- name: Create nginx_group
+  group:
+    name: "{{ nginx_group | default('nginx') }}"
+    state: present
+  become: yes
+
+- name: Define PWD
+  set_fact:
+    nginx_pwd: "{{nginx_os_user_pwd}}"
+  no_log: true
+  ignore_errors: yes
+
+- name: Define PWD - debug info when previous step failed
+  debug:
+    msg: "{{nginx_os_user_pwd}}"
+  when: nginx_pwd is not defined
+
+- name: Create nginx_user
+  user:
+    name: "{{ nginx | default('nginx') }}"
+    group: "{{ nginx_group | default('nginx')}}"
+    password: "{{ nginx_pwd | password_hash('sha512') }}"
+    state: present
+    system: no
+    createhome: yes
+  become: yes
+
+- name: Python get IP 4 CSM
+  shell: python2.7 -c 'import ConfigParser; from operator import itemgetter; config = ConfigParser.ConfigParser(allow_no_value=True);config.read("{{ WORKSPACE }}/config/{{ Stand }}/hosts.ini");  print(config.get("CSM_Server.WildFly","{{groups["CSM_Server.WildFly"][0]}} ansible_host"))'
+  register: CSMip
+  delegate_to: 127.0.0.1
+  ignore_errors: Yes
+
+- set_fact:
+    CSM_ip: "1"
+
+- set_fact:
+    CSM_ip: "{{ CSMip.stdout | regex_search('(2[0-4]\\d|25[0-5]|[01]?\\d\\d?)\\.(2[0-4]\\d|25[0-5]|[01]?\\d\\d?)\\.(2[0-4]\\d|25[0-5]|[01]?\\d\\d?)\\.(2[0-4]\\d|25[0-5]|[01]?\\d\\d?)') }}"
+  ignore_errors: Yes
+
+- set_fact:
+    CSM_ip: "127.0.0.1"
+  when:   CSM_ip=="1"
+
+- name: Python get port
+  shell: python2.7 -c 'import ConfigParser; from operator import itemgetter; config = ConfigParser.ConfigParser(allow_no_value=True);config.read("{{ WORKSPACE }}/config/{{ Stand }}/hosts.ini");  print(config.get("CSM_Server.WildFly:vars","http_port"))'
+  register: CSMport
+  delegate_to: 127.0.0.1
+  ignore_errors: Yes
+
+- set_fact:
+    CSM_port: "{{ CSMport.stdout }}"
+  ignore_errors: Yes
+
+- set_fact:
+    CSM_port: "8080"
+  when:   ( CSM_port is not defined ) or (CSM_port=="")
+
+- name: Create folder conf.d
+  shell: sudo mkdir /etc/nginx/conf.d
+
+- name: Generate configuration
+  block:
+    - name: Generate server configuration
+      template:
+        src: nginx.conf.j2
+        dest: "{{ nginx_conf_dir }}/nginx.conf"
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_group }}"
+        mode: 0644
+        backup: yes
+        force: yes
+      become: yes
+
+
+    - name: Generate virtualhost configuration
+      template:
+        src: default.conf.j2
+        dest: "{{ nginx_conf_dir }}/conf.d/default.conf"
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_group }}"
+        mode: 0644
+        backup: yes
+        force: yes
+      become: yes
+
+
+- name: Create directories
+  block:
+    - name: Create docroot directory
+      file:
+        path: "{{item}}"
+        state: directory
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_group }}"
+        mode: 0755
+      become: yes
+      with_items:
+        - "{{ install_dir }}"
+        - "{{ install_dir }}/html"
+        - "{{ install_dir }}/sites-available"
+        - "{{ install_dir }}/upstreams"
+
+    - name: Create log directory
+      file:
+        path: "{{ nginx_log_dir }}"
+        state: directory
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_group }}"
+        mode: 0700
+      become: yes
+
+    - name: Create modules_location directory
+      file:
+        path: "{{ nginx_conf_dir }}/conf.d/modules_location"
+        state: directory
+        owner: "{{ nginx_user }}"
+        group: "{{ nginx_group }}"
+        mode: 0700
+      become: yes
+
+- name: Enable Nginx autostart
+  systemd:
+    enabled: yes
+    force: yes
+    name: nginx
+    state: started
+  become: yes
+
+- name: Copy template
+  template:
+    src: nginx.sudoers.j2
+    dest: /etc/sudoers.d/nginx
+    owner: "root"
+    group: "root"
+
+
+- debug:
+    msg: "  Сервис: nginx, порт {{ ip }}:{{ nginx_http_port }}, системный пользователь: {{ nginx_user }}, установлен в: {{ nginx_conf_dir }}, веб директория: {{ nginx_docroot }}"

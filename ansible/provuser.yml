@@ -1,0 +1,11 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - user:
+        name: provuser
+
+    - authorized_key:
+        user: provuser
+        key: >
+          ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDOUwj9O1Cdg5IItmoX12mWaBj07wGpF1ASRP/67QIgsaI7nTGqOfqnBNI7/bm7Z5Y8jbsq3rfwCjvkniA3fGQxd75leC/KNyAV4OJNcKvSHUWjemoWrTotOUMP3FQaleaZhQ8uni8L6tJxpnY8djznp6V4PPpks1FYWffT5kIp8GE5RXj+a750XujCiPyyBQvkSPBgBP6CyBmf4NOYAB6p8B2bcwntzZZ1KxxiREMQLtwq9PbGYwKSgxc4ZodKgnEM2I0ytUqAwK98Za0Ge6+X1qKEzmSLhK1/lF1FPuAW4AbIl1tRxDA52etA8bOhO2qu4ZBWMOR+JCLDyzwfbwnXGLguxhVHBZ9r/xL0oeF7BZovOsBXIjsKh6/VT97oUKrluI2mr7qwaSfUfrquIU2CSDheUzkp0e6XEGCh+lWuHihg9pJb9gH4/r5vNMjoh3nPN1OAZ3I8yWBaQMG39xe8iw2dwbh7ElOSVrZmQ5y84vw/wlRc+OnzNT9tpt+9bck=

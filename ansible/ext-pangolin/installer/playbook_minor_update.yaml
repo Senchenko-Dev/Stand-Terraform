@@ -1,0 +1,351 @@
+- name: Get ping response and gather packages info
+  hosts: localhost:all
+  tasks:
+    - action: ping
+    - set_fact:
+        the_ansible_local_address: "{{ hostvars['127.0.0.1'].ansible_default_ipv4.address }}"
+      run_once: true
+    - package_facts:
+        manager: "auto"
+      no_log: "{{ nolog }}"
+  tags: standalone,cluster
+
+########################################   standalone-postgresql-only               ########################################
+########################################   standalone-postgresql-pgbouncer          ########################################
+########################################   standalone-patroni-etcd-pgbouncer        ########################################
+- hosts: master
+  roles:
+    - { role: checkup,    tags: standalone, when: not update_errors.aggregate }
+    - { role: rsyslog,    tags: standalone, when: rsyslog is defined and rsyslog and not update_errors.aggregate }
+    - { role: postgresql, tags: standalone, when: postgres and not update_errors.aggregate }
+- name: Turn ON pause mode on patroni
+  hosts: master
+  tasks:
+    - { include_role: { name: patroni, tasks_from: update_with_patronictl.yml }, vars: { change_params: "pause: true" } }
+  tags: standalone
+- hosts: master
+  roles:
+    - { role: etcd,       tags: standalone, when: etcd and not update_errors.aggregate }
+    - { role: patroni,    tags: standalone, when: patroni and not update_errors.aggregate }
+    - { role: pgbouncer,  tags: standalone, when: pgbouncer and not update_errors.aggregate }
+    - { role: tls,        tags: standalone, when: ldap_tls is defined and ldap_tls and not update_errors.aggregate }
+    - { role: configure,  tags: standalone, when: not update_errors.aggregate }
+    - { role: SRC,        tags: standalone, when: SRC is defined and SRC and not update_errors.aggregate, operation_type: update_pg_server }
+    - { role: doc,        tags: standalone, when: not update_errors.aggregate }
+    - { role: finally,    tags: standalone, when: not update_errors.aggregate, operation_type: turn_on_pp }
+    - { role: tests,      tags: standalone, when: not update_errors.aggregate and run_smoke_test, vars: { cluster: false }}
+    - { role: finally,    tags: standalone, when: not update_errors.aggregate, operation_type: change_linux_password }
+- name: Recovery process will be started
+  hosts: master
+  tasks:
+
+    - name: write to process status work that minor update process finished with error and with recovery
+      include_role:
+        name: common
+        tasks_from: add_process_status_logs
+      vars:
+        process_work_status: "{{ process_work_statuses.recovery_minor.start }}"
+        recovery_key: true
+      when: handle_update_errors and update_errors.aggregate
+
+    - name: turn on pause mode
+      block:
+
+        - name: turn on pause mode
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: true"
+          when: "(update_errors.components.etcd or update_errors.components.patroni or update_errors.components.pgbouncer or update_errors.components.haproxy) \
+                 or (update_errors.components.pg and update_errors.types.pg.bootstrap)"
+                
+      rescue:
+
+        - debug:
+            msg: "It is normal"
+
+  tags: standalone
+- hosts: master
+  roles:
+    - { role: recovery,   tags: standalone, when: handle_update_errors is defined and handle_update_errors and update_errors.aggregate, recovery_type: etcd }
+- name: Turn on pause mode
+  hosts: master
+  tasks:
+
+    - name: turn on pause mode
+      block:
+
+        - name: turn on pause mode
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: true"
+          when: "(update_errors.components.patroni \
+                 or update_errors.components.pgbouncer or update_errors.components.haproxy)"
+                
+      rescue:
+
+        - debug:
+            msg: "It is normal"
+
+  tags: standalone
+- hosts: master
+  roles:
+    - { role: recovery,   tags: standalone, when: handle_update_errors is defined and handle_update_errors and update_errors.aggregate, recovery_type: patroni }
+    - { role: recovery,   tags: standalone, when: handle_update_errors is defined and handle_update_errors and update_errors.aggregate, recovery_type: postgresql }
+    - { role: recovery,   tags: standalone, when: handle_update_errors is defined and handle_update_errors and update_errors.aggregate, recovery_type: finally }
+    - { role: recovery,   tags: standalone, when: handle_update_errors is defined and handle_update_errors and update_errors.aggregate, recovery_type: pgbouncer }
+
+########################################   cluster-patroni-etcd-pgbouncer           ########################################
+########################################   cluster-patroni-etcd-pgbouncer-haproxy   ########################################
+- hosts: master:replica:etcd
+  roles:
+    - { role: checkup, tags: cluster, when: not update_errors.aggregate }
+    - { role: rsyslog, tags: cluster, when: rsyslog is defined and rsyslog and not update_errors.aggregate }
+#=== postgresql ===
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: replica
+  roles:
+    - { role: postgresql, tags: cluster, when: postgres and not update_errors.aggregate }
+# переменные о статусе обновления должны быть синхронизированы между хостами
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: master
+  roles:
+    - { role: postgresql, tags: cluster, when: postgres and not update_errors.aggregate }
+- hosts: replica:master:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+#=== etcd ===
+- name: Turn ON pause mode on patroni
+  hosts: master
+  tasks:
+    - { include_role: { name: patroni, tasks_from: update_with_patronictl.yml }, vars: { change_params: "pause: true" } }
+  tags: cluster
+- hosts: master:replica:etcd
+  roles:
+    - { role: etcd,           tags: cluster, when: etcd and not update_errors.aggregate }
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+#=== patroni ===
+- hosts: master
+  roles:
+    - { role: patroni,        tags: cluster, when: patroni and not update_errors.aggregate }
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: replica
+  roles:
+    - { role: patroni,        tags: cluster, when: patroni and not update_errors.aggregate }
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+#=== pgbouncer ===
+- hosts: replica
+  roles:
+    - { role: pgbouncer,      tags: cluster, when: pgbouncer and not update_errors.aggregate }
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: master
+  roles:
+    - { role: pgbouncer,      tags: cluster, when: pgbouncer and not update_errors.aggregate }
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+#=== HAProxy ===
+- hosts: replica:master
+  serial: 1
+  roles:
+    - { role: HAProxy,        tags: cluster, when: haproxy and not update_errors.aggregate }
+#=== Custom settings ===
+- hosts: postgres_nodes
+  roles:
+    - { role: tls,            tags: cluster, when: ldap_tls is defined and ldap_tls and not update_errors.aggregate }
+#=== configure and SRC ===
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+#=== configure ===
+- hosts: postgres_nodes
+  roles:
+    - { role: configure,      tags: cluster, when: not update_errors.aggregate }
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+#=== SRC ===
+- hosts: postgres_nodes
+  roles:
+    - { role: SRC,            tags: cluster, when: SRC is defined and SRC and not update_errors.aggregate, operation_type: update_pg_server }
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+#=== doc, turn_on_pp, tests ===
+- hosts: replica:master
+  roles:
+    - { role: doc,            tags: cluster, when: not update_errors.aggregate }
+    - { role: finally,        tags: cluster, when: not update_errors.aggregate, operation_type: turn_on_pp }
+    - { role: tests,          tags: cluster, when: not update_errors.aggregate and run_smoke_test , vars: { cluster: true }}
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+#=== change_linux_password ===
+- hosts: master:replica:etcd
+  roles:
+    - { role: finally,        tags: cluster, when: not update_errors.aggregate, operation_type: change_linux_password }
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+#=== recovery if error ===
+- name: Write to process status work that minor update process finished with error and with recovery
+  hosts: master:replica
+  tasks:
+
+    - name: write to process status work that minor update process finished with error and with recovery
+      include_role:
+        name: common
+        tasks_from: add_process_status_logs
+      vars:
+        process_work_status: "{{ process_work_statuses.recovery_minor.start }}"
+        recovery_key: true
+      when: handle_update_errors and update_errors.aggregate
+
+    - name: turn on pause mode
+      block:
+
+        - name: turn on pause mode
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: true"
+          when: "(update_errors.components.etcd or update_errors.components.patroni or update_errors.components.pgbouncer or update_errors.components.haproxy) \
+                 or (update_errors.components.pg and update_errors.types.pg.bootstrap)"
+                
+      rescue:
+
+        - debug:
+            msg: "It is normal"
+
+  tags: cluster
+- hosts: master:replica:etcd
+  roles:
+    - { role: recovery,       tags: cluster, when: handle_update_errors is defined and handle_update_errors and update_errors.aggregate, recovery_type: etcd }
+- name: Turn on pause mode
+  hosts: master:replica
+  tasks:
+
+    - name: turn on pause mode
+      block:
+
+        - name: turn on pause mode
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: true"
+          when: "(update_errors.components.patroni \
+                 or update_errors.components.pgbouncer or update_errors.components.haproxy)"
+                
+      rescue:
+
+        - debug:
+            msg: "It is normal"
+
+  tags: cluster
+- hosts: master:replica
+  serial: 1
+  roles:
+    - { role: recovery,       tags: cluster, when: handle_update_errors is defined and handle_update_errors and update_errors.aggregate, recovery_type: patroni }
+- hosts: master:replica
+  serial: 1
+  roles:
+    - { role: recovery,       tags: cluster, when: handle_update_errors is defined and handle_update_errors and update_errors.aggregate, recovery_type: postgresql }
+- hosts: master
+  roles:
+    - { role: recovery,       tags: cluster, when: handle_update_errors is defined and handle_update_errors and update_errors.aggregate, recovery_type: finally }
+- hosts: master:replica
+  serial: 1
+  roles:
+    - { role: recovery,       tags: cluster, when: handle_update_errors is defined and handle_update_errors and update_errors.aggregate, recovery_type: pgbouncer }
+
+#=== Print info about update errors and assert ===
+- name: Finish playbook and print error status message
+  hosts: master:replica
+  tasks:
+
+    - debug: 
+        msg: "{{ update_errors }}"
+      run_once: true
+
+    - debug:
+        msg: "RLM.FAIL__В процессе обновления произошла ошибка, было произведено восстановление версии СУБД Pangolin до запуска обновления. \
+              Свяжитесь с администраторами СУБД__RLM.FAIL"
+      run_once: true
+      when: handle_update_errors and update_errors.aggregate
+
+    - debug:
+        msg: "RLM.FAIL__В процессе обновления произошла ошибка, опция восстановления предыдущей версии СУБД Pangolin не была активирована. \
+              Свяжитесь с администраторами СУБД__RLM.FAIL"
+      run_once: true
+      when: not handle_update_errors and update_errors.aggregate
+
+    - name: clear cache update directory
+      file:
+        path: "{{ update_status_files.dir }}"
+        state: absent
+      become: true
+      when: not update_errors.aggregate
+
+    - name: delete disallow file
+      file:
+        path: "{{ update_status_files.disallow_update }}"
+        state: absent
+      become: true
+      when: handle_update_errors
+
+    - name: write to process status work that minor update process finished
+      include_role:
+        name: common
+        tasks_from: add_process_status_logs
+      vars:
+        process_work_status: "{{ process_work_statuses.update_minor.finish }}"
+      when: not update_errors.aggregate
+
+    - name: write to process status work that minor update process finished with error without recovery
+      include_role:
+        name: common
+        tasks_from: add_process_status_logs
+      vars:
+        process_work_status: "{{ process_work_statuses.update_minor.error }}"
+      when: not handle_update_errors and update_errors.aggregate
+
+    - name: write to process status work that minor update process finished with error and with recovery
+      include_role:
+        name: common
+        tasks_from: add_process_status_logs
+      vars:
+        process_work_status: "{{ process_work_statuses.recovery_minor.finish }}"
+        recovery_key: true
+      when: handle_update_errors and update_errors.aggregate
+
+  tags: standalone,cluster

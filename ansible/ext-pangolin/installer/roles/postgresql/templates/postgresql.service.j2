@@ -1,0 +1,23 @@
+[Unit]
+Description=Runners PostgreSQL service
+After=syslog.target network.target
+ 
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+
+Environment="PG_PLUGINS_PATH={{PGHOME}}/lib"
+Environment="LD_LIBRARY_PATH={{PGHOME}}/lib:{{PGHOME}}/3rdparty/postgis/lib:{{PGHOME}}/3rdparty/pgrouting/lib/"
+ 
+# Pre-commands to start watchdog device
+PermissionsStartOnly=true
+ExecStartPre=/bin/mkdir -p /var/run/postgresql
+ExecStartPre=/bin/chown -R postgres:postgres /var/run/postgresql
+
+WorkingDirectory={{ PGHOME }}
+ExecStart=/bin/bash -i -c "{{ PGHOME }}/bin/postgres -D {{ PGDATA }}"
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

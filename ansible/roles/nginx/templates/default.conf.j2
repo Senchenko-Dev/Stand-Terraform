@@ -1,0 +1,32 @@
+server {
+    listen       {{ nginx_http_port }};
+    server_name  localhost;
+
+    location / {
+        root   {{ nginx_docroot }};
+        autoindex on;
+    }
+
+    location /httpbridge-server {
+    access_log {{ nginx_log_dir }}/httpbridge-server.access.log;
+    error_log {{ nginx_log_dir }}/httpbridge-server.error.log warn;
+    proxy_pass http://{{ ip }}:8091/httpbridge-server;
+    }
+
+    location /stage_log {
+        root   /;
+        autoindex on;
+    }
+    
+    location /nginx {
+        root   /var/log;
+        autoindex on;
+    }
+    
+    include {{ install_dir }}/sites-available/*.conf;
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+    root   /usr/share/nginx/html;
+    }
+}

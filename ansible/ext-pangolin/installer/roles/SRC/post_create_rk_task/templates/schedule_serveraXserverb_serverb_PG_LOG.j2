@@ -1,0 +1,6 @@
+{% for hour in range(1, 25) %}
+-full
+-every
+        -day
+        -at {{ hour|int - 1 }}:{{ mi }}
+{% endfor %}

@@ -1,0 +1,157 @@
+---
+- name: Create and configure objects of DB
+  block:
+
+  - name: create a new tablespace TDE, if not exist or configure it, if exist
+    block:
+
+    - name: check exist tablespace TDE
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT spcname FROM pg_tablespace where spcname = '{{ tablespace_name }}';
+      register: is_tde
+
+    - name: assign owner to tablespace TDE, if exist
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER TABLESPACE "{{ tablespace_name }}" OWNER TO "{{ db_admin }}";
+        autocommit: yes
+      when: is_tde.rowcount|int != 0
+
+    - name: create a new tablespace TDE, if not exist
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: CREATE TABLESPACE "{{ tablespace_name }}" OWNER "{{ db_admin }}" LOCATION '{{ tablespace_location }}/{{ tablespace_name }}'
+               WITH (is_encrypted = on);
+        autocommit: yes
+      when: is_tde.rowcount|int == 0
+
+    when: "tde and tablespace_name|length > 0"
+
+  - name: create a new database TDE, if not exist or configure it, if exist
+    block:
+
+    - name: check exist database TDE
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT * FROM pg_database WHERE datname = '{{ db_name }}';
+      register: is_tde
+
+    - name: assign owner to database TDE, if exist
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: "{{ item }}"
+        autocommit: yes
+      loop:
+        - ALTER DATABASE "{{ db_name }}" OWNER TO "{{ db_admin }}";
+        - ALTER DATABASE "{{ db_name }}" SET TABLESPACE "{{ tablespace_name }}";
+      when: is_tde.rowcount|int != 0
+
+    - name: create a new database TDE, if not exist
+      postgresql_db:
+        port: "{{ ports.pg }}"
+        name: "{{ db_name }}"
+        encoding: UTF-8
+        lc_collate: en_US.UTF-8
+        lc_ctype: en_US.UTF-8
+        template: template0
+        tablespace: "{{ tablespace_name }}"
+        owner: "{{ db_admin }}"
+      when: is_tde.rowcount|int == 0
+
+    when: "tde and db_name|length > 0 and tablespace_name|length > 0"
+
+  - name: create a new simple tablespace, if not exist or configure it, if exist
+    block:
+
+    - name: check exist simple tablespace
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT spcname FROM pg_tablespace where spcname = '{{ tablespace_name }}';
+      register: is_not_tde
+
+    - name: assign owner to simple tablespace, if exist
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER TABLESPACE "{{ tablespace_name }}" OWNER TO "{{ db_admin }}";
+        autocommit: yes
+      when: is_not_tde.rowcount|int != 0
+
+    - name: create a new simple tablespace, if not exist
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: CREATE TABLESPACE "{{ tablespace_name }}" OWNER "{{ db_admin }}" LOCATION '{{ tablespace_location }}/{{ tablespace_name }}';
+        autocommit: yes
+      when: is_not_tde.rowcount|int == 0
+
+    when: "not tde and tablespace_name|length > 0"
+
+  - name: create a new simple database, if not exist or configure it, if exist
+    block:
+
+    - name: check exist simple database
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT * FROM pg_database WHERE datname = '{{ db_name }}';
+      register: is_not_tde
+
+    - name: assign owner to simple database, if exist
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: "{{ item }}"
+        autocommit: yes
+      loop:
+        - ALTER DATABASE "{{ db_name }}" OWNER TO "{{ db_admin }}";
+        - ALTER DATABASE "{{ db_name }}" SET TABLESPACE "{{ tablespace_name }}";
+      when: is_not_tde.rowcount|int != 0
+
+    - name: create a new simple database, if not exist
+      postgresql_db:
+        port: "{{ ports.pg }}"
+        name: "{{ db_name }}"
+        encoding: UTF-8
+        lc_collate: en_US.UTF-8
+        lc_ctype: en_US.UTF-8
+        template: template0
+        tablespace: "{{ tablespace_name }}"
+        owner: "{{ db_admin }}"
+      when: is_not_tde.rowcount|int == 0
+
+    when: "not tde and db_name|length > 0 and tablespace_name|length > 0"
+
+  - name: create a new {{ schema_name }} schema, if not exist or configure it, if exist
+    block:
+
+    - name: check exist {{ schema_name }} schema
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: SELECT * FROM pg_catalog.pg_namespace WHERE nspname = '{{ schema_name }}';
+      register: is_schema
+
+    - name: assign owner to {{ schema_name }} schema, if exist
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER SCHEMA "{{ schema_name }}" OWNER TO "{{ as_group }}";
+        db: "{{ db_name }}"
+        autocommit: yes
+      when: is_schema.rowcount|int != 0
+
+    - name: create a new {{ schema_name }} schema, if not exist
+      postgresql_schema:
+        port: "{{ ports.pg }}"
+        database: "{{ db_name }}"
+        name: "{{ schema_name }}"
+        owner: "{{ as_group }}"
+      when: is_schema.rowcount|int == 0
+      register: schema_status
+
+    when: "schema_name|length > 0 and db_name|length > 0 and tablespace_name|length > 0"
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres
+  when: ansible_fqdn == current_master

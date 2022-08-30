@@ -1,0 +1,125 @@
+- name: Run opetations with special technical users and monitoring
+  block:
+
+    - name: define version of current python interpreter
+      set_fact:
+        previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+    - name: define default value for disable and enable variables
+      set_fact:
+        disable_mon: false
+        enable_mon: false
+
+    - name: redefine disable_mon if operation is disable
+      set_fact:
+        disable_mon: true
+      when: operation == 'disable'
+
+    - name: redefine enable_mon if operation is enable
+      set_fact:
+        enable_mon: true
+      when: operation == 'enable'
+
+    - name: define roles of nodes
+      include_role:
+        name: patroni
+        tasks_from: update_define_roles_of_nodes.yml
+
+    - name: define ips of nodes
+      include_role:
+        name: common
+        tasks_from: define_ips_nodes.yml
+
+    - name: disable special technical user
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER USER "backup_user" NOLOGIN
+      when: ansible_fqdn == current_master and disable_mon
+
+    - name: enable special technical user
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER USER "backup_user" LOGIN
+      when: ansible_fqdn == current_master and enable_mon
+
+    - name: pause monitoring standalone
+      block:
+
+        - name: disable monitoring
+          uri:
+            url: "{{ monitoring_params.monitoring_url_pause }}"
+            method: POST
+            body: '{"ip":["{{ ip_address_master }}"],"period": {{ monitoring_params.pause_period }}}'
+            body_format: json
+            headers:
+                Accept: "application/json"
+                Content-Type: "application/json"
+                Authorization: "{{ monitoring_params.token_for_pause }}"
+          when: disable_mon
+
+        - name: enable monitoring
+          uri:
+            url: "{{ monitoring_params.monitoring_url_pause_delete }}"
+            method: POST
+            body: '{"ip":["{{ ip_address_master }}"]}'
+            body_format: json
+            headers:
+                Accept: "application/json"
+                Content-Type: "application/json"
+                Authorization: "{{ monitoring_params.token_for_pause }}"
+          when: enable_mon
+
+      delegate_to: localhost
+      run_once: true
+      become: false
+      when: installation_type == 'standalone'
+
+    - name: pause monitoring cluster
+      block:
+
+        - name: disable monitoring
+          uri:
+            url: "{{ monitoring_params.monitoring_url_pause }}"
+            method: POST
+            body: '{"ip":["{{ ip_address_master }}","{{ ip_address_replica }}"],"period": {{ monitoring_params.pause_period }}}'
+            body_format: json
+            headers:
+                Accept: "application/json"
+                Content-Type: "application/json"
+                Authorization: "{{ monitoring_params.token_for_pause }}"
+          when: disable_mon
+
+        - name: enable monitoring
+          uri:
+            url: "{{ monitoring_params.monitoring_url_pause_delete }}"
+            method: POST
+            body: '{"ip":["{{ ip_address_master }}","{{ ip_address_replica }}"]}'
+            body_format: json
+            headers:
+                Accept: "application/json"
+                Content-Type: "application/json"
+                Authorization: "{{ monitoring_params.token_for_pause }}"
+          when: enable_mon
+
+      delegate_to: localhost
+      run_once: true
+      become: false
+      when: installation_type == 'cluster'
+            
+
+  always:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ previous_python_interpreter }}'
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres

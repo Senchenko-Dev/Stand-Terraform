@@ -1,0 +1,27 @@
+- name: Create dynamic welcome message
+  block:
+
+    - name: copy script
+      template:
+        src: dynmotd.sh.j2
+        dest: "{{ global_scripts }}/dynmotd.sh"
+        owner: postgres
+        mode: 0755
+
+    - name: remove old
+      lineinfile:
+        dest: /etc/profile
+        regexp: "{{ item }}"
+        state: absent
+      with_items:
+        - "^# Dynamic motd"
+        - "^/usr/local/sbin/dynmotd.sh"
+
+    - name: add /etc/profile
+      vars:
+       msg:  |
+             # Dynamic motd
+             {{ global_scripts }}/dynmotd.sh {{ installation_type }}
+      shell: echo "{{ msg }}" >> /etc/profile
+
+  become: true

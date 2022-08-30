@@ -1,0 +1,100 @@
+- name: Get service_facts
+  service_facts:
+  no_log: "{{ nolog }}"
+
+- name: Check installed HAProxy version
+  shell: |
+    set -o pipefail
+    haproxy -v | head -1 | awk '{print $3}'
+  register: installed_version_haproxy
+  become: true
+  become_user: postgres
+
+- name: Remove old installation haproxy service, if exist
+  block:
+
+    - name: stop service haproxy, if started
+      systemd:
+        name: haproxy
+        state: stopped
+        enabled: yes
+        daemon_reload: yes
+      when: ansible_facts.services['haproxy.service'].state == 'running'
+
+    - name: loop wait for haproxy stopped
+      shell: "systemctl show -p ActiveState haproxy | cut -d'=' -f2"
+      register: result
+      until: result.stdout == 'inactive'
+      retries: 60
+      delay: 1
+
+    - name: remove haproxy package
+      yum:
+        name: haproxy
+        state: absent
+
+  become: true
+  when: "'haproxy' in ansible_facts.packages and ( [installed_version_haproxy.stdout, versions.haproxy] | compare_versions )"
+
+- name: Recovery old version of haproxy
+  block:
+
+    - name: recovery, if was deleted
+      block:
+
+        - name: install haproxy service
+          yum:
+            name: "{{ backup.haproxy }}/haproxy-{{ versions.haproxy }}"
+            state: present
+
+        - name: enable haproxy service
+          service:
+            name: haproxy
+            enabled: yes
+
+        - name: just force systemd to reread configs (2.4 and above)
+          systemd:
+            daemon_reload: yes
+
+        - name: remove old haproxy directories and create new it
+          file:
+            path: "{{ item.src }}"
+            state: "{{ item.state }}"
+            owner: postgres
+            group: postgres
+            mode: '0750'
+          with_items:
+            - { src: "{{ haproxy_files.socket_dir }}/", state: "absent" }
+            - { src: "{{ haproxy_files.conf_dir }}/",   state: "absent" }
+            - { src: "{{ haproxy_files.socket_dir }}/", state: "directory" }
+            - { src: "{{ haproxy_files.conf_dir }}/",   state: "directory" }
+
+        - name: create socket file
+          file:
+            path: "{{ haproxy_files.socket_dir }}/stats"
+            state: touch
+          
+      when: "[installed_version_haproxy.stdout, versions.haproxy] | compare_versions"
+
+    - name: recovery haproxy files
+      copy:
+        src: "{{ backup.haproxy }}{{ haproxy_files.conf_dir }}/haproxy.cfg"
+        dest: "{{ haproxy_files.conf_dir }}/haproxy.cfg"
+        remote_src: yes
+        owner: postgres
+        group: postgres
+        mode: '0750'    
+
+    - name: start/restart haproxy service
+      service:
+        name: haproxy
+        state: restarted
+        
+  become: true
+
+- name: Loop wait for haproxy started
+  shell: "systemctl show -p ActiveState haproxy | cut -d'=' -f2"
+  register: result
+  until: result.stdout == 'active'
+  retries: 60
+  delay: 1

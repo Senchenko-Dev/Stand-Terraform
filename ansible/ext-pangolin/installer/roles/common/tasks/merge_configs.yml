@@ -1,0 +1,79 @@
+- name: Run this block only for master and replica, not etcd
+  block:
+
+    - name: ensure {{ merge_cfg_root_dir }} and internal directories exist
+      file:
+        path: "{{ item.src }}"
+        state: "{{ item.state }}"
+        owner: postgres
+        group: postgres
+        mode: 0750
+      with_items:
+        - { src: "{{ merge_cfg.new_cfg }}",                     state: "directory" }
+        - { src: "{{ merge_cfg.result_pgse }}",                 state: "directory" }
+        - { src: "{{ merge_cfg.result_pgse_patroni }}",         state: "directory" }
+
+    - name: fill new pgse configs
+      template:
+        src: "{{ playbook_dir }}/roles/postgresql/templates/{{ item.src }}"
+        dest: "{{ merge_cfg.new_cfg }}/{{ item.dest }}"
+        owner: postgres
+        group: postgres
+        mode: 0640
+        trim_blocks: False
+      with_items:
+        - { src: "postgresql.conf.j2",       dest: "postgresql.conf" }
+        - { src: "pg_hba.conf.j2",           dest: "pg_hba.conf" }
+      become_user: postgres
+
+    - name: auto merge old configs with new postgresql.conf, pg_hba.conf
+      include_role:
+        name: common
+        tasks_from: use_auto_merge
+      vars:
+        _useamerge_old_cfg_file: "{{ merge_cfg.old_cfg_pgse }}/{{ item.old_cfg }}"
+        _useamerge_new_cfg_file: "{{ merge_cfg.new_cfg }}/{{ item.new_cfg }}"
+        _useamerge_result_cfg_file: "{{ item.save_file }}"
+        _useamerge_old_ver: "{{ merge_cfg.old_ver }}"
+        _useamerge_new_ver: "{{ merge_cfg.new_ver }}"
+        _useamerge_root_path: "{{ merge_cfg.dir_path }}"
+        _useamerge_only_pgse: "False"
+        _useamerge_pghba_mode: "merge"
+      loop:
+        - { old_cfg: 'postgresql.conf',    new_cfg: 'postgresql.conf', save_file: '{{ merge_cfg.result_pgse }}/postgresql.conf',}
+        - { old_cfg: 'pg_hba.conf',        new_cfg: 'pg_hba.conf',     save_file: '{{ merge_cfg.result_pgse }}/pg_hba.conf',}
+
+    - name: auto merge new configs
+      block:
+
+        - name: configure and save new postgres.yml
+          template:
+            src: "{{ playbook_dir }}/roles/patroni/templates/postgres.yml.j2"
+            dest: "{{ merge_cfg.new_cfg }}/postgres.yml"
+            owner: postgres
+            group: postgres
+            mode: 0640
+            trim_blocks: False
+
+        - name: merge old configs with new postgres.yml
+          include_role:
+            name: common
+            tasks_from: use_auto_merge
+          vars:
+            _useamerge_old_cfg_file: "{{ merge_cfg.old_cfg_patroni }}/{{ item.old_cfg }}"
+            _useamerge_new_cfg_file: "{{ merge_cfg.new_cfg }}/{{ item.new_cfg }}"
+            _useamerge_result_cfg_file: "{{ item.save_file }}"
+            _useamerge_old_ver: "{{ merge_cfg.old_ver }}"
+            _useamerge_new_ver: "{{ merge_cfg.new_ver }}"
+            _useamerge_root_path: "{{ merge_cfg.dir_path }}"
+            _useamerge_only_pgse: "{{ item.only_pgse }}"
+            _useamerge_pghba_mode: "merge"
+          loop:
+              - { old_cfg: 'postgres.yml', new_cfg: 'postgres.yml', save_file: '{{ merge_cfg.result_pgse }}/postgres.yml',         only_pgse: True}
+              - { old_cfg: 'postgres.yml', new_cfg: 'postgres.yml', save_file: '{{ merge_cfg.result_pgse_patroni }}/postgres.yml', only_pgse: False}
+
+      become_user: postgres
+      when: patroni
+      
+  become: true   
+  when: inventory_hostname != 'etcd'

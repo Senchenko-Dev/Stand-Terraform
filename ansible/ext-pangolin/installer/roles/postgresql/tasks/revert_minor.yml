@@ -1,0 +1,275 @@
+- name: Get service_facts
+  service_facts:
+  no_log: "{{ nolog }}"
+  become: true
+
+- name: Started patroni, if patroni stopped
+  systemd:
+    name: patroni
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  when: patroni and ansible_facts.services['patroni.service'].state == 'stopped'
+
+- name: Role switched to back (current node have to have replica role)
+  block:
+
+    - name: define current master role of the cluster
+      include_role:
+        name: patroni
+        tasks_from: update_define_roles_of_nodes.yml
+
+    - name: turn on synchronous mode and then switchover
+      include_role:
+        name: patroni
+        tasks_from: update_run_switchover
+      vars:
+        current_database_port: "{{ ports.pg }}"
+      when: ansible_fqdn != current_replica
+
+    - name: turn on synchronous mode and wait for cluster synchronization
+      include_role:
+        name: patroni
+        tasks_from: update_wait_cluster_synchronization
+      when: ansible_fqdn == current_replica
+
+  when: "installation_type == 'cluster' \
+         and \
+            ( update_errors.types.pg.role_switched \
+              or update_errors.types.pg.bootstrap \
+              or (inventory_hostname == 'replica' and update_errors.hosts.master and update_errors.components.pg) \
+              or update_errors.components.patroni \
+              or update_errors.components.etcd \
+              or update_errors.components.pgbouncer \
+              or update_errors.components.haproxy \
+            )"
+
+- name: Turn off PAUSE mode (it's needed for stopped patroni with pgse)
+  include_role:
+    name: patroni
+    tasks_from: update_with_patronictl.yml
+  vars:
+    change_params: "pause: false"
+  when: patroni
+
+ # перейти в асинхронный режим, чтобы текущий мастер продолжил работать на "запись"
+- name: turn off synchronous mode
+  include_role:
+    name: patroni
+    tasks_from: update_with_patronictl.yml
+  vars:
+    change_params: "{{ item }}"
+  with_items:
+    - "synchronous_mode: false"
+    - "synchronous_mode_strict: false"
+  when: patroni
+
+- name: Recovery old pg se version, recovery patroni and postgresql services and configs (postgresql.conf, pg_hba.conf, postgres.yml)
+  block:
+
+    - name: recovery bash_profile
+      copy:
+        src:  "{{ backup_root_dir }}{{ shell_profile_file }}"
+        dest: "{{ shell_profile_file }}"
+        owner: postgres
+        group: postgres
+        mode: '0600'
+        remote_src: yes
+      become_user: postgres
+
+    - name: stopped patroni and pgse
+      systemd:
+        name: patroni
+        state: stopped
+        enabled: yes
+        daemon_reload: yes
+      when: patroni and ansible_facts.services['patroni.service'].state == 'running'
+
+    - name: stop old version PG SE
+      service:
+        name: postgresql
+        state: stopped
+      when: not patroni and ansible_facts.services['postgresql.service'].state == 'running'
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+    - name: remove installed new version pg se
+      yum:
+        name: postgresql-sber-edition
+        state: absent
+      ignore_errors: yes
+      become_user: root
+
+    - name: remove directory of new pg se version and create old
+      file:
+        path: "{{ item.src }}"
+        state: "{{ item.state }}"
+        owner: postgres
+        mode: 0700
+      with_items:
+        - { src: "{{ PGHOME }}",     state: absent }
+        - { src: "{{ PGHOME_OLD }}", state: absent }
+        - { src: "{{ PGHOME_OLD }}", state: directory }
+      become_user: root
+
+    - name: recovery old pg se version
+      shell: "cp -r {{ backup.postgresql }}/{{ PGHOME_OLD_NAME }}/* {{ PGHOME_OLD }}/"
+      become_user: postgres
+
+    - name: rewrite old patroni
+      block:
+
+        - name: create directory for patroni
+          file:
+            path: "{{ PGHOME_OLD }}/postgres_venv"
+            state: directory
+            owner: postgres
+            mode: 0700
+          become_user: root
+
+        - name: recovery old patroni
+          shell: "cp -r {{ backup.patroni }}/postgres_venv {{ PGHOME_OLD }}/"
+          become_user: postgres
+      
+      when: "patroni and ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 0"
+
+    - name: recovery postgresql.conf, pg_hba.conf, postgresql.auto.conf
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: postgres
+        mode: 0600
+        remote_src: yes
+      with_items:
+        - { dest: '{{ PGDATA_OLD }}/pg_hba.conf',          src: '{{ backup.postgresql }}{{ PGDATA_OLD }}/pg_hba.conf' }
+        - { dest: '{{ PGDATA_OLD }}/postgresql.conf',      src: '{{ backup.postgresql }}{{ PGDATA_OLD }}/postgresql.conf' }
+        - { dest: '{{ PGDATA_OLD }}/postgresql.auto.conf', src: '{{ backup.postgresql }}{{ PGDATA_OLD }}/postgresql.auto.conf' }
+      become_user: postgres
+
+    - name: recovery postgres.yml
+      copy:
+        src: "{{ backup.patroni }}{{ patroni_files.conf_dir }}/postgres.yml"
+        dest: "{{ patroni_files.conf_dir }}/postgres.yml"
+        owner: postgres
+        mode: '0600'
+        remote_src: yes
+      become_user: postgres
+      when: patroni
+
+    - name: check exists patroni
+      stat: path="{{ PYTHON_VENV_OLD }}/bin/patroni"
+      register: patroni_exists
+
+    - name: define needed service name (patroni.service or postgresql.service)
+      set_fact:
+        the_srvc: '{% if patroni_exists.stat.exists %}patroni.service{% else %}postgresql.service{% endif %}'
+
+    - name: recovery needed service (patroni.service or postgresql.service)
+      copy:
+        src: "{{ backup_root_dir }}{{ service_path_dir }}/{{ the_srvc }}"
+        dest: "{{ service_path_dir }}/{{ the_srvc }}"
+        remote_src: yes
+      become_user: root
+
+    - name: started patroni
+      systemd:
+        name: patroni
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      when: patroni
+
+    - name: send reload command to patroni
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl
+      vars:
+        endpoint_name: reload
+      when: patroni
+    
+    - name: start new version PG SE
+      systemd:
+        name: postgresql
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      when: not patroni
+
+    - name: loop wait for pgsql started
+      shell: '{{ PGHOME_OLD }}/bin/pg_isready -h 127.0.0.1 -p {{ PGPORT_OLD }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+      become_user: postgres
+
+  become: true
+
+- name: Reinitialize replica
+  block:
+
+    - name: send reinit command to patroni
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl
+      vars:
+        endpoint_name: reinit
+      when: patroni
+
+    - name: loop wait for pgsql started
+      shell: '{{ PGHOME_OLD }}/bin/pg_isready -h 127.0.0.1 -p {{ PGPORT_OLD }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+      become: true
+      become_user: postgres
+
+  when: installation_type == "cluster" and update_errors.types.pg.started_db
+  
+- name: Recovery cron job
+  block:
+
+    - name: removes cron job
+      cron:
+        name: "a job for postgresql clean logs"
+        state: absent
+      become: true
+      become_user: postgres
+      ignore_errors: yes
+
+    - name: backup cron job
+      copy:
+        src: "{{ backup_root_dir }}{{ global_scripts }}/postgresql_clean_logs"
+        dest: "{{ global_scripts }}/postgresql_clean_logs"
+        owner: postgres
+        group: postgres
+        mode: 0700
+        remote_src: yes
+      become: true
+      become_user: root
+
+    - name: creates cron job
+      cron:
+        name: "a job for postgresql clean logs"
+        special_time: daily
+        job: "{{ global_scripts }}/postgresql_clean_logs"
+      become: true
+      become_user: postgres
+
+  when: update_errors.types.pg.role_switched
+
+- name: Turn on synchronous mode and wait for cluster synchronization
+  include_role:
+    name: patroni
+    tasks_from: update_wait_cluster_synchronization
+  when: installation_type == "cluster"
+
+- name: Delete encrypt space of patroni db user, if pgse ver < 4.4.0
+  file:
+    path: "{{ pg_encrypt_cfg }}"
+    state: absent
+  become: true
+  when: ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0

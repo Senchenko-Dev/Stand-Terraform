@@ -1,0 +1,17 @@
+---
+- name: Get Logs K3s
+  shell: journalctl -eu k3s.service > /mnt/log/logs_k3s.txt
+
+- name: Get Logs awx-web
+  shell: kubectl -n awx  logs deploy/awx -c awx-web > /mnt/log/awx-web.txt
+
+- name: Get Logs awx-task
+  shell: kubectl -n awx  logs deploy/awx -c awx-task > /mnt/log/awx-tasks.txt
+
+- name: Get Logs awx-ee
+  shell: kubectl -n awx  logs deploy/awx -c awx-ee > /mnt/log/awx-ee.txt
+  
+- debug:
+    msg: "Логи по ссылке: http://{{awx_host}}:{{pod_nginx_port}}/log/ "
+
+

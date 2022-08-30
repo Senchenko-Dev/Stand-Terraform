@@ -1,0 +1,12 @@
+---
+#- name: Recheck for disks
+#  shell: "sg_scan"
+
+#- name: Rescan scsi
+#  shell: "rescan-scsi-bus.sh"
+
+- name: Check unparted disks and mounts
+  include_tasks: check_disks.yml
+  loop: "{{ disks }}"
+  loop_control:
+    loop_var: lvm

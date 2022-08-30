@@ -1,0 +1,131 @@
+####################################################### PRESETUP (mandatory) ##################################################################
+segment: "{{ 'sbercloud' | default('sigma', true) }}" # in case alpha/delta fill it like - segment: "{{ 'alpha' | default('sigma', true) }}"
+min_space_pgdata: 0                          # minimal free disk space on the pgdata (GB)
+min_space_pgarclogs: 0                       # minimal free disk space on the pgarclogs (GB)
+min_space_pgerrorlogs: 0                     # minimal free disk space on the pgerrorlogs (GB)
+sos_file_size: 0                           # volume of the sos file will be created in /pgdata (MB)
+
+####################################################### CONNECTION SETTINGS (mandatory) #######################################################
+# pg_hba settings for users as_admin/as_admin_read, all-sa-pam-group and other rules (you can write multiple lines separated by "\n")
+ldap_bind_tuz_name: 'SBT-SA-PGPSxxx' # name TUZ for ldap
+pam_hba: host all +all-sa-pam-group 0.0.0.0/0 ldap ldapserver=sigma.sbrf.ru ldapport=389 ldapprefix="cn=" ldapsuffix=", OU=NPA, OU=PAM, OU=ALL, OU=Sberbank, DC=sigma, dc=sbrf, dc=ru"
+other_hba: ['host all +{{ as_group }}, +as_admin_read 0.0.0.0/0 ldap ldapserver="sigma.sbrf.ru" ldapport=3268
+            ldapbasedn="" ldapbinddn="cn={{ ldap_bind_tuz_name }},OU=Service Accounts,OU=SBT,OU=Sberbank,dc=sigma,dc=sbrf,dc=ru"
+            ldapbindpasswd="{{ secrets.postgres.ldap_bind_tuz_password }}" ldapsearchfilter="(&(objectCategory=person)(objectClass=user)(cn=$username))"',
+           'host all all 0.0.0.0/0 md5'
+           ] # example ['rule 1', 'rule 2']
+ldap_tls: false                              # whether to switch tls in ldap autentification
+cert_dir: "{{ '' | default('TBF', true) }}" # example /etc/pki/ca-trust/source/anchors
+openldap_config: /etc/openldap/ldap.conf
+
+###################################################### SECURITY SETTINGS (optional) ##########################################################
+tde: false                                   # switching transparent data encryption
+admin_protection: false                      # switching administrator protection
+KMS_HOST: 192.168.175.3
+KMS_PORT: 8200
+KMS_LOGIN: adminencryption
+KMS_PASSWORD: autotest
+KMS_CONFIG: "{{ PGETCDIR }}/enc_connection_settings.cfg"
+KMS_VERSION: 1.4.0
+KMS_CLUSTER_ID: 'qwerty'
+
+#################################################### RSYSLOG SETTINGS (optional) #############################################################
+rsyslog: false                               # whether to switch RSYSLOG/SOC, usually used in PROM
+SOC_server: "{{ 'pvlas-csp000026.csp.omega.sbrf.ru' if segment == 'alpha' else '10.51.4.49' }}"
+SOC_server_port: 7718
+SOC_config_file: /etc/rsyslog.conf
+
+################################################## BACKUP SETTINGS (optional) ################################################################
+SRC: false                                   # whether to switch SRC(Backup System), usually used in PROM
+distrib_server: "{{ 'mirror.ca.sbrf.ru' if segment == 'alpha' else 'mirror.sigma.sbrf.ru' }}"
+distrib_ob2_version: "10.50"
+distrib_server_ob2_path: "http://{{ distrib_server }}/packages/rpm/DP/DP_{{ distrib_ob2_version }}/"
+data_protector_host: "Dismas13-idz.delta.sbrf.ru"
+data_protector_datalists: /etc/opt/omni/server/datalists
+data_protector_schedules: /etc/opt/omni/server/schedules
+manage_backup_bin: /opt/omni/lbin
+
+##################################################### ENVIRONMENT SETTINGS (mandatory) ########################################################
+pip_repository: "{% if   segment == 'alpha' %}{ 'index_url': 'http://mirror.ca.sbrf.ru/pypi/simple/',    'trusted_host': 'mirror.ca.sbrf.ru'}\
+                 {% elif segment == 'sigma' %}{ 'index_url': 'http://mirror.sigma.sbrf.ru/pypi/simple/', 'trusted_host': 'mirror.sigma.sbrf.ru'}\
+                 {% elif segment == 'sbercloud' %}{ 'index_url': 'https://spo.solution.sbt/python/simple/ ', 'trusted_host': 'spo.solution.sbt'}\
+                 {% else                    %}{ 'index_url': 'https://pypi.org/simple',                  'trusted_host': 'pypi.org'}\
+                 {% endif %}"
+
+linux_repos:
+  - name:     EPEL7
+    file:     mirror
+    baseurl:  http://mirror.sigma.sbrf.ru/rhel-extras/EPEL7
+    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sigma' }}"
+
+  - name:     EPEL7
+    file:     mirror
+    baseurl:  http://mirror.ca.sbrf.ru/rhel-extras/EPEL7
+    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'alpha' }}"
+
+  - name:     EPEL7
+    file:     mirror
+    baseurl:  https://mirror.yandex.ru/epel/7/x86_64/
+#    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-server-rhscl-7-rpms/
+    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
+
+  - name:     rhel-server-rhscl-7-rpms
+    file:     D10
+    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-server-rhscl-7-rpms/
+    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
+
+  - name:     rhel-7-server-extras-rpms
+    file:     D10
+    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-extras-rpms/
+    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
+
+######################################################## MONITORING ZABBIX (optional) ########################################################
+monitoring_zabbix: false                     # whether to switch Zabbix monitoring, usually used in PROM.
+monitoring_params:
+  monitoring_url: "{% if segment == 'alpha' %}http://api.zabbix.ca.sbrf.ru/api/monitoring/create_host{% else %}http://api.zabbix.sigma.sbrf.ru/api/monitoring/create_host{% endif %}"
+  token_main: "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJvcmlnX2lhdCI6MTU2NjI5NDY5MywiZXhwIjo5NTY1NjkzNDkzLCJ1c2VyX2lkIjoiS2FycGVua28tYXMiLCJyb2xlIjoibW9uaXRvcmluZ19hZGQ7bW9uaXRvcmluZ19hZGRfYWRtaW47bW9uaXRvcmluZ19jaGVja2FkbWluczttb25pdG9yaW5nX2FkZF9kaSIsIm5hbWUiOiJcdTA0MWFcdTA0MzBcdTA0NDBcdTA0M2ZcdTA0MzVcdTA0M2RcdTA0M2FcdTA0M2UgXHUwNDEwXHUwNDNkXHUwNDM0XHUwNDQwXHUwNDM1XHUwNDM5IFx1MDQyMVx1MDQzNVx1MDQ0MFx1MDQzM1x1MDQzNVx1MDQzNVx1MDQzMlx1MDQzOFx1MDQ0NyJ9.m-DxD5aXsmmwMxRlYKfx3fl-frZ68KdVPnxae75CZIc"
+  tag: "dbsberpg"
+  monitoring_url_pause: "{% if segment == 'alpha' %}http://api.zabbix.ca.sbrf.ru/api/event_supressing/create{% else %}http://api.zabbix.sigma.sbrf.ru/api/event_supressing/create{% endif %}"
+  monitoring_url_pause_delete: "{% if segment == 'alpha' %}http://api.zabbix.ca.sbrf.ru/api/event_supressing/delete{% else %}http://api.zabbix.ca.sigma.ru/api/event_supressing/delete{% endif %}"
+  token_for_pause: "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJvcmlnX2lhdCI6MTU2NjI5NDY5MywiZXhwIjo5NTY1NjkzNDkzLCJ1c2VyX2lkIjoiS2FycGVua28tYXMiLCJyb2xlIjoibW9uaXRvcmluZ19hZGQ7bW9uaXRvcmluZ19hZGRfYWRtaW47bW9uaXRvcmluZ19jaGVja2FkbWluczttb25pdG9yaW5nX2FkZF9kaTtldmVudGRhc2hib2FyZDtldmVudGRhc2hib2FyZHN1cHJlc3M7ZXZlbnRfc3VwcmVzc2luZztldmVudF9zdXByZXNzaW5nX2dldCIsIm5hbWUiOiJcdTA0MWFcdTA0MzBcdTA0NDBcdTA0M2ZcdTA0MzVcdTA0M2RcdTA0M2FcdTA0M2UgXHUwNDEwXHUwNDNkXHUwNDM0XHUwNDQwXHUwNDM1XHUwNDM5IFx1MDQyMVx1MDQzNVx1MDQ0MFx1MDQzM1x1MDQzNVx1MDQzNVx1MDQzMlx1MDQzOFx1MDQ0NyJ9.95MpTPll5NrnS7DWhnId6MnIDTxzYGMkPR8feVLz7Lw"
+  pause_period: 60
+
+########################################################## CONFIGURE DB (mandatory) ###########################################################
+pgbouncer_scram_password: "{{ secrets.postgres.pgbouncer_scram_password }}" #thEmosTpowerfulLpassworD13579_
+
+auditor_scram_pass: "{{ secrets.postgres.auditor_scram_pass }}" #thEmosTpowerfulLpassworD13579_
+
+zabbix_oasubd_scram_pass: "{{ secrets.postgres.auditor_scram_pass }}" #thEmosTpowerfulLpassworD13579_
+
+monitoring_php_scram_pass: "{{ secrets.postgres.monitoring_php_scram_pass }}" #thEmosTpowerfulLpassworD13579_
+
+postgres_db_scram_pass: "{{ secrets.postgres.postgres_db_scram_pass }}" # thEmosTpowerfulLpassworD13579_
+
+postgres_linux_pass: "{{ secrets.postgres.postgres_linux_pass }}" # postgres:123qwe123
+
+ldap_bind_tuz_password: "{{ secrets.postgres.ldap_bind_tuz_password }}" # thEmosTpowerfulLpassworD13579_
+
+patroni_yml_pass: "{{ secrets.postgres.patroni_yml_pass }}" # thEmosTpowerfulLpassworD13579_
+
+#DO NOT CHANGE!!!
+db_group_roles:
+  as_admin:
+    pass:
+      scram: thEmosTpowerfulLpassworD13579_
+      open: thEmosTpowerfulLpassworD13579_
+  transport:
+    pass:
+      scram: thEmosTpowerfulLpassworD13579_
+      open: thEmosTpowerfulLpassworD13579_
+
+######################################################### OTHER SETTINGS ##########################################################
+handle_update_errors: true                           # whether to run recovery cluster when update get error (true = rollback, false = skip error)
+run_smoke_test: false                                 # whether to run autotests after installation/update
+
+######################### Roles for LDAP authentification (Deprecated, need for delete then update) ###############################
+support_sigma: "{{ '' | default(['16802315', 'Bogachev-VY', '17630584', 'Dolgopolova-EI', 'Egorov-PA', 'Izosimov-SD', '16758344', 'Kedrov-BV', \
+'Kirichenko-evv', 'konovalov-dmn', 'Lesnych-AP', '8432474', 'Mikushin-EYu', 'Papulov-EA', '16710609', 'Roslyakov-AN', '17555360', '4001407', \
+'8428019', '16527841', 'guseynaliyev-avo'], true) }}" #list of support sigma logins
+support_alpha: "{{ '' | default(['Balykova-ZT', 'Bogachev-VY', 'Bulgakov-RS', 'Dolgopolova-EI', 'Egorov-PA', 'Izosimov1-SD', 'Ilin-ID', \
+'Kedrov1-BV', 'Kirichenko-evv', 'konovalov1-dn', 'Lesnych-AP', 'Mikushin-EY', 'Papulov1-EA', 'Perelomov-GP', 'Roslyakov-AN', \
+'Sidelnikov-IO', 'Trofimenko-AI', 'Chernyshov1-AN', 'Shagiakhmetov-RL', 'guseynaliev-av'], true) }}" #list of support alpha logins

@@ -1,0 +1,145 @@
+- name: Remove old postgres rules into sudoers
+  lineinfile:
+    path: /etc/sudoers
+    regexp: ^postgres.*ALL=[(]ALL[)].*NOPASSWD:.*
+    state: absent
+  become: true
+  when: "'update' in action_type"
+
+- name: Add postgres rules into sudoers
+  block:
+
+    - name: change and validate the sudoers file for general rules
+      lineinfile:
+        path: /etc/sudoers
+        state: present
+        insertafter: '^#includedir /etc/sudoers.d'
+        line: 'postgres  ALL=(ALL)       NOPASSWD:
+          /usr/bin/systemctl stop rsyslog,
+          /usr/bin/systemctl start rsyslog,
+          /usr/bin/systemctl restart rsyslog,
+          /usr/bin/systemctl status rsyslog,
+          /usr/bin/systemctl status rsyslog -l,
+          /usr/bin/systemctl status rsyslog --no-pager --full,
+          /usr/bin/systemctl enable rsyslog,
+          /usr/bin/systemctl disable rsyslog,
+          /usr/bin/systemctl daemon-reload,
+          /bin/journalctl -u rsyslog'
+        validate: /usr/sbin/visudo -cf %s
+
+    - name: change and validate the sudoers file for standalone-postgresql-only
+      replace:
+        path: /etc/sudoers
+        regexp: /bin/journalctl -u rsyslog
+        replace: '/bin/journalctl -u postgresql,
+          /usr/bin/systemctl stop postgresql,
+          /usr/bin/systemctl start postgresql,
+          /usr/bin/systemctl restart postgresql,
+          /usr/bin/systemctl status postgresql,
+          /usr/bin/systemctl status postgresql --no-pager --full,
+          /usr/bin/systemctl enable postgresql,
+          /usr/bin/systemctl disable postgresql,
+          /bin/journalctl -u rsyslog'
+        validate: /usr/sbin/visudo -cf %s
+      when: tag == 'standalone-postgresql-only' or tag == 'standalone-postgresql-pgbouncer'
+
+    - name: change and validate the sudoers file for standalone-postgresql-pgbouncer
+      replace:
+        path: /etc/sudoers
+        regexp: /bin/journalctl -u rsyslog
+        replace: '/bin/journalctl -u rsyslog,
+          /usr/bin/systemctl stop pgbouncer,
+          /usr/bin/systemctl start pgbouncer,
+          /usr/bin/systemctl restart pgbouncer,
+          /usr/bin/systemctl reload pgbouncer,
+          /usr/bin/systemctl status pgbouncer,
+          /usr/bin/systemctl status pgbouncer --no-pager --full,
+          /usr/bin/systemctl enable pgbouncer,
+          /usr/bin/systemctl disable pgbouncer,
+          /bin/journalctl -u pgbouncer'
+        validate: /usr/sbin/visudo -cf %s
+      when: tag == 'standalone-postgresql-pgbouncer' or tag == 'standalone-patroni-etcd-pgbouncer' or installation_type == 'cluster'
+
+    - name: change and validate the sudoers file for standalone-patroni-etcd-pgbouncer
+      replace:
+        path: /etc/sudoers
+        regexp: /bin/journalctl -u pgbouncer
+        replace: '/bin/journalctl -u pgbouncer,
+          /usr/bin/systemctl stop etcd,
+          /usr/bin/systemctl start etcd,
+          /usr/bin/systemctl restart etcd,
+          /usr/bin/systemctl status etcd,
+          /usr/bin/systemctl status etcd -l,
+          /usr/bin/systemctl status etcd --no-pager --full,
+          /usr/bin/systemctl enable etcd,
+          /usr/bin/systemctl disable etcd,
+          /usr/bin/systemctl stop patroni,
+          /usr/bin/systemctl start patroni,
+          /usr/bin/systemctl restart patroni,
+          /usr/bin/systemctl status patroni,
+          /usr/bin/systemctl status patroni -l,
+          /usr/bin/systemctl status patroni --no-pager --full,
+          /usr/bin/systemctl enable patroni,
+          /usr/bin/systemctl disable patroni,
+          /bin/journalctl -u etcd,
+          /bin/journalctl -u patroni'
+        validate: /usr/sbin/visudo -cf %s
+      when: tag == 'standalone-patroni-etcd-pgbouncer' or installation_type == 'cluster'
+
+    - name: change and validate the sudoers file for cluster-patroni-etcd-pgbouncer
+      replace:
+        path: /etc/sudoers
+        regexp: /bin/journalctl -u patroni
+        replace: '/bin/journalctl -u patroni,
+          /usr/bin/systemctl stop confd,
+          /usr/bin/systemctl start confd,
+          /usr/bin/systemctl restart confd,
+          /usr/bin/systemctl status confd,
+          /usr/bin/systemctl status confd -l,
+          /usr/bin/systemctl status confd --no-pager --full,
+          /usr/bin/systemctl enable confd,
+          /usr/bin/systemctl disable confd,
+          /bin/journalctl -u confd'
+        validate: /usr/sbin/visudo -cf %s
+      when: tag == 'cluster-patroni-etcd-pgbouncer'
+
+    - name: change and validate the sudoers file for cluster-patroni-etcd-pgbouncer-haproxy
+      replace:
+        path: /etc/sudoers
+        regexp: /bin/journalctl -u patroni
+        replace: '/bin/journalctl -u patroni,
+          /usr/bin/systemctl stop haproxy,
+          /usr/bin/systemctl start haproxy,
+          /usr/bin/systemctl restart haproxy,
+          /usr/bin/systemctl reload haproxy,
+          /usr/bin/systemctl status haproxy,
+          /usr/bin/systemctl status haproxy -l,
+          /usr/bin/systemctl status haproxy --no-pager --full,
+          /usr/bin/systemctl enable haproxy,
+          /usr/bin/systemctl disable haproxy,
+          /bin/journalctl -u haproxy'
+        validate: /usr/sbin/visudo -cf %s
+      when: tag == 'cluster-patroni-etcd-pgbouncer-haproxy'
+
+  become: true
+  when: inventory_hostname != 'etcd'
+
+- name: Change and validate the sudoers file for etcd
+  lineinfile:
+    path: /etc/sudoers
+    state: present
+    insertafter: '^#includedir /etc/sudoers.d'
+    line: 'postgres  ALL=(ALL)       NOPASSWD:
+      /usr/bin/systemctl daemon-reload,
+      /usr/bin/systemctl stop etcd,
+      /usr/bin/systemctl start etcd,
+      /usr/bin/systemctl restart etcd,
+      /usr/bin/systemctl status etcd,
+      /usr/bin/systemctl status etcd -l,
+      /usr/bin/systemctl status etcd --no-pager --full,
+      /usr/bin/systemctl enable etcd,
+      /usr/bin/systemctl disable etcd,
+      /bin/journalctl -u etcd'
+    validate: /usr/sbin/visudo -cf %s
+  become: true
+  when: inventory_hostname == 'etcd'

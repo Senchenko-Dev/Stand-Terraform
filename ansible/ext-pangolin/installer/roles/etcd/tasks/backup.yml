@@ -1,0 +1,53 @@
+- name: Common task for master, replica and etcd
+  block:
+
+    - name: ensure {{ backup.etcd }} directory exist
+      file:
+        path: "{{ item.src }}"
+        state: "{{ item.state }}"
+        mode: 0700
+      with_items:
+        - { src: "{{ backup.etcd }}",                           state: "absent" }
+        - { src: "{{ backup.etcd }}{{ etcd_files.conf_dir }}/", state: "directory" }
+        - { src: "{{ backup.etcd }}/db_backup",                 state: "directory" }
+
+    - name: get installed etcd version
+      uri:
+        url: "http://localhost:{{ ports.etcd_inner }}/version"
+      register: installed_version_etcd
+      
+    - name: download the etcd package but do not install it
+      yum:
+        name:
+          - "etcd-{{ installed_version_etcd.json.etcdserver }}"
+        state: present
+        download_only: true
+        download_dir: "{{ backup.etcd }}"
+
+    - name: copy etcd files to {{ backup.etcd }}
+      copy:
+        src: "{{ item }}"
+        dest: "{{ backup.etcd }}{{ etcd_files.conf_dir }}"
+        remote_src: yes
+      with_items:
+        - "{{ etcd_files.conf_dir }}/etcd.conf"
+        - "{{ etcd_files.conf_dir }}/etcd.conf.base"
+    
+    - name: backup etcd service
+      copy:
+        src: "{{ service_path_dir }}/etcd.service"
+        dest: "{{ backup_root_dir }}{{ service_path_dir }}/etcd.service"
+        remote_src: yes
+        owner: root
+        group: root
+
+    - name: backup etcd data for current node
+      copy:
+        src: "{{ etcd_files.data_dir }}"
+        dest: "{{ backup.etcd }}/db_backup"
+        owner: etcd
+        group: etcd
+        mode: 0700
+        remote_src: yes
+        
+  become: true

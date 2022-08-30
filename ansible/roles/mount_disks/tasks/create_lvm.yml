@@ -1,0 +1,89 @@
+---
+- name: Create directory
+  file:
+    path: "{{ lvm.mnt_dir }}"
+    state: directory
+
+- name: Check if d folder is empty before proceeding
+  find:
+    paths: "{{ lvm.mnt_dir }}"
+  register: files_found
+  
+- fail:
+    msg: "mnt_dir {{ lvm.mnt_dir }} is not empty."
+  when: files_found.matched > 0
+
+- name: Define suitable disks list
+  set_fact:
+    suitable_disks: []
+
+- name: Filter disks from list
+  include_tasks: filter_disks.yml
+  loop: "{{ lsblk_search_size.stdout_lines }}"
+  loop_control:
+    loop_var: disk
+
+- fail:
+    msg: "No suitable disk with {{ lvm.size }} size found for mnt_dir {{ lvm.mnt_dir }}"
+  when: suitable_disks | length == 0
+  
+- name: Set disk var
+  set_fact:
+    target_disk: "{{ suitable_disks[0] }}"
+
+- name: Create partition
+  parted:
+    device: "/dev/{{ target_disk }}"
+    number: 1
+    flags: [ lvm ]
+    state: present
+
+- name: Create vg
+  lvg:
+    vg: "{{ target_disk }}_vg"
+    pvs: "/dev/{{ target_disk }}1"
+    state: present
+
+- name: Create lv
+  lvol:
+    vg: "{{ target_disk }}_vg"
+    lv: "{{ target_disk }}_lv"
+    size: '100%VG'
+    state: present
+
+- name: Format lv
+  filesystem:
+    fstype: 'ext4'
+    dev: "/dev/{{ target_disk }}_vg/{{ target_disk }}_lv"
+
+- name: Get uuid
+  shell: "blkid /dev/{{ target_disk }}_vg/{{ target_disk }}_lv -sUUID -ovalue"
+  register: uuid_get
+
+- name: Mount lv
+  mount:
+    path: "{{ lvm.mnt_dir }}"
+    src: "UUID={{ uuid_get.stdout }}"
+    fstype: ext4
+    state: mounted
+
+- name: Set maximum expiration date for password
+  user:
+    name: "{{ lvm.owner }}"
+  when: lvm.owner is defined
+
+- name: Ensure group  exists
+  group:
+    name: "{{ lvm.group }}"
+    state: present
+  when: lvm.group is defined
+
+- name: Permissions on Folder
+  file:
+    path: "{{ lvm.mnt_dir }}"
+    state: directory
+    owner: "{{ lvm.owner | default(ansible_user, true) }}"
+    group: "{{ lvm.group | default(ansible_user, true) }}"
+    mode: "{{ lvm.mode | default('0755')}}"
+
+                      

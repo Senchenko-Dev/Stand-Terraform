@@ -1,0 +1,83 @@
+- name: Find 3rdparty extensions
+  block:
+
+    - name: find 3rdparty extensions
+      set_fact:
+        extensions: []
+
+    - name: check if postgis exists
+      stat:
+        path: "{{ local_distr_path }}/3rdparty/postgis.tar.gz"
+      register: check_postgis
+
+    - name: found postgis
+      set_fact:
+        extensions: "{{ extensions + ['postgis'] }}"
+      when: check_postgis.stat.exists
+
+    - name: check if pgrouting exists
+      stat:
+        path: "{{ local_distr_path }}/3rdparty/pgrouting.tar.gz"
+      register: check_pgrouting
+
+    - name: found pgrouting
+      set_fact:
+        extensions: "{{ extensions + ['pgrouting'] }}"
+      when: check_pgrouting.stat.exists
+
+  delegate_to: localhost
+
+- name: Copy cracklib, postgis and pgroutin in {{ PGHOME }}/3rdparty
+  block:
+
+    - name: copy cracklib to {{ PGHOME }}/lib
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ PGHOME }}/lib/"
+        owner: postgres
+        group: postgres
+        mode: "{{ item.mode }}"
+      with_items:
+        - { src: '{{ local_distr_path }}/3rdparty/cracklib/libcrack.so', mode: 600 }
+        - { src: '{{ local_distr_path }}/3rdparty/cracklib/pw_dict.hwm', mode: 600 }
+        - { src: '{{ local_distr_path }}/3rdparty/cracklib/pw_dict.pwd', mode: 600 }
+        - { src: '{{ local_distr_path }}/3rdparty/cracklib/pw_dict.pwi', mode: 600 }
+
+    - name: copy other extensions
+      block:
+
+        - name: create dirs for extensions
+          file:
+            path: "{{ PGHOME }}/3rdparty/{{ item }}"
+            state: directory
+            owner: postgres
+            group: postgres
+            mode: 0700
+          with_items: "{{ extensions }}"
+
+        - name: copy extensions in {{ PGHOME }}
+          copy:
+            src: "{{ local_distr_path }}/3rdparty/{{ item }}.tar.gz"
+            dest: "{{ PGHOME }}/3rdparty"
+          with_items: "{{ extensions }}"
+
+        - name: unarchive extensions
+          unarchive:
+            src:  "{{ PGHOME }}/3rdparty/{{ item }}.tar.gz"
+            dest: "{{ PGHOME }}/3rdparty"
+            remote_src: yes
+            owner: postgres
+            group: postgres
+            mode: 0700
+          with_items: "{{ extensions }}"
+
+        - name: remove archives
+          file:
+            state: absent
+            path: "{{ PGHOME }}/3rdparty/{{ item }}.tar.gz"
+          with_items: "{{ extensions }}"
+
+      when: extensions | length > 0
+
+  become: true
+

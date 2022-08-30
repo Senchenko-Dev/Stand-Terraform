@@ -1,0 +1,156 @@
+- name: Define ip addresses accepted connect to DB port if cluster installed
+  set_fact:
+    the_accepted_ip_list: [ "127.0.0.1",
+                          "{{ the_ansible_local_address }}",
+                          "{{ hostvars['master'].ansible_default_ipv4.address }}", 
+                          "{{ hostvars['replica'].ansible_default_ipv4.address }}",
+                          "{{ hostvars['etcd'].ansible_default_ipv4.address }}" ]
+  run_once: true
+  when: installation_type == 'cluster'
+
+- name: Define ip addresses accepted connect to DB port if standalone installed
+  set_fact:
+    the_accepted_ip_list: [ "127.0.0.1",
+                          "{{ the_ansible_local_address }}",
+                          "{{ hostvars['master'].ansible_default_ipv4.address }}" ]
+  run_once: true
+  when: installation_type == 'standalone'
+
+- name: check exists pgbouncer
+  stat: 
+    path: "{{ pgbouncer_files.bin_path }}"
+  register: pgbouncer_exists
+  become: true
+
+- name: check exists haproxy
+  stat: 
+    path: "{{ haproxy_files.bin_path }}"
+  register: haproxy_exists
+  become: true
+
+- name: Block {{ the_current_pg_port }} port for input traffic but {{ the_accepted_ip_list }}
+  block:
+
+    - name: block {{ the_current_haproxy_port }} port for input traffic for {{ the_accepted_ip_list }}
+      shell: "iptables -A INPUT -p tcp -m tcp -s {{ item }} --dport {{ the_current_haproxy_port }} -j ACCEPT"
+      loop: "{{ the_accepted_ip_list }}"
+
+    - name: block {{ the_current_pgbouncer_port }} port for input traffic for {{ the_accepted_ip_list }}
+      shell: "iptables -A INPUT -p tcp -m tcp -s {{ item }} --dport {{ the_current_pgbouncer_port }} -j ACCEPT"
+      loop: "{{ the_accepted_ip_list }}"
+
+    - name: block {{ the_current_pg_port }} port for input traffic for {{ the_accepted_ip_list }}
+      shell: "iptables -A INPUT -p tcp -m tcp -s {{ item }} --dport {{ the_current_pg_port }} -j ACCEPT"
+      loop: "{{ the_accepted_ip_list }}"
+
+    - name: block {{ the_current_haproxy_port }} port for input traffic for other ip
+      shell: "iptables -A INPUT -p tcp -m tcp --dport {{ the_current_haproxy_port }} -j DROP"
+
+    - name: block {{ the_current_pgbouncer_port }} port for input traffic for other ip
+      shell: "iptables -A INPUT -p tcp -m tcp --dport {{ the_current_pgbouncer_port }} -j DROP"
+
+    - name: block {{ the_current_pg_port }} port for input traffic for other ip
+      shell: "iptables -A INPUT -p tcp -m tcp --dport {{ the_current_pg_port }} -j DROP"
+
+    - name: wait to apply rule for block traffic
+      pause:
+        seconds: 10
+
+    - name: disable technical users and monitoring
+      include_role:
+        name: control
+        tasks_from: control_monitoring_operations
+      vars:
+        operation: disable
+      when: "monitoring_zabbix is defined and monitoring_zabbix"
+
+  become: true
+  when: block_traffic
+
+- name: Open {{ the_current_pg_port }} port for input traffic
+  block:
+
+    - name: unblock {{ the_current_pg_port }} port for input traffic for other ip
+      shell: "iptables -D INPUT -p tcp --dport {{ the_current_pg_port }} -j DROP"
+      ignore_errors: yes
+
+    - name: unblock {{ the_current_pgbouncer_port }} port for input traffic for other ip
+      shell: "iptables -D INPUT -p tcp --dport {{ the_current_pgbouncer_port }} -j DROP"
+      ignore_errors: yes
+
+    - name: unblock {{ the_current_haproxy_port }} port for input traffic for other ip
+      shell: "iptables -D INPUT -p tcp --dport {{ the_current_haproxy_port }} -j DROP"
+      ignore_errors: yes
+
+    - name: unblock {{ the_current_pg_port }} port for input traffic for {{ the_accepted_ip_list }}
+      shell: "iptables -D INPUT -p tcp -s {{ item }} --dport {{ the_current_pg_port }} -j ACCEPT"
+      loop: "{{ the_accepted_ip_list }}"
+      ignore_errors: yes
+
+    - name: unblock {{ the_current_pgbouncer_port }} port for input traffic for {{ the_accepted_ip_list }}
+      shell: "iptables -D INPUT -p tcp -s {{ item }} --dport {{ the_current_pgbouncer_port }} -j ACCEPT"
+      loop: "{{ the_accepted_ip_list }}"
+      ignore_errors: yes
+
+    - name: unblock {{ the_current_haproxy_port }} port for input traffic for {{ the_accepted_ip_list }}
+      shell: "iptables -D INPUT -p tcp -m tcp -s {{ item }} --dport {{ the_current_haproxy_port }} -j ACCEPT"
+      loop: "{{ the_accepted_ip_list }}"
+      ignore_errors: yes
+
+    - name: wait to apply rule for block traffic
+      pause:
+        seconds: 10
+
+    - name: define ip addresses with pg se nodes
+      set_fact:
+        the_ip_list_with_pgse: [ "{{ hostvars['master'].ansible_default_ipv4.address }}", 
+                                 "{{ hostvars['replica'].ansible_default_ipv4.address }}" ]
+      when: installation_type == 'cluster'
+
+    - name: define ip addresses with pg se nodes
+      set_fact:
+        the_ip_list_with_pgse: [ "{{ hostvars['master'].ansible_default_ipv4.address }}"]
+      when: installation_type == 'standalone'
+
+    - name: wait to unblock traffic
+      shell: "nmap -p {{ the_current_pg_port }} {{ item }} | grep {{ the_current_pg_port }} | cut -d ' ' -f 2 | tr -d ' ' "
+      loop: "{{ the_ip_list_with_pgse }}"
+      register: is_blocked
+
+    - name: check opened {{ the_current_pg_port }} on pg se nodes
+      assert:
+        that: "'open' == is_blocked.results[index].stdout"
+        fail_msg: "{{ the_current_pg_port }} closed for {{ item }}"
+        success_msg: "{{ the_current_pg_port }} opened for {{ item }}"
+      loop: "{{ the_ip_list_with_pgse }}"
+      loop_control:
+        index_var: index
+
+    - name: check opened {{ the_current_pgbouncer_port }} on pg se nodes
+      assert:
+        that: "'open' == is_blocked.results[index].stdout"
+        fail_msg: "{{ the_current_pgbouncer_port }} closed for {{ item }}"
+        success_msg: "{{ the_current_pgbouncer_port }} opened for {{ item }}"
+      loop: "{{ the_ip_list_with_pgse }}"
+      loop_control:
+        index_var: index
+
+    - name: check opened {{ the_current_haproxy_port }} on pg se nodes
+      assert:
+        that: "'open' == is_blocked.results[index].stdout"
+        fail_msg: "{{ the_current_haproxy_port }} closed for {{ item }}"
+        success_msg: "{{ the_current_haproxy_port }} opened for {{ item }}"
+      loop: "{{ the_ip_list_with_pgse }}"
+      loop_control:
+        index_var: index
+
+    - name: enable technical users and monitoring
+      include_role:
+        name: control
+        tasks_from: control_monitoring_operations
+      vars:
+        operation: enable
+      when: "monitoring_zabbix is defined and monitoring_zabbix"
+      
+  become: true
+  when: not block_traffic

@@ -1,0 +1,16 @@
+urllib3==1.25.9
+PyYAML==5.3.1
+six==1.15.0
+kazoo==2.8.0
+psycopg2-binary==2.8.4
+flake8==3.7.9
+python-dateutil==2.8.1
+boto==2.49.0
+requests==2.23.0
+python-etcd==0.4.5
+click==7.1.2
+prettytable==0.7.2
+psutil==5.7.3
+cdiff==1.0
+python-daemon==2.2.4
+setuptools-rust==1.1.1

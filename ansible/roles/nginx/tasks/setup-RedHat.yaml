@@ -1,0 +1,27 @@
+- name: install RedHat unzip
+  yum:
+    name: unzip
+    state: latest
+
+- name: Install RedHat MC
+  yum:
+    name: mc
+    state: latest
+
+- name: Install RedHat Python
+  yum:
+    name: python
+    state: latest
+
+# enable EPEL repo by installing the epel-release package
+#- name: install EPEL repo
+#  become: yes
+#  yum: name=epel-release state=present
+#  ignore_errors: yes
+
+- name: Install RedHat Nginx
+  yum:
+    name: "{{ nginx_version }}"
+    state: installed
+    update_cache: yes
+    allow_downgrade: yes

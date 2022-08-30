@@ -1,0 +1,47 @@
+---
+- debug:
+    msg: "{{ lvm }}"
+
+- name: Search disk with requested size
+  shell: "lsblk | grep disk | grep -w {{ lvm.size }} | awk '{print$1}'"
+  register: lsblk_search_size
+  failed_when: no
+  
+- name: Fail if disk not found
+  fail:
+    msg: Disk with size {{ lvm.size }} not found
+  when: lsblk_search_size.rc != 0
+
+- name: Check mount dir 
+  shell: "lsblk | grep -w {{ lvm.mnt_dir }}"
+  failed_when: no
+  register: lsblk_search_mnt
+
+- block:
+
+
+  - name: If dir already mounted check size
+    debug:
+      msg: "lsblk -b | awk '{print $1, int($4/1024/1024/1000)\"G\", $7}' | grep -w {{ lvm.mnt_dir }} | grep -w {{ lvm.size }}"
+
+
+  - name: If dir already mounted check size
+    shell: "lsblk -b | awk '{print $1, int($4/1024/1024/1000)\"G\", $7}' | grep -w {{ lvm.mnt_dir }} | grep -w {{ lvm.size }} || lsblk | awk '{print $1, $4, $7}' | grep -w {{ lvm.mnt_dir }} | grep -w {{ lvm.size }}"
+    failed_when: no
+    register: lsblk_mnt_size
+  
+  - name: Fail if dir already mnt with diff size
+    fail:
+      msg: "Mount dir already mounted with different size: {{ lsblk_search_mnt.stdout }}"
+#      msg: "Mount dir already mounted with different size: {{ lsblk_mnt_size.stderr }}"
+    when: lsblk_mnt_size.rc != 0
+
+  - debug:
+      msg: "Mount dir already mounted with same size: {{ lsblk_search_mnt.stdout }}"
+    when: lsblk_mnt_size.rc == 0
+
+  when: lsblk_search_mnt.rc == 0
+  
+- name: import create lvm task
+  include_tasks: create_lvm.yml
+  when: lsblk_search_mnt.rc != 0

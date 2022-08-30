@@ -1,0 +1,116 @@
+DATALIST "{{ hostvars['master'].ansible_fqdn }}_PG_FULL"
+GROUP "DININFRA"
+DESCRIPTION "PostgreSQL_SE"
+RECONNECT
+DYNAMIC 2 2
+PREEXEC "{{ pg_major_version }}_manage_backup.sh start" -on_host "{{ hostvars['master'].ansible_fqdn }}"
+POSTEXEC "{{ pg_major_version }}_manage_backup.sh stop" -on_host "{{ hostvars['master'].ansible_fqdn }}"
+DEFAULTS
+{
+    FILESYSTEM
+    {
+        -vss    no_fallback
+    } -protect days 3 -keepcatalog same_as_dataprotection
+    RAWDISK
+    {
+
+    }
+}
+
+DEVICE "{{ device }}"
+{
+}
+
+FILESYSTEM "{{ db_files_fs }}_1" {{ hostvars['master'].ansible_fqdn }}:"{{ db_files_fs }}"
+{
+    -trees
+        "{{ PGDATA }}"
+	-only
+		"*1"
+}
+
+FILESYSTEM "{{ db_files_fs }}_2" {{ hostvars['master'].ansible_fqdn }}:"{{ db_files_fs }}"
+{
+    -trees
+        "{{ PGDATA }}"
+	-only
+        "*2"
+}
+
+FILESYSTEM "{{ db_files_fs }}_3" {{ hostvars['master'].ansible_fqdn }}:"{{ db_files_fs }}"
+{
+    -trees
+        "{{ PGDATA }}"
+	-only
+        "*3"
+}
+
+FILESYSTEM "{{ db_files_fs }}_4" {{ hostvars['master'].ansible_fqdn }}:"{{ db_files_fs }}"
+{
+    -trees
+        "{{ PGDATA }}"
+	-only
+        "*4"
+}
+
+FILESYSTEM "{{ db_files_fs }}_5" {{ hostvars['master'].ansible_fqdn }}:"{{ db_files_fs }}"
+{
+    -trees
+        "{{ PGDATA }}"
+	-only
+        "*5"
+}
+
+FILESYSTEM "{{ db_files_fs }}_6" {{ hostvars['master'].ansible_fqdn }}:"{{ db_files_fs }}"
+{
+    -trees
+        "{{ PGDATA }}"
+	-only
+        "*6"
+}
+
+FILESYSTEM "{{ db_files_fs }}_7" {{ hostvars['master'].ansible_fqdn }}:"{{ db_files_fs }}"
+{
+    -trees
+        "{{ PGDATA }}"
+	-only
+        "*7"
+}
+
+FILESYSTEM "{{ db_files_fs }}_8" {{ hostvars['master'].ansible_fqdn }}:"{{ db_files_fs }}"
+{
+    -trees
+        "{{ PGDATA }}"
+	-only
+        "*8"
+}
+
+FILESYSTEM "{{ db_files_fs }}_9" {{ hostvars['master'].ansible_fqdn }}:"{{ db_files_fs }}"
+{
+    -trees
+        "{{ PGDATA }}"
+	-only
+        "*9"
+}
+
+FILESYSTEM "{{ db_files_fs }}_other" {{ hostvars['master'].ansible_fqdn }}:"{{ db_files_fs }}"
+{
+    -trees
+        "{{ PGDATA }}"
+	-skip
+        "*1"
+        "*2"
+        "*3"
+        "*4"
+        "*5"
+        "*6"
+        "*7"
+        "*8"
+        "*9"
+}
+
+FILESYSTEM "{{ db_pg_data_fs }}_ts" {{ hostvars['master'].ansible_fqdn }}:"{{ db_pg_data_fs }}"
+{
+    -trees
+        "{{ tablespace_location }}"
+}

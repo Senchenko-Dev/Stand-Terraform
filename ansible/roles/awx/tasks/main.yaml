@@ -1,0 +1,41 @@
+---
+# Файл в соответствии с примером СТД-11 https://confluence.sberbank.ru/pages/viewpage.action?pageId=4833510147
+
+- debug:
+    msg: "================ Install AWX ================"
+  #    msg: "{{ role_name }}"
+  tags:
+    - always
+
+#- name: import health_check
+#  import_tasks: health_check.yaml
+#  tags:
+#    - health_check
+
+- name: import install-awx
+  import_tasks: setup-RedHat.yaml
+  tags:
+   - install
+
+#- name: import control
+#  import_tasks: control.yaml
+#  tags:
+#   - control
+
+#- name: import logs
+#  import_tasks: logs.yaml
+#  tags:
+#    - logs
+
+#- name: import backup
+#  import_tasks: backup.yaml
+#  tags:
+#    - backup
+
+#- name: import uninstall
+#  import_tasks: uninstall.yaml
+#  tags:
+#    - uninstall
+
+
+

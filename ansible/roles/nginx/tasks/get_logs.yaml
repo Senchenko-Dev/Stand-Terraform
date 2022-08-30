@@ -1,0 +1,62 @@
+---
+- name: Get IP from fact
+  set_fact:
+    ip: "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+
+- name: Copy Template
+  template:
+    src: nginx.conf
+    dest: /etc/nginx
+    owner: "{{ nginx_user }}"
+    group: "{{ nginx_group }}"
+
+- name: restatrt nginx
+  shell: systemctl restart nginx
+
+- name: nginx -s reload
+  shell: nginx -s reload
+
+- name: Create folder
+  file:
+    path: /mnt/log
+    state: directory
+    owner: "{{ nginx_user }}"
+    group: "{{ nginx_group }}"
+
+- name: Get Logs nginx.service
+  shell: journalctl -eu nginx.service > /mnt/log/nginx_service.txt
+
+- name: Get Logs Nginx error
+  shell: "cat {{nginx_log_dir}}/error.log > /mnt/log/error.txt"
+
+- name: Get Logs Nginx access.log
+  shell: "cat {{nginx_log_dir}}/access.log > /mnt/log/access.txt"
+
+- name: Create folder
+  file:
+    path: "/mnt/nginx-{{ip}}"
+    state: directory
+    owner: "{{ nginx_user }}"
+    group: "{{ nginx_group }}"
+
+- name: fetch files to host
+  fetch:
+    src: "/mnt/log/{{item}}"
+    dest: "/tmp/nginx-{{ip}}/"
+    owner: "{{ nginx_user }}"
+    group: "{{ nginx_group }}"
+    flat: yes
+  with_items:
+    - access.txt
+    - error.txt
+    - nginx_service.txt
+
+- name: copy log to master
+  copy:
+    src: "/tmp/nginx-{{ip}}"
+    dest: /mnt/log
+  delegate_to: "{{awx_host}}"
+
+- debug:
+    msg: "Логи по ссылке: http://{{awx_host}}:{{pod_nginx_port}}/log/ "
+

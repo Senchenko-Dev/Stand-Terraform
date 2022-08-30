@@ -1,0 +1,50 @@
+- name: Run this block only for master and replica, not etcd
+  block:
+
+    - name: define name of patroni venv
+      set_fact:
+        _backuppatroni_patroni_venv_name: "postgres_venv"
+
+    - name: define name of patroni venv
+      set_fact:
+        _backuppatroni_patroni_venv_name: "patroni_venv"
+      when: ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int != 0
+
+    - name: ensure {{ backup.patroni }}
+      file:
+        path: "{{ item.src }}"
+        state: "{{ item.state }}"
+        owner: postgres
+        group: postgres
+        mode: 0700
+      with_items:
+        - { src: "{{ backup.patroni }}",                                   state: absent }
+        - { src: "{{ backup.patroni }}{{ patroni_files.conf_dir }}",       state: directory }
+
+    - name: backup virtual environment for python
+      copy:
+        src: "{{ PYTHON_VENV_OLD }}"
+        dest: "{{ backup.patroni }}/{{ _backuppatroni_patroni_venv_name }}"
+        owner: postgres
+        group: postgres
+        mode: 0700
+        directory_mode: yes
+        remote_src: yes
+
+    - name: backup patroni configuration file
+      copy:
+        src: "{{ patroni_files.conf_dir }}/postgres.yml"
+        dest: "{{ backup.patroni }}{{ patroni_files.conf_dir }}/postgres.yml"
+        remote_src: yes
+        owner: postgres
+        group: postgres
+        mode: 0600
+
+    - name: backup config of patroni service
+      copy:
+        src: "{{ service_path_dir }}/patroni.service"
+        dest: "{{ backup_root_dir }}{{ service_path_dir }}/patroni.service"
+        remote_src: yes
+
+  become: true   
+  when: inventory_hostname != 'etcd'

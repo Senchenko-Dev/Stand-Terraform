@@ -1,0 +1,34 @@
+DATALIST "{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}_RUN_PG_FULL"
+GROUP "DININFRA"
+DESCRIPTION "PostgreSQL_SE"
+RECONNECT
+DYNAMIC 1 1
+POSTEXEC "patroni_session_run.sh" -on_host "{{ data_protector_host }}"
+DEFAULTS
+{
+    FILESYSTEM
+    {
+        -vss    no_fallback
+    } -protect days 3
+    RAWDISK
+    {
+
+    }
+}
+
+DEVICE "{{ device }}"
+{
+}
+
+FILESYSTEM "{{ hostvars['master'].ansible_fqdn }}" {{ hostvars['master'].ansible_fqdn }}:"/"
+{
+    -trees
+        "/etc/opt/omni/client/cell_server"
+}
+
+FILESYSTEM "{{ hostvars['replica'].ansible_fqdn }}" {{ hostvars['replica'].ansible_fqdn }}:"/"
+{
+    -trees
+        "/etc/opt/omni/client/cell_server"
+}
+

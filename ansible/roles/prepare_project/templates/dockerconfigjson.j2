@@ -1,0 +1,1 @@
+{"auths":{"{{ item.oseImagePullRegistry }}":{"username":"{{ item.oseImagePullUser}}","password":"{{ item.oseImagePullPassword }}","email":"{{ item.oseImagePullEmail | default('example@email.com') }}","auth":"{{ (item.oseImagePullUser + ':' + item.oseImagePullPassword) | b64encode }}"}}}

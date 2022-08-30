@@ -1,0 +1,47 @@
+---
+- name: Create resource quota
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'templates/resourcequota.yml')}}"
+  retries: 4
+  delay: 5
+  when: quota is defined
+
+- name: Create image pull secret
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'templates/imagepullsecret.yml')}}"
+  with_items: "{{ pullCreds }}"
+  when: pullCreds is defined
+
+- name: Create sa
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'templates/serviceaccount.yml') }}"
+  with_items: "{{ sa }}"
+  when: sa is defined
+  
+- name: Create bindings
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'templates/rolebinding.yml') }}"
+  with_items: "{{ bindings }}"
+  when: bindings is defined
+
+- name: Create Service Mesh Control Plane
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'templates/' + cp.template) }}"
+    wait: yes
+    wait_timeout: 1000
+    wait_condition:
+      reason: ComponentsReady
+      status: yes
+      type: Ready
+  when: cp is defined
+
+- name: Create Service Mesh Memeber
+  k8s:
+    state: present
+    definition: "{{ lookup('template', 'templates/servicemeshmember.yml') }}"
+  when: sm is defined

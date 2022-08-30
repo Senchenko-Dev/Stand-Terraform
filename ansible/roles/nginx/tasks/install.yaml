@@ -1,0 +1,9 @@
+--- 
+- include_tasks: inc-install-RedHat.yaml
+  when: ansible_os_family == 'RedHat'
+ 
+- include_tasks: inc-install-Altlinux.yaml
+  when: ansible_os_family == 'Altlinux'
+
+
+

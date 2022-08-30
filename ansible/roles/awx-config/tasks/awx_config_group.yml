@@ -1,0 +1,68 @@
+- name: Создание инвентаря
+  awx.awx.inventory:
+    name: "{{ org_name }}-{{ group_name }}"
+    description: "Инвентарь группы {{ group_name }}"
+    organization: "{{ org_name }}"
+    variables:
+  register: result
+  until: result is not failed
+  retries: 5
+  delay: 3
+
+- name: Создание источника инвентаря
+  awx.awx.inventory_source:
+    name: "Источник инвентаря группы {{ group_name }}"
+    inventory: "{{ org_name }}-{{ group_name }}"
+    organization: "{{ org_name }}"
+    overwrite: yes
+    overwrite_vars: yes
+    source: scm
+    source_project: "{{ org_name }}-project"
+    source_path: "{{ inventory_path }}"
+#    update_on_launch: yes
+    update_on_project_update : yes
+  register: result
+  until: result is not failed
+  retries: 5
+  delay: 3
+
+- set_fact:
+#    found_tags: "{{ awx_tags.split(' ') | difference(exclude_tags.split(' ')) }}"
+    spo_role_defaults: "{{ lookup('file', 'roles/' + spo_role_name + '/defaults/main.yml') | from_yaml }}"
+
+- set_fact:
+    awx_tags: "{{ spo_role_defaults.awx_tags | default([]) }}"
+
+- debug: 
+    var: awx_tags
+
+#- name: Ожидание загрузки проекта
+#  wait_for:
+#    path: ansible/spo_install_playbook.yml
+#    timeout: 90
+
+- name: Создание шаблонов JOBs согласно тэгам
+  awx.awx.job_template:
+    name: "{{ spo_role_name }}_{{ item }}" # если инвентарь на выбор
+#    name: "{{ group_name }}_{{ item }}" # если инвентарь фиксированный
+    job_type: "run"
+    organization: "{{ org_name }}"
+    ask_inventory_on_launch: yes
+    #        inventory: "{{ org_name }}-{{ group_name }}"
+    project: "{{ org_name }}-project"
+    playbook: "ansible/spo_install_playbook.yml" # теперь в той же папке, что и setup vm
+    job_tags: "{{ item }}"
+    credentials:
+      - "{{ machine_cred_name }}"
+    state: "present"
+    become_enabled: yes
+    timeout: 37
+    extra_vars:
+      spo_role_name: "{{ spo_role_name }}"
+      awx_host: "{{ awx_host }}"
+      pod_nginx_port: "{{pod_nginx_port}}"
+  loop: "{{ awx_tags }}"
+  register: result
+  until: result is not failed
+  retries: 10
+  delay: 5

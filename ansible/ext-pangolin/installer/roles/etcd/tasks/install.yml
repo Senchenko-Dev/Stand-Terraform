@@ -1,0 +1,115 @@
+- name: Remove old installation etcd service
+  block:
+
+    - name: remove etcd configure
+      shell: etcdctl del service/{{ clustername }}/initialize || true
+      environment:
+        ETCDCTL_API: 3
+
+    - name: stop service etcd, if started
+      service:
+        name: etcd
+        state: stopped
+
+    - name: loop wait for etcd stopped
+      shell: "systemctl show -p ActiveState etcd | cut -d'=' -f2"
+      register: result
+      until: result.stdout in ('inactive','failed')
+      retries: 60
+      delay: 1
+
+    - name: remove etcd package
+      package:
+        name: etcd
+        state: absent
+
+  become: true
+  when: "'etcd' in ansible_facts.packages"
+
+- name: Remove old directory/files, if exist
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ etcd_files.conf_dir }}"
+    - "{{ etcd_files.data_dir }}"
+    - "{{ service_path_dir }}/etcd.service"
+  ignore_errors: yes
+  become: true
+
+- name: Install etcd
+  include_role:
+    name: common
+    tasks_from: install_versioned_package
+  vars:
+    _install_versioned_package_name: etcd
+    _install_versioned_package_version: "{{ versions.etcd }}"
+
+- name: Restart and reconfig etcd
+  block:
+
+    - name: move default etcd config
+      shell: |
+        set -o pipefail
+        mv {{ etcd_files.conf_dir }}/etcd.conf {{ etcd_files.conf_dir }}/etcd.conf.base
+
+    - name: make etcd config from template
+      template:
+        src: etcd.conf.j2
+        dest: "{{ etcd_files.conf_dir }}/etcd.conf"
+
+    - name: register etcd service in systemd
+      template:
+        src: etcd.service.j2
+        dest: "{{ service_path_dir }}/etcd.service"
+        owner: root
+        group: root
+        mode: 0640
+
+    - name: change permissions for etcd directory
+      file:
+        path: "{{ etcd_files.conf_dir }}"
+        recurse: yes
+        owner: postgres
+        group: postgres
+        mode: 0700
+
+    - name: reload systemd and start service
+      systemd:
+        name: etcd
+        state: started
+        daemon_reload: yes
+        enabled: yes
+
+    - name: loop wait for etcd started
+      shell: etcdctl --cluster=true endpoint health 2>&1
+      environment:
+        ETCDCTL_API: 3
+      register: result
+      until: result.stdout.find(" is healthy") != -1
+      retries: 10
+      delay: 1
+
+    - name: added roles and users in etcd
+      command:
+        cmd: '{{ item }}'
+      with_items:
+        - "etcdctl user add root:'{{ etcd_root_pass }}'"
+        - "etcdctl user add patronietcd:'{{ patroni_etcd_pass }}'"
+        - "etcdctl --user=root:'{{ etcd_root_pass }}' role add patroni"
+        - "etcdctl role grant-permission patroni readwrite --prefix=true /service/"
+        - "etcdctl --user=root:'{{ etcd_root_pass }}' user grant-role patronietcd patroni"
+        - "etcdctl --user=root:'{{ etcd_root_pass }}' auth enable"
+      run_once: true
+      environment:
+        ETCDCTL_API: 3
+      no_log: "{{ nolog }}"
+
+  become: true
+
+- name: Include_role
+  include_role:
+    name: common
+    tasks_from: bash_profile
+  vars:
+    component_name: 'etcd'

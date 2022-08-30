@@ -1,0 +1,34 @@
+DATALIST "{{ master_hostname }}X{{ replica_hostname }}_RUN_PG_FULL"
+GROUP "DININFRA"
+DESCRIPTION "PostgreSQL_SE"
+RECONNECT
+DYNAMIC 1 1
+POSTEXEC "patroni_session_run.sh" -on_host "{{ data_protector_host }}"
+DEFAULTS
+{
+    FILESYSTEM
+    {
+        -vss    no_fallback
+    } -protect days 3
+    RAWDISK
+    {
+
+    }
+}
+
+DEVICE "{{ device }}"
+{
+}
+
+FILESYSTEM "{{ master_fqdn }}" {{ master_fqdn }}:"/"
+{
+    -trees
+        "/etc/opt/omni/client/cell_server"
+}
+
+FILESYSTEM "{{ replica_fqdn }}" {{ replica_fqdn }}:"/"
+{
+    -trees
+        "/etc/opt/omni/client/cell_server"
+}
+

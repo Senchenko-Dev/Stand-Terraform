@@ -1,0 +1,381 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+- name: Check that {{ update_status_files.prev_pgse_version }}
+  stat:
+    path: "{{ update_status_files.dir }}/{{ update_status_files.prev_pgse_version }}"
+  register: json_with_prev_pgse_ver
+  become: true
+    
+- name: Remember current PG SE version from service info
+  block:
+
+    - name: remember current PG SE version
+      set_fact:
+        pg_current_version: "{{ ansible_facts.packages['postgresql-sber-edition'][0].version }}"
+
+    - name: create cache update dir
+      file:
+        path: "{{ update_status_files.dir }}"
+        state: directory
+        mode: '0700'
+        owner: 'postgres'
+        group: 'postgres'
+        recurse: yes
+      
+    - name: create {{ update_status_files.prev_pgse_version }} file
+      file:
+        path: "{{ update_status_files.dir }}/{{ update_status_files.prev_pgse_version }}"
+        state: touch
+        owner: postgres
+        group: postgres
+        mode: '600'
+
+    - name: check that {{ update_status_files.prev_pgse_version }} created
+      stat:
+        path: "{{ update_status_files.dir }}/{{ update_status_files.prev_pgse_version }}"
+      register: file_with_prev_pgse_ver_created
+
+    - name: save pg_current_version as json structure
+      set_fact:
+        json_pg_current_version:
+          pg_current_version: '{{ pg_current_version }}'
+
+    - name: write prev pg se version to {{ update_status_files.prev_pgse_version }}
+      copy:
+        content: "{{ json_pg_current_version | to_json }}"
+        dest: '{{ update_status_files.dir }}/{{ update_status_files.prev_pgse_version }}'
+
+    - name: check that {{ update_status_files.prev_pgse_version }} file is exists
+      assert:
+        that: file_with_prev_pgse_ver_created.stat.exists
+        fail_msg: "Информация о текущей версии PG SE не была записана в файл."
+
+  become: true
+  when: "inventory_hostname != 'etcd' and not json_with_prev_pgse_ver.stat.exists and 'update' in action_type"
+
+- name: Read current PG SE version from file
+  block:
+
+    - name: fetch {{ update_status_files.prev_pgse_version }} file from master
+      fetch:
+        src: '{{ update_status_files.dir }}/{{ update_status_files.prev_pgse_version }}'
+        dest: '{{ REMOTE_TMP }}'
+
+    - name: define dir name for host_name
+      set_fact:
+        _prepareupdate_dir_name: "{% if inventory_hostname == 'master' %}master\
+                                  {% else %}replica{% endif %}"
+
+    - name: read json file with pg_current_version
+      include_vars:
+        file: "{{ REMOTE_TMP }}/{{ _prepareupdate_dir_name }}/{{ update_status_files.dir }}/{{ update_status_files.prev_pgse_version }}"
+
+    - name: print pg_current_version
+      debug: 
+        msg: "{{ pg_current_version }}"
+
+  become: true
+  when: "inventory_hostname != 'etcd' and json_with_prev_pgse_ver.stat.exists and 'update' in action_type"
+
+- name: Sync pg_current_version between hosts
+  block:
+
+    - name: sync pg_current_version between hosts
+      set_fact: 
+        pg_current_version: "{{ pg_current_version }}"
+
+    - name: print pg_current_version
+      debug: 
+        msg: "{{ pg_current_version }}"
+
+  run_once: true
+  when: "'update' in action_type"
+
+- name: Get PGDATA_OLD, PGHOME_OLD
+  block:
+
+    - name: check patroni configuration files
+      block:
+
+        - name: check that patroni yml config is exists
+          stat:
+            path: "{{ patroni_files.conf_dir }}/postgres.yml"
+          register: patroni_yml_file
+
+        - name: check that patroni systemd config is exists
+          stat:
+            path: "{{ patroni_files.service_file }}"
+          register: patroni_systemd_file
+          become_user: root
+
+        - name: define patroni_config_files variable
+          set_fact:
+            patroni_config_files: "{% if patroni_yml_file.stat.exists and patroni_systemd_file.stat.exists %}true{% else %}false{% endif %}"
+
+    - name: get PGDATA_OLD and define some variables if patroni installed
+      block:
+
+        - name: get PGDATA_OLD
+          reciter:
+            src: "{{ patroni_files.conf_dir }}/postgres.yml"
+            action: get
+            parameter: postgresql
+            inner_parameter: data_dir
+          register: pgdata_old
+
+        - name: get PGHOME_OLD
+          reciter:
+            src: "{{ patroni_files.conf_dir }}/postgres.yml"
+            action: get
+            parameter: postgresql
+            inner_parameter: bin_dir
+          register: pghome_old
+
+        - name: define some variables
+          set_fact:
+            PGDATA_OLD: "{{ pgdata_old.message }}"
+            PGHOME_OLD: "{{ pghome_old.message | replace('/bin', '') }}"
+
+      when: "installation_type =='cluster' or patroni_config_files"
+
+    - name: get PGDATA_OLD and define some variables if patroni not installed
+      block:
+
+        - name: get PGDATA_OLD
+          reciter:
+            src: "{{ postgresql_files.service_file }}"
+            action: get
+            parameter: ExecStart
+          register: pgdata_old
+
+        - name: get PGHOME_OLD
+          reciter:
+            src: "{{ postgresql_files.service_file }}"
+            action: get
+            parameter: WorkingDirectory
+          register: pghome_old
+
+        - name: save PGDATA_OLD
+          set_fact:
+            PGDATA_OLD: "{{ pgdata_old.message.split('-D ')[-1]}}"
+            PGHOME_OLD: "{{ pghome_old.message }}"
+            
+      become_user: root
+      when: "installation_type =='standalone' and not patroni_config_files "
+
+    - name: grep PYTHON_VENV_OLD
+      block:
+
+        - name: get PYTHON_VENV_OLD
+          reciter:
+            src: "{{ patroni_files.service_file }}"
+            action: get
+            parameter: ExecStart
+          register: python_venv_old
+          become_user: root
+
+        - name: save PYTHON_VENV_OLD
+          set_fact:
+            PYTHON_VENV_OLD: "{% if ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0 %}{{ python_venv_old.message.split().0 | replace('bin/python3','')}}\
+                              {% else %}{{ python_venv_old.message.split().0 | replace('bin/patroni_bin/patroni.bin','')}}{% endif %}"
+
+      when: patroni_config_files
+
+    - name: define variable if patroni configuration files aren't exist
+      set_fact:
+        PYTHON_VENV_OLD: null
+      when: not patroni_config_files
+
+  become: true
+  become_user: postgres
+  when: inventory_hostname != 'etcd'
+
+# TODO: pgdata_new_string и pgdata_old_string определять через set_fact
+- name: Remember short names path for symlink
+  block:
+
+    - name: remember short {{ PGDATA_OLD }} path for symlink
+      shell: "echo {{ PGDATA_OLD }} | cut -d '/' -f 1,2,3"
+      register: pgdata_old_string
+
+    - name: remember short {{ PGDATA }} path for symlink
+      shell: "echo {{ PGDATA }} | cut -d '/' -f 1,2,3"
+      register: pgdata_new_string
+
+  when: inventory_hostname != 'etcd'
+
+- name: Check exists components
+  import_tasks: check_exist_components_and_define_configuration_type.yml
+
+- name: Get and save PGPORT_OLD, PGBOUNCERPORT_OLD, CLNAME_OLD and PGHOME_OLD_NAME
+  block:
+
+    - name: get PGPORT_OLD
+      reciter:
+        src: "{{ PGDATA_OLD }}/postgresql.conf"
+        action: get
+        parameter: port
+      register: pgport_old
+
+    - name: save old PGPORT
+      set_fact:
+        PGPORT_OLD: "{{ pgport_old.message }}"
+
+    - name: get CLNAME_OLD by not patroni
+      block:
+
+        - name: get CLNAME_OLD without patroni
+          reciter:
+            src: "{{ PGDATA_OLD }}/postgresql.conf"
+            action: get
+            parameter: archive_command
+          register: clname_old
+
+        - name: save old CLNAME_OLD
+          set_fact:
+            CLNAME_OLD: "{{ clname_old.message.split('--instance')[-1].split()[0] }}"
+      
+      when: not patroni_exists.stat.exists
+
+    - name: get CLNAME_OLD by patroni
+      block:
+
+        - name: get CLNAME_OLD without patroni
+          reciter:
+            src: "{{ patroni_files.conf_dir }}/postgres.yml"
+            action: get
+            parameter: scope
+          register: clname_old
+
+        - name: save old CLNAME_OLD
+          set_fact:
+            CLNAME_OLD: "{{ clname_old.message }}"
+      
+      when: patroni_exists.stat.exists
+
+    - name: save PGHOME directory name
+      set_fact:
+        PGHOME_OLD_NAME: "{{ PGHOME_OLD.replace('/', ' ').split() | last }}"
+
+    - name: save PGBOUNCERPORT_OLD port
+      block:
+
+        - name: setup python version for reciter
+          set_fact:
+            ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+        - name: check current port of pgbouncer
+          reciter:
+            src: "{{ pgbouncer_files.conf_dir }}/pgbouncer.ini"
+            action: get
+            parameter: listen_port
+          register: pgbouncerport_old
+
+        - name: save old PGBOUNCERPORT_OLD
+          set_fact:
+            PGBOUNCERPORT_OLD: "{{ pgbouncerport_old.message }}"
+
+        - name: undo previous stage with set_fact
+          set_fact:
+            ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+      when: pgbouncer
+
+    - name: save HAPROXYPORT_OLD port
+      block:
+
+        - name: grep HAPROXYPORT_OLD
+          shell: "cat {{ haproxy_files.conf_dir }}/haproxy.cfg | grep 'frontend fe_postgresql' -A 3 | grep bind | awk -F ' ' '{ print $2 }' | awk -F ':' '{print $2}'"
+          ignore_errors: true
+          register: haproxyport_old
+
+        - name: save HAPROXYPORT_OLD
+          set_fact:
+            HAPROXYPORT_OLD: "{{ haproxyport_old.stdout }}"
+          when: haproxyport_old|length > 0
+        
+      when: haproxy
+    
+  become: true
+  become_user: postgres
+  when: inventory_hostname != 'etcd'
+
+- name: Check variables
+  block:
+
+    - name: check PGHOME_OLD_NAME exist
+      assert:
+        that: "PGHOME_OLD_NAME|length > 0"
+        fail_msg: "PGHOME_OLD_NAME didn't load"
+        success_msg: "PGHOME_OLD_NAME = {{ PGHOME_OLD_NAME }}"
+
+    - name: check PGHOME_OLD exist
+      assert:
+        that: "PGHOME_OLD|length > 0"
+        fail_msg: "PGHOME_OLD didn't load"
+        success_msg: "PGHOME_OLD = {{ PGHOME_OLD }}"
+
+    - name: check PGDATA_OLD exist
+      assert:
+        that: "PGDATA_OLD|length > 0"
+        fail_msg: "PGDATA_OLD didn't load"
+        success_msg: "PGDATA_OLD = {{ PGDATA_OLD }}"
+    
+    - name: check PGPORT_OLD exist
+      assert:
+        that: "PGPORT_OLD|length > 0"
+        fail_msg: "PGPORT_OLD didn't load"
+        success_msg: "PGPORT_OLD = {{ PGPORT_OLD }}"
+
+    - name: check CLNAME_OLD exist
+      assert:
+        that: "CLNAME_OLD|length > 0"
+        fail_msg: "CLNAME_OLD didn't load"
+        success_msg: "CLNAME_OLD = {{ CLNAME_OLD }}"
+      when: patroni
+
+    - name: check PGBOUNCERPORT_OLD exist
+      assert:
+        that: "PGBOUNCERPORT_OLD|length > 0"
+        fail_msg: "PGBOUNCERPORT_OLD didn't load"
+        success_msg: "PGBOUNCERPORT_OLD = {{ PGBOUNCERPORT_OLD }}"
+      when: pgbouncer
+
+    - name: check HAPROXYPORT_OLD exist
+      assert:
+        that: "HAPROXYPORT_OLD|length > 0"
+        fail_msg: "HAPROXYPORT_OLD didn't load"
+        success_msg: "HAPROXYPORT_OLD = {{ HAPROXYPORT_OLD }}"
+      when: haproxy
+
+    # - name: check PGBACKUP_OLD exist
+    #   assert:
+    #     that: "PGBACKUP_OLD|length > 0"
+    #     fail_msg: "PGBACKUP_OLD didn't load"
+    #     success_msg: "PGBACKUP_OLD = {{ PGBACKUP_OLD }}"
+
+    - name: check PYTHON_VENV_OLD exist
+      assert:
+        that: "PYTHON_VENV_OLD|length > 0"
+        fail_msg: "PYTHON_VENV_OLD didn't load"
+        success_msg: "PYTHON_VENV_OLD = {{ PYTHON_VENV_OLD }}"
+      when: patroni
+
+    - name: check tag, some configuration type have to actual value
+      assert:
+        that: "tag|length > 0"
+        fail_msg: "tag didn't load"
+        success_msg: "tag = {{ tag }}"
+
+  when: inventory_hostname != 'etcd'
+
+- name: Save old variables for update
+  block:
+
+    - name: define clustername
+      set_fact:
+        clustername: "{{ CLNAME_OLD }}"
+
+  when: "inventory_hostname != 'etcd' and 'install' not in action_type"

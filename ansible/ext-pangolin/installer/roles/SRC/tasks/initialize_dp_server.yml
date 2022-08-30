@@ -1,0 +1,112 @@
+- set_fact:
+    db_files_fs: "/{{ PGDATA.replace('/', ' ').split().0 }}"
+    db_logs_fs: "/{{ PGBACKUP.replace('/', ' ').split().0 }}"
+    db_pg_data_fs: "/{{ PGDATA.replace('/', ' ').split().0 }}"
+
+- name: Find clustername in /etc/opt/omni/server/cell/devfilters
+  block:
+    - shell: "cat /etc/opt/omni/server/cell/devfilters | grep -i 'default'"
+      changed_when: false
+      register: di
+
+- set_fact:
+    keyword_stdout: "{{ di }}"
+
+- set_fact:
+    device: "{{ keyword_stdout.stdout_lines[0].split().0 }}"
+    mi: "{{ '%02d' | format( 59 | random | int ) }}"
+
+- block:
+    - name: Add new host to data-protector
+      shell: "sudo /opt/omni/bin/omnicc -export_host {{ item }}"
+      failed_when: false
+      changed_when: false
+      args:
+        warn: no
+      register: export_host
+      with_items: 
+        - "{{ hostvars['master'].ansible_hostname }}"
+        - "{{ hostvars['replica'].ansible_hostname }}"
+
+    - name: Configure data-protector for new host
+      shell: "sudo /opt/omni/bin/omnicc -secure_comm -configure_for_dr {{ item }} -accept_host"
+      args:
+        warn: no
+      with_items: 
+        - "{{ hostvars['master'].ansible_hostname }}"
+        - "{{ hostvars['replica'].ansible_hostname }}"
+
+    - name: Add new host to data-protector
+      shell: "sudo /opt/omni/bin/omnicc -import_host {{ item }} -accept_host"
+      args:
+        warn: no
+      with_items: 
+        - "{{ hostvars['master'].ansible_hostname }}"
+        - "{{ hostvars['replica'].ansible_hostname }}"
+
+    - name: Create datalists
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { src: "datalist_serveraXserverb_servera_PG_FULL.j2", dest: "{{ data_protector_datalists }}/{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}\
+            _{{ hostvars['master'].ansible_hostname }}_PG_FULL" }
+        - { src: "datalist_serveraXserverb_serverb_PG_FULL.j2", dest: "{{ data_protector_datalists }}/{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}\
+            _{{ hostvars['replica'].ansible_hostname }}_PG_FULL" }
+        - { src: "datalist_serveraXserverb_servera_PG_LOG.j2", dest: "{{ data_protector_datalists }}/{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}\
+            _{{ hostvars['master'].ansible_hostname }}_PG_LOG" }
+        - { src: "datalist_serveraXserverb_serverb_PG_LOG.j2", dest: "{{ data_protector_datalists }}/{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}\
+            _{{ hostvars['replica'].ansible_hostname }}_PG_LOG" }
+        - { src: "datalist_serveraXserverb_RUN_PG_FULL.j2", dest: "{{ data_protector_datalists }}/{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}_RUN_PG_FULL" }
+
+    - name: Create schedule files
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { src: "schedule_serveraXserverb_servera_PG_FULL.j2", dest: "{{ data_protector_schedules }}/{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}\
+            _{{ hostvars['master'].ansible_hostname }}_PG_FULL" }
+        - { src: "schedule_serveraXserverb_serverb_PG_FULL.j2", dest: "{{ data_protector_schedules }}/{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}\
+            _{{ hostvars['replica'].ansible_hostname }}_PG_FULL" }
+        - { src: "schedule_serveraXserverb_servera_PG_LOG.j2", dest: "{{ data_protector_schedules }}/{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}\
+            _{{ hostvars['master'].ansible_hostname }}_PG_LOG" }
+        - { src: "schedule_serveraXserverb_serverb_PG_LOG.j2", dest: "{{ data_protector_schedules }}/{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}\
+            _{{ hostvars['replica'].ansible_hostname }}_PG_LOG" }
+        - { src: "schedule_serveraXserverb_RUN_PG_FULL.j2", dest: "{{ data_protector_schedules }}/{{ hostvars['master'].ansible_hostname }}X{{ hostvars['replica'].ansible_hostname }}_RUN_PG_FULL" }
+  when: installation_type == 'cluster'
+
+- block:
+    - name: Add new host to data-protector
+      shell: "sudo /opt/omni/bin/omnicc -export_host {{ hostvars['master'].ansible_hostname }}"
+      failed_when: false
+      changed_when: false
+      args:
+        warn: no
+      register: export_host
+
+    - name: Configure data-protector for new host
+      shell: "sudo /opt/omni/bin/omnicc -secure_comm -configure_for_dr {{ hostvars['master'].ansible_hostname }} -accept_host"
+      args:
+        warn: no
+
+    - name: Add new host to data-protector
+      shell: "sudo /opt/omni/bin/omnicc -import_host {{ hostvars['master'].ansible_hostname }} -accept_host"
+      args:
+        warn: no
+
+    - name: Create datalists
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { src: "datalist_standalone_PG_FULL.j2", dest: "{{ data_protector_datalists }}/{{ hostvars['master'].ansible_hostname }}_PG_FULL" }
+        - { src: "datalist_standalone_PG_LOG.j2", dest: "{{ data_protector_datalists }}/{{ hostvars['master'].ansible_hostname }}_PG_LOG" }
+
+    - name: Create schedule files
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { src: "schedule_serveraXserverb_RUN_PG_FULL.j2", dest: "{{ data_protector_schedules }}/{{ hostvars['master'].ansible_hostname }}_PG_FULL" }
+        - { src: "schedule_serveraXserverb_servera_PG_LOG.j2", dest: "{{ data_protector_schedules }}/{{ hostvars['master'].ansible_hostname }}_PG_LOG" }
+  when: installation_type == 'standalone'

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+find {{ PGLOGS }} -name "postgresql-*.gz" -mtime +30 -delete
+
+for file in `find {{ PGLOGS }} -name "postgresql-*.log" -mtime +2`
+do
+   gzip $file
+done
+
+SIZE_USED=`df {{ PGLOGS }} | awk '{print $5}' | grep -v Use% | tr -d %`
+if (( $SIZE_USED > 90 ))
+then
+   logger The postgresql logging disk partition is more than 90% full. Please clean it up for success working
+fi
+exit 0

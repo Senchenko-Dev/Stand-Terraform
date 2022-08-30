@@ -1,0 +1,302 @@
+- name: Update patroni nodes
+  block:
+
+    - name: backup intermediate patroni values
+      block:
+
+        - name: ensure {{ backup.patroni_intermediate }}
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: postgres
+            group: postgres
+            mode: 0700
+          with_items:
+            - "{{ backup.patroni_intermediate }}{{ service_path_dir }}"
+            - "{{ backup.patroni_intermediate }}{{ PGUSERHOME }}"
+
+        - name: backup config of patroni service
+          copy:
+            src: "{{ patroni_files.service_file }}"
+            dest: "{{ backup.patroni_intermediate }}{{ patroni_files.service_file }}"
+            remote_src: yes
+
+        - name: backup shell profile
+          copy:
+            src:  "{{ shell_profile_file }}"
+            dest: "{{ backup.patroni_intermediate }}{{ shell_profile_file }}"
+            remote_src: yes
+            owner: postgres
+            group: postgres
+
+    - name: check current path of patroni virtual environment
+      stat:
+        path: "{{ python.patroni_venv }}"
+      register: patroni_venv_dir
+
+    - name: get parameters from patroni via api
+      uri:
+        url: 'http://{{ ansible_fqdn }}:{{ ports.patroni }}'
+        return_content: yes
+        status_code: ['200', '503']
+      register: patroni_parameters
+      become_user: postgres
+
+    - name: define variable with version of installed patroni 
+      set_fact:
+        patroni_installed_version: "{%if 'se_version' in patroni_parameters.json.patroni %}{{ patroni_parameters.json.patroni.se_version }}{% endif %}"
+
+    - name: get patroni se version from file
+      set_fact:
+        patroni_se_version: "{{ lookup('file', '{{ local_distr_path }}/patroni/se_version') }}"
+
+    - name: compare installed and distributive versions
+      set_fact:
+        compare_result: "{%if patroni_installed_version != '' %}{{ [patroni_installed_version, patroni_se_version] | compare_versions }}{% else %}true{% endif %}"
+
+    - name: define required variable for update
+      set_fact:
+        is_pg_old_venv_dir: "{% if patroni_venv_dir.stat.exists == true %}false{% else %}true{% endif %}"
+
+    - name: create patroni directory
+      file:
+        path: "{{ python.patroni_venv }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: 0700
+        recurse: yes
+
+    - name: stop patroni linux service
+      service:
+        name: patroni
+        state: stopped
+
+    - name: create patroni bin diretory
+      file:
+        path: "{{ patroni_files.conf_dir }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: 0700
+    
+    - name: encrypt passwords patroni
+      block:
+      
+        - name: encrypt passwords restapi
+          shell: >
+            {{ PGHOME }}/bin/pg_auth_password enc -W "{{ patroni_yml_pass }}"
+          register: encpassword_restapi
+    
+        - name: encrypt passwords etcd
+          shell: >
+            {{ PGHOME }}/bin/pg_auth_password enc -W "{{ patroni_etcd_pass }}"
+          register: encpassword_etcd
+      
+      no_log: "{{ nolog }}"
+
+    - name: encrypt ldap password 
+      block:
+        
+        - name: encrypt ldap passwords 
+          shell: >
+            {{ PGHOME }}/bin/pg_auth_password enc -W "{{ ldap_bind_tuz_password }}"
+          register: encpassword_ldap
+    
+        - name: update ldap password
+          set_fact:
+            ldap_bind_tuz_password: "{{ encpassword_ldap.stdout[0:-1] }}"
+      
+      no_log: "{{ nolog }}"
+
+    - name: copy new config of patroni
+      copy:
+        src: "{{ merge_cfg.result_pgse_patroni }}/postgres.yml"
+        dest: "{{ patroni_files.conf_dir }}/postgres.yml"
+        owner: postgres
+        group: postgres
+        mode: 0600
+        remote_src: true
+
+    - name: update callback script for change role action
+      template:
+        src: reload_pgbouncer.sh.j2
+        dest: "{{ patroni_files.conf_dir }}/reload_pgbouncer.sh"
+        owner: postgres
+        group: postgres
+        mode: 0500
+        trim_blocks: False
+
+    - name: change connection user for patroni
+      include_tasks: prepare_using_encrypt_space.yml
+     
+    - name: update password for restapi and etcd
+      replace:
+        path: "{{ patroni_files.conf_dir }}/postgres.yml"
+        after: "{{ item.after }}"
+        regexp: "{{ item.rexexp }}"
+        replace: "{{ item.replace }}"
+      loop:
+        - { after: "username: patroniyml", rexexp: "^(.*)        password:.*", replace: '        password: {{ encpassword_restapi.stdout[0:-1] }}'}
+        - { after: "username: patronietcd", rexexp: "^(.*)    password:.*", replace: '    password: {{ encpassword_etcd.stdout[0:-1] }}'}
+
+    - name: change pg_hba ldap password
+      shell: "sed -i '/{{ ldap_bind_tuz_name }}/s@ldapbindpasswd=.*[\\w+/]* @ldapbindpasswd=\"{{ ldap_bind_tuz_password }}\" @g' {{ patroni_files.conf_dir }}/postgres.yml"
+      become: true
+      become_user: postgres
+      no_log: "{{ nolog }}"
+      
+    - name: update patroni linux service
+      template:
+        src: patroni.service.j2
+        dest: "{{ service_path_dir }}/patroni.service"
+
+    - name: update patroni version, if current version order than new
+      block:
+
+        - name: remove installed patroni module
+          pip:
+            name: patroni
+            state: absent
+            virtualenv: "{{ PYTHON_VENV_OLD }}"
+          become_user: postgres
+
+        - name: remove existing python virtual environment
+          file:
+            path: "{{ PYTHON_VENV_OLD }}"
+            state: absent
+
+        - name: create directory for python virtual environment of patroni, if not exist
+          file:
+            path: "{{ python.patroni_venv }}"
+            state: directory
+            owner: postgres
+            group: postgres
+            mode: 0700
+
+        - name: create new python virtual environment for patroni
+          include_role:
+            name: checkup
+            tasks_from: python_env 
+          vars:
+            component_name: patroni
+
+        - name: copy patroni files to node
+          unarchive:
+            src: "{{ local_distr_path }}/patroni/{{ item.name }}.tar.gz"
+            dest: "{{ item.path }}"
+            group: postgres
+            owner: postgres
+            mode: "{{ item.mode }}"
+          loop:
+            - { name: patroni,            path: "{{ python.patroni_venv }}/bin/", mode: '0700' }
+            - { name: postgresql_se_libs, path: "{{ python.patroni_venv }}/lib/", mode: '0700' }
+          become_user: postgres
+
+        - name: copy patroni se version file
+          copy:
+            src: "{{ local_distr_path }}/patroni/se_version"
+            dest: "{{ python.patroni_venv }}/bin/se_version"
+            owner: postgres
+            group: postgres
+            mode: 0600
+        
+      when: compare_result or is_pg_old_venv_dir
+
+    - name: export path for new patroni directory
+      lineinfile:
+        path: "{{ shell_profile_file }}"
+        insertafter: EOF
+        line: "{{ item }}"
+        state: present
+      with_items:
+        - export PATH={{ python.patroni_venv }}/bin:$PATH
+      become_user: postgres
+
+    - name: include_role
+      include_role:
+        name: common
+        tasks_from: bash_profile
+      vars:
+        component_name: 'patroni'
+
+    - name: reload systemd and start service
+      systemd:
+        name: patroni
+        state: restarted
+        daemon_reload: yes
+        enabled: yes
+
+    - name: pause for restart patroni
+      pause:
+        seconds: 20
+
+    - name: wait when pgsql open port
+      shell: '{{ PGHOME }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ ports.pg }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+
+    - name: to do checkpoint
+      include_role:
+        name: postgresql
+        tasks_from: update_run_checkpoint.yml
+      vars:
+        _runcheckpoint_database_port: "{{ ports.pg }}"
+
+    - name: finish patroni update
+      block:
+
+        - name: turn off pause mode after patroni nodes updated
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: false"
+          
+        - name: restart cluster if need
+          import_tasks: pending_restart.yml
+          vars:
+            current_python_venv: "{{ python.patroni_venv }}"
+            current_pghome: "{{ PGHOME }}"
+            current_pgport: "{{ ports.pg }}"
+            current_patroni_port: "{{ ports.patroni }}"
+      
+      when: inventory_hostname == 'replica' or installation_type == 'standalone'
+
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            patroni: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            patroni: true
+      when: inventory_hostname == 'master'
+
+  always:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+  become: true

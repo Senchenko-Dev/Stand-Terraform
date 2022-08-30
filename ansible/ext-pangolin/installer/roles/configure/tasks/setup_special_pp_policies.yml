@@ -1,0 +1,33 @@
+- name: Сonfigure special password policies rules for TUZes, group's users and some roles
+  block:
+
+    - name: configure special password policies rules for TUZes and group foles
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT * FROM set_role_policies('{{ item }}', max_age('0'), min_age('0'), check_syntax('1'),
+              policy_enable('1'), lockout('0'), illegal_values('1'), use_password_strength_estimator('1'),
+              password_strength_estimator_score('3'))
+      with_items:
+        - ['zabbix_oasubd', 'monitoring_php', 'auditor', 'postgres']
+        - ['{{ TUZ_group }}', '{{ as_group }}', '{{ db_admin }}']
+
+    - name: check exist backup_user
+      postgresql_query:
+          port: "{{ ports.pg }}"
+          query: SELECT pg_roles.rolname FROM pg_roles WHERE rolname='backup_user'
+      register: _is_backup_user
+
+    - name: configure special password policies rules for backup_user
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT * FROM set_role_policies('backup_user', max_age('0'), min_age('0'), check_syntax('1'),
+              policy_enable('1'), lockout('0'), illegal_values('1'), use_password_strength_estimator('1'),
+              password_strength_estimator_score('3'))
+      when: _is_backup_user.rowcount|int != 0
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres

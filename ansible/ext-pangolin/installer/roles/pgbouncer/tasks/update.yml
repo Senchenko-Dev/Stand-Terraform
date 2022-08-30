@@ -1,0 +1,144 @@
+- name: Update pgbouncer nodes
+  block:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+    - name: gather services facts
+      service_facts:
+      no_log: "{{ nolog }}"
+
+    - name: stop pgbouncer service
+      service:
+        name: pgbouncer
+        state: stopped
+      when: ansible_facts.services['pgbouncer.service'].state == 'running'
+
+    - name: make pgbouncer systemd script
+      template:
+        src: pgbouncer.service.j2
+        dest: "{{ service_path_dir }}/pgbouncer.service"
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: copy pgbouncer bin
+      copy:
+        src: '{{ local_distr_path }}/pgbouncer{{ pgbouncer_files.bin_path }}'
+        dest: '{{ pgbouncer_files.bin_path }}'
+        mode: a+x
+
+    - name: copy pgbouncer files from distrib
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { src: '{{ local_distr_path }}/pgbouncer{{ user_share_dir }}/doc/pgbouncer/',       dest: '{{ user_share_dir }}/doc/' }
+        - { src: '{{ local_distr_path }}/pgbouncer{{ user_share_dir }}/man/man1/pgbouncer.1', dest: '{{ user_share_dir }}/man/man1/' }
+        - { src: '{{ local_distr_path }}/pgbouncer{{ user_share_dir }}/man/man5/pgbouncer.5', dest: '{{ user_share_dir }}/man/man5/' }
+
+    - name: check exists confd
+      stat: path="{{ confd_files.path_dir }}/bin/confd"
+      register: confd_exists
+
+    - name: update bouncer config for confd
+      block:
+
+        - name: update confd template file
+          template:
+            src: "{{ playbook_dir }}/roles/confd/templates/pgbouncer.tmpl.j2"
+            dest: "{{ confd_files.conf_dir }}/templates/pgbouncer.tmpl"
+            owner: postgres
+            group: postgres
+            mode: 0600
+
+        - name: restart systemd and start service
+          systemd:
+            name: confd
+            state: restarted
+
+      when: confd_exists.stat.exists
+
+    - name: ensure config directory {{ pgbouncer_files.conf_dir }} exist
+      file:
+        path: "{{ pgbouncer_files.conf_dir }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: 0700
+
+    - name: make pgbouncer config from template
+      template:
+        src: pgbouncer.ini.j2
+        dest: "{{ pgbouncer_files.conf_dir }}/pgbouncer.ini"
+        owner: postgres
+        group: postgres
+        mode: 0600
+
+    - name: make pgbouncer userlist from template
+      template:
+        src: userlist.txt.j2
+        dest: "{{ pgbouncer_files.conf_dir }}/userlist.txt"
+        owner: postgres
+        group: postgres
+        mode: 0600
+
+    - name: restarted systemd and start service
+      systemd:
+        name: pgbouncer
+        state: restarted
+        daemon_reload: yes
+        enabled: yes
+
+    - name: wait when pgbouncer service to open the port
+      wait_for:
+        port: "{{ ports.pgbouncer }}"
+        host: "{{ ansible_fqdn }}"
+        state: started
+        timeout: 10
+        delay: 5
+
+    - name: setup logrotate configuration
+      template:
+        src: pgbouncer.j2
+        dest: "{{ logrorate_dir }}/pgbouncer"
+        owner: root
+        group: root
+        mode: 0644
+
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            pgbouncer: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            pgbouncer: true
+      when: inventory_hostname == 'master'
+
+  always:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+  become: true

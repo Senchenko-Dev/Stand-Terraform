@@ -1,0 +1,50 @@
+- name: Backup and update files
+  block:
+
+    - name: rename previous files
+      command:
+        cmd: "mv {{ manage_backup_bin }}/11_{{ item }} {{ manage_backup_bin }}/old_{{ ansible_date_time.iso8601 }}_11_{{ item }}"
+      with_items: "{% if ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0 %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.py']|list}}\
+                   {% else %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.bin']|list}}{% endif %}"
+      when: ([ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 0
+
+    - name: rename previous files
+      command:
+        cmd: "mv {{ manage_backup_bin }}/04_{{ item }} {{ manage_backup_bin }}/old_{{ ansible_date_time.iso8601 }}_04_{{ item }}"
+      with_items: "{% if ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0 %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.py']|list}}\
+                   {% else %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.bin']|list}}{% endif %}"
+      when: ([ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 1 or ([ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 2
+
+    - name: create bin backup module to remote hosts
+      copy:
+        src: "{{ local_distr_path }}/pg_backup/manage_backup.bin"
+        dest: "{{ manage_backup_bin }}/{{ pg_major_version }}_manage_backup.bin"
+        owner: root
+        group: root
+        mode: 0751
+
+    - name: copy templates sh scripts for start-stop backup
+      template:
+        src: "{{ item.source }}"
+        dest: "{{ manage_backup_bin }}/11_{{ item.dest }}"
+        owner: root
+        group: root
+        mode: 0751
+      with_items:
+        - { source: 'pg_se_archlogs.sh.j2', dest: 'pg_se_archlogs.sh' }
+        - { source: 'manage_backup.sh.j2', dest: 'manage_backup.sh' }
+      when: ([ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 0
+
+    - name: copy templates sh scripts for start-stop backup
+      template:
+        src: "{{ item.source }}"
+        dest: "{{ manage_backup_bin }}/04_{{ item.dest }}"
+        owner: root
+        group: root
+        mode: 0751
+      with_items:
+        - { source: 'pg_se_archlogs.sh.j2', dest: 'pg_se_archlogs.sh' }
+        - { source: 'manage_backup.sh.j2', dest: 'manage_backup.sh' }
+      when: ([ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 1 or ([ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 2
+
+  become: true

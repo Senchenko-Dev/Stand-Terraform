@@ -1,0 +1,10 @@
+---
+- name: Create Folder Backup-Nginx
+  file:
+    path: /root/Backup-Nginx
+    state: directory
+
+- name: BackUp Nginx
+  file:
+    src: /etc/nginx
+    dest: /root/Backup-Nginx

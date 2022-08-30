@@ -1,0 +1,74 @@
+- name: Clean etcd db
+  block:
+
+    - name: stop patroni service
+      service:
+        name: patroni
+        state: stopped
+      when: inventory_hostname != 'etcd'
+
+    - name: clear cache etcd
+      shell: "ETCDCTL_API=2 etcdctl rm -r /service"
+      ignore_errors: true
+
+    - name: stop etcd service
+      service:
+        name: etcd
+        state: stopped
+
+    - name: wait for stoped etcd
+      pause:
+        seconds: 3
+
+    - name: remove etcd data dir
+      file:
+        path: "{{ etcd_files.data_dir }}"
+        state: absent
+
+    - name: backup etcd data for current node
+      copy:
+        src: "{{ backup.etcd }}/db_backup/etcd"
+        dest: "/var/lib/"
+        owner: etcd
+        group: etcd
+        mode: 0700
+        remote_src: yes
+
+    - name: start service etcd
+      systemd:
+        name: etcd
+        state: restarted
+        enabled: yes
+
+    - name: loop wait for etcd started
+      command:
+        cmd:  etcdctl cluster-health
+      register: result
+      until: result.stdout.find("cluster is healthy") != -1
+      retries: 10
+      delay: 1
+
+    - name: start patroni service
+      service:
+        name: patroni
+        state: started
+      when: inventory_hostname != 'etcd'
+
+    - name: turn off pause mode
+      block:
+
+        - name: turn off pause mode
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: false"
+          when: inventory_hostname == 'master'
+      
+      rescue:
+
+        - name: it is normal
+          debug:
+            msg: "It is normal"
+
+  become: true

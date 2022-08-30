@@ -1,0 +1,16 @@
+---
+- name: Start Kafka Brokers
+  command: "{{ item.0 }}/bin/kafka-server-start{{ script_extension }} -daemon {{ item.0 }}/{{ config_sub_dir }}/server.properties"
+  args:
+    chdir: "{{ item.0 }}"
+  environment:
+    LOG_DIR: "{{ item.1 }}"
+    JAVA_HOME: "{{ DestJDK }}/jre"
+  with_together:
+    - "{{ brokers_to_start_path }}"
+    - "{{ brokers_to_start_logdir }}"
+  register: start_kafka
+  until: start_kafka is not failed
+  retries: 3
+  delay: 5
+  when: KPorts is defined

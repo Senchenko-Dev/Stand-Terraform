@@ -1,0 +1,98 @@
+- name: Check exists patroni
+  stat: path="{{ current_python_venv }}/bin/patroni"
+  register: patroni_exists
+  become: true
+
+# запрос корректно отработает только, когда patroni НЕ в режиме паузы
+- name: Check status of patroni via api
+  block:
+
+    - name: define current master role of the cluster
+      include_role:
+        name: patroni
+        tasks_from: update_define_roles_of_nodes.yml
+
+    - name: wait when patroni update cache
+      pause:
+        seconds: "{{ patroni_wait_seconds }}"
+    
+    - name: send reload command to patroni
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl
+      vars:
+        endpoint_name: reload
+
+    - name: get parameters from patroni service for cluster
+      uri:
+        url: "http://{{ current_master }}:{{ current_patroni_port }}"
+        return_content: yes
+        status_code: 200
+      register: patroni_parameters
+
+    - name: save patroni params from master
+      set_fact:
+        patroni_parameters: "{{ patroni_parameters | string }}"
+
+    - name: check restart condition from master node
+      set_fact: 
+        is_restart: "{{ ('pending_restart' in patroni_parameters)|bool }}"
+
+    - name: need restart master with replica
+      set_fact: 
+        is_master_replica: "{{ is_restart }}"
+
+    - name: check pending restart on replica
+      block:
+
+        - name: get parameters from patroni service for standalone
+          uri:
+            url: "http://{{ current_replica }}:{{ current_patroni_port }}"
+            return_content: yes
+            status_code: 503
+          register: patroni_parameters
+
+        - name: save patroni params from replica
+          set_fact:
+            patroni_parameters: "{{ patroni_parameters | string }}"
+
+        - name: check restart condition from master node
+          set_fact: 
+            is_restart: "{{ ('pending_restart' in patroni_parameters)|bool }}"
+          when: not is_restart
+
+      when: current_replica is defined and ansible_fqdn == current_replica
+
+    - name: to do checkpoint
+      include_role:
+        name: postgresql
+        tasks_from: update_run_checkpoint.yml
+      vars:
+        _runcheckpoint_database_port: "{{ current_pgport }}"
+        _runcheckpoint_ansible_python_interpreter: "{{ current_python_venv }}/bin/python3"
+
+    - name: restart all cluster
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl
+      vars:
+        endpoint_name: restart
+      when: is_restart and is_master_replica
+
+    - name: wait when pgsql open port
+      shell: '{{ current_pghome }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ current_pgport }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+
+    - name: restart replica
+      systemd:
+        name: patroni
+        state: restarted
+      become_user: root
+      when: current_replica is defined and is_restart and ansible_fqdn == current_replica
+
+  become: true
+  become_user: postgres
+  when: patroni_exists.stat.exists

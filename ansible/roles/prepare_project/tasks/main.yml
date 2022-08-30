@@ -1,0 +1,54 @@
+---
+- name: Create resource quota
+  command:
+    cmd: "kubectl apply -f -"
+    stdin: "{{ lookup('template', 'resourcequota.yml')}}"
+  retries: 30
+  delay: 5
+  register: result
+  until: result.rc == 0
+  when: (quota is defined) and (quota != false)
+
+- name: Create image pull secret
+  command:
+    cmd: "kubectl apply -f -"
+    stdin: "{{ lookup('template', 'templates/imagepullsecret.yml')}}"
+  with_items: "{{ pullCreds }}"
+  when: pullCreds is defined
+  no_log: true
+
+- name: Create sa
+  command:
+    cmd: "kubectl apply -f -"
+    stdin: "{{ lookup('template', 'templates/serviceaccount.yml') }}"
+  with_items: "{{ sa }}"
+  when: sa is defined
+  
+- name: Create bindings
+  command:
+    cmd: "kubectl apply -f -"
+    stdin: "{{ lookup('template', 'templates/rolebinding.yml') }}"
+  with_items: "{{ bindings }}"
+  when: bindings is defined
+
+- block:
+
+  - name: Create Service Mesh Control Plane
+    command:
+      cmd: "kubectl apply -f -"
+      stdin: "{{ lookup('template', 'templates/' + cp.template) }}"
+
+  - name: Wait for cp
+    shell: "test $(oc get smcp basic-install -o=jsonpath='{@.status.conditions[?(@.type==\"Ready\")].status}' -n {{ project }}) == 'True'"
+    retries: 200
+    delay: 5
+    register: wait_result
+    until: wait_result.rc == 0
+
+  when: (cp is defined) and (cp != false)
+
+- name: Create Service Mesh Memeber
+  command:
+    cmd: "kubectl apply -f -"
+    stdin: "{{ lookup('template', 'templates/servicemeshmember.yml') }}"
+  when: (sm is defined) and (sm != false)

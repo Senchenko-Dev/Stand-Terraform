@@ -1,0 +1,82 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '/usr/bin/python2'
+
+- name: Gather packages info
+  package_facts:
+    manager: "auto"
+  no_log: "{{ nolog }}"
+    
+- name: Remove old installation haproxy service, if exist
+  block:
+
+    - name: stop service haproxy, if started
+      service:
+        name: haproxy
+        state: stopped
+
+    - name: loop wait for haproxy stopped
+      shell: "systemctl show -p ActiveState haproxy | cut -d'=' -f2"
+      register: result
+      until: result.stdout == 'inactive'
+      retries: 60
+      delay: 1
+
+    - name: remove haproxy package
+      package:
+        name: haproxy
+        state: absent
+
+  become: true
+  when: "'haproxy' in ansible_facts.packages"
+
+- name: Reinstall haproxy
+  block:
+
+    - name: Install haproxy
+      include_role:
+        name: common
+        tasks_from: install_versioned_package
+      vars:
+        _install_versioned_package_name: haproxy
+        _install_versioned_package_version: "{{ versions.haproxy }}"
+
+    - name: enable haproxy service
+      service:
+        name: haproxy
+        enabled: yes
+ 
+    - name: create haproxy work directory
+      file:
+        path: "{{ haproxy_files.socket_dir }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: 0700
+
+    - name: create socket file
+      file:
+        path: "{{ haproxy_files.socket_dir }}/stats"
+        state: touch
+
+    - name: copy configuration file for haproxy
+      template:
+        src: haproxy.cfg.j2
+        dest: "{{ haproxy_files.conf_dir }}/haproxy.cfg"
+        owner: postgres
+        group: postgres
+        mode: 0600
+
+    - name: start haproxy service
+      service:
+        name: haproxy
+        state: reloaded
+        
+  become: true
+
+- name: Loop wait for haproxy started
+  shell: "systemctl show -p ActiveState haproxy | cut -d'=' -f2"
+  register: result
+  until: result.stdout == 'active'
+  retries: 60
+  delay: 1

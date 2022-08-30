@@ -1,0 +1,5 @@
+---
+- service:
+    name: k3s.service
+    state: "{{service_state_k3s}}"
+    

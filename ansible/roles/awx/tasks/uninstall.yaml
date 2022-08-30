@@ -1,0 +1,45 @@
+---
+- name: delete k3s file
+  shell: rm -rf k3s
+  args:
+    chdir: /usr/bin
+    
+- name: delete file k3s-selinux 
+  shell: rm -rf k3s-selinux-0.4-1.el7.noarch.rpm
+  args:
+    chdir: /usr/bin
+   
+- name: delete file install.sh
+  shell: rm -rf install.sh
+  args:
+    chdir: /usr/bin
+ 
+- name: delete file kustomize
+  shell: rm -rf kustomize
+  args:
+    chdir: /usr/bin
+
+- name: delete k3s
+  shell: ./k3s-uninstall.sh
+  args:
+    chdir: /usr/bin
+  ignore_errors: yes
+    
+- name: delete k3s-selinux
+  shell: yum remove k3s-selinux.noarch -y
+  
+- name: delete folder's awx-operator
+  shell: rm -rf  awx-operator  awx-operator.zip
+  args:
+    chdir: /root
+  
+- name: Delete Docker
+  shell: sudo yum remove docker.x86_64 docker-client.x86_64 docker-common.x86_64 -y
+  
+
+  
+
+
+
+    
+

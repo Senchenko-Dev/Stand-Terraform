@@ -1,0 +1,25 @@
+[Unit]
+Description=pgBouncer connection pooling for PostgreSQL
+After=postgresql.service
+
+[Service]
+Type=forking
+User=postgres
+Group=postgres
+
+#Path to pgbouncer config
+Environment=BOUNCERCONF={{ pgbouncer_files.conf_dir }}/pgbouncer.ini
+
+PermissionsStartOnly=true
+ExecStartPre=/bin/mkdir -p {{ pgbouncer_files.pid_dir }}
+ExecStartPre=/bin/chown -R postgres:postgres {{ pgbouncer_files.pid_dir }}
+ExecStartPost=/bin/sleep 1
+ExecStart={{ pgbouncer_files.bin_path }} -d ${BOUNCERCONF}
+ExecReload=/bin/kill -HUP $MAINPID
+
+PIDFile={{ pgbouncer_files.pid_dir }}/pgbouncer.pid
+LimitNOFILE=65536
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

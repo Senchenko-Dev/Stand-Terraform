@@ -1,0 +1,14 @@
+- name: Version Nginx
+  shell: nginx -v
+  register: version
+
+- debug:
+    msg: "{{version.stderr_lines}}"
+
+- name: Status service Nginx
+  shell: systemctl status nginx
+  register: stat
+
+- debug:
+    msg: "{{stat.stdout_lines}}"
+

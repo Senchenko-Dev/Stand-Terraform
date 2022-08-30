@@ -1,0 +1,46 @@
+- name: Wait
+  hosts: "{{ prepare_group | default('all') }}"
+  gather_facts: no
+  tasks:
+    - name: Wait for system to become reachable
+      wait_for_connection:
+
+
+- name: VM preparation
+  hosts: "{{ prepare_group | default('all') }}"
+  become: yes
+  gather_facts: yes # important
+  tasks:
+    - name: setup mirror for yum
+      include_role:
+        name: setup_yum_repos
+
+    - name: Disable firewalld
+      service:
+        name: firewalld
+        state: stopped
+        enabled: False
+
+    - name: Disbale Selinux
+      selinux:
+        state: disabled
+      register: selinux_result
+
+    - name: "Build hosts file"
+      lineinfile:
+        dest: /etc/hosts
+        regexp: '.*{{ hostvars[item].ansible_fqdn }}$'
+        line: "{{ hostvars[item].ansible_host }} {{ hostvars[item].ansible_fqdn }}"
+        state: present
+      when: hostvars[item].ansible_host is defined
+      with_items: "{{play_hosts}}"
+
+    - reboot:
+      when: selinux_result.reboot_required
+
+    - include_role:
+        name: copy_sshkeys
+      loop: "{{ ssh_keys_list }}"
+
+    - include_role:
+        name: mount_disks

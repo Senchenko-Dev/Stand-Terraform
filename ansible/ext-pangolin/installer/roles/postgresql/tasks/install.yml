@@ -1,0 +1,273 @@
+---
+
+- name: Copy package to remote hosts
+  copy:
+    src: "{{ local_distr_path }}/{{ postgresql_package_file }}"
+    dest: "{{ REMOTE_TMP }}"
+
+- name: Make sure previous package isn't installed
+  package:
+    name:  postgresql-sber-edition
+    state: absent
+  become_user: root
+  become: true
+
+- name: Install package
+  package:
+    name: "{{ REMOTE_TMP }}/{{ postgresql_package_file }}"
+    state: present
+  become: true
+  when: ansible_os_family != "Altlinux"
+
+# Because 'package:' fails with no obvious reason on ALT Linux.
+- name: Install package
+  command:
+    cmd: "apt-get install -y '{{ REMOTE_TMP }}/{{ postgresql_package_file }}'"
+  become: true
+  when: ansible_os_family == "Altlinux"
+
+- name: Change permissions postgresql python bin
+  file:
+    path: "{{ python.postgresql_venv }}/bin/"
+    state: "directory"
+    owner: postgres
+    group: postgres
+    mode: 0700
+    recurse: yes
+  become_user: root
+  become: true
+
+- name: Copy 3rdparty extensions
+  import_tasks: copy_3rdparty_extensions.yml
+
+- name: Copy timescaledb to PGHOME
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: postgres
+    group: postgres
+    mode: "{{ item.mode }}"
+    directory_mode: yes
+  with_items:
+    - { src: '{{ local_distr_path }}/timescaledb{{ PGHOME }}/lib/',             dest: '{{ PGHOME }}/lib',             mode: 600 }
+    - { src: '{{ local_distr_path }}/timescaledb{{ PGHOME }}/share/extension/', dest: '{{ PGHOME }}/share/extension', mode: 600 }
+  become: true
+
+- name: Create postgresql service
+  template:
+    src: postgresql.service.j2
+    dest: "{{ service_path_dir }}/postgresql.service"
+  become: true
+  when: not patroni
+
+- name: Fill part of bash_profile for postgresql and update sudoers
+  include_role:
+    name: common
+    tasks_from: bash_profile
+  vars:
+    component_name: postgresql
+
+- name: Ensure data and log dirs exists
+  file:
+    path: "{{ item.path }}"
+    state: "{{ item.state }}"
+    owner: postgres
+    group: postgres
+    mode: 0700
+  with_items:
+    - { path: '{{ PGUSERHOME }}/', state: 'directory' }
+    - { path: '{{ PGDATA }}/', state: 'absent' }
+    - { path: '{{ PGLOGS }}/', state: 'absent' }
+    - { path: '{{ PGBACKUP }}', state: 'absent' }
+    - { path: '{{ PGETCDIR }}/', state: 'absent' }
+    - { path: "/{{ PGDATA.replace('/', ' ').split().0 }}", state: 'directory'}
+    - { path: "/{{ PGLOGS.replace('/', ' ').split().0 }}", state: 'directory'}
+    - { path: '{{ PGDATA }}/', state: 'directory' }
+    - { path: '{{ PGLOGS }}/', state: 'directory' }
+    - { path: '{{ PGBACKUP }}', state: 'directory' }
+    - { path: '/var/run/postgresql/', state: 'directory' }
+    - { path: '{{ PGETCDIR }}/', state: 'directory' }
+  become: true
+
+- name: Change owner for sos file
+  file:
+    path: "/{{ PGDATA.replace('/', ' ').split().0 }}/sos"
+    owner: postgres
+    group: postgres
+    mode: 0600
+  become: true
+  when: "stand == 'prom' and (inventory_hostname == 'master' or inventory_hostname == 'replica')"
+
+- name: Ensure tablespace_location dir exists
+  file:
+    path: "{{ tablespace_location }}/{{ tablespace_name }}"
+    state: 'directory'
+    owner: postgres
+    group: postgres
+    mode: 0700
+  become: true
+  when: "tablespace_name|length > 0"
+
+- name: Initializate database and copy templates for configs
+  block:
+
+    - name: initializate standalone database
+      shell: "{{ PGHOME }}/bin/pg_ctl -D {{ PGDATA }} initdb -o --data-checksums"
+      environment:
+        PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
+
+    - name: initializate standalone protect
+      shell: |
+        set timeout -1
+        spawn {{ PGHOME }}/bin/initprotection -D {{ PGDATA }} -U {{ sec_admin }}
+        match_max 100000
+        expect "Enter new security admin password:"
+        send -- "{{ sec_password }}\r"
+        expect "Enter it again:"
+        send -- "{{ sec_password }}\r"
+        expect eof
+      args:
+        executable: "expect"
+      environment:
+        PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
+      when: "admin_protection is defined and admin_protection"
+
+    - name: rename default configs to base.conf
+      shell: |
+        mv "{{ PGDATA }}/postgresql.conf" "{{ PGDATA }}/postgresql.base.conf"
+        mv "{{ PGDATA }}/pg_hba.conf" "{{ PGDATA }}/pg_hba.base.conf"
+
+    - name: configure standalone postgresql.conf
+      template:
+        src: postgresql.conf.j2
+        dest: "{{ PGDATA }}/postgresql.conf"
+        owner: postgres
+        group: postgres
+        mode: 0600
+        trim_blocks: False
+
+    - name: encrypt ldap
+      block:
+
+        - name: encrypt ldap passwords 
+          shell: >
+            {{ PGHOME }}/bin/pg_auth_password enc -W "{{ ldap_bind_tuz_password }}"
+          register: encpassword_ldap
+    
+        - name: update ldap password
+          set_fact:
+            ldap_bind_tuz_password: '{{ encpassword_ldap.stdout[0:-1] }}'
+            
+      no_log: "{{ nolog }}"
+      when: "action_type == 'install' and 'patroni' not in tag"
+
+    - name: Configure pg_hba.conf
+      template:
+        src: pg_hba.conf.j2
+        dest: "{{ PGDATA }}/pg_hba.conf"
+        owner: postgres
+        group: postgres
+        mode: 0600
+
+  become_user: postgres
+  become: true
+  when: master is defined and "'postgresql-sber-edition' not in ansible_facts.packages"
+
+- name: Setup delete and compress old logs
+  template:
+    src: postgresql_clean_logs.j2
+    dest: "{{ global_scripts }}/postgresql_clean_logs"
+    owner: postgres
+    group: postgres
+    mode: 0751
+  become: true
+
+- name: Creates cron job
+  cron:
+    name: "a job for postgresql clean logs"
+    special_time: daily
+    job: "{{ global_scripts }}/postgresql_clean_logs"
+  become: true
+  become_user: postgres
+
+- name: Generate certificates
+  include_role:
+    name: postgresql
+    tasks_from: generate_certs.yml
+
+- name: Create configutation file for KMS
+  shell: |
+    set timeout -1
+    spawn {{ PGHOME }}/bin/setup_kms_credentials
+    match_max 100000
+    expect "Choose credentials domain:"
+    send -- "1\r"
+    expect "Enter PostgreSQL cluster ID:"
+    send -- "{{ KMS_CLUSTER_ID }}\r"
+    expect "Enter IP address:"
+    send -- "{{ KMS_HOST }}\r"
+    expect "Enter port:"
+    send -- "{{ KMS_PORT }}\r"
+    expect "Choose credentials type:"
+    send -- "1\r"
+    expect "Enter login:"
+    send -- "{{ KMS_LOGIN }}\r"
+    expect "Enter password:"
+    send -- "{{ KMS_PASSWORD }}\r"
+    expect "Confirm password:"
+    send -- "{{ KMS_PASSWORD }}\r"
+    expect "Do you want to add another KMS credentials? (yes/no)?:"
+    send -- "no\r"
+    expect eof
+  args:
+    executable: "expect"
+  environment:
+    PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
+  when: "(tde is defined and tde) or (admin_protection is defined and admin_protection)"
+  become: true
+  become_user: postgres
+
+- name: Start database and check process of postgresql
+  block:
+
+    - name: start db daemon
+      shell: "{{ PGHOME }}/bin/postgres -D {{ PGDATA }} &"
+      environment:
+        PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
+      become_user: postgres
+      when: patroni
+
+    - name: start db daemon
+      systemd:
+        name: postgresql
+        state: started
+        daemon_reload: yes
+        enabled: yes
+      when: not patroni
+
+    - name: loop wait for pgsql started
+      shell: '{{ PGHOME }}/bin/pg_isready -h 127.0.0.1 -p {{ ports.pg }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+      become_user: postgres
+
+  become: true
+  when: master is defined and "'postgresql-sber-edition' not in ansible_facts.packages"
+
+- name: Gather packages info
+  package_facts:
+    manager: "auto"
+  no_log: "{{ nolog }}"
+
+- name: Remember current PG SE version
+  set_fact:
+    pg_current_version: "{{ ansible_facts.packages['postgresql-sber-edition'][0].version }}"
+  when: "'postgresql-sber-edition' in ansible_facts.packages"
+
+- name: Add and configure patroni db user
+  include_role:
+    name: postgresql
+    tasks_from: add_and_configure_patroni_db_user.yml
+  when: patroni and action_type == 'install'

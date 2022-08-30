@@ -1,0 +1,336 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+- name: Define current master role of the cluster
+  include_role:
+    name: patroni
+    tasks_from: update_define_roles_of_nodes.yml
+
+- name: Change role of current host in cluster
+  include_role:
+    name: patroni
+    tasks_from: update_run_switchover
+  vars:
+    current_database_port: "{{ ports.pg }}"
+  run_once: true
+  when: installation_type == 'cluster' and hostvars['master'].ansible_fqdn != current_master
+
+- name: Define current_master for standalone installation
+  set_fact:
+    current_master: "{{ hostvars['master'].ansible_fqdn }}"
+  when: installation_type == 'standalone'
+
+- name: Define current PGDATA and PGHOME
+  set_fact:
+    the_configure_pgdata: "{{ PGDATA_OLD }}"
+    the_configure_pghome: "{{ PGHOME_OLD }}"
+  when: "'update' in action_type and not postgres"
+
+- name: Define current PGDATA and PGHOME
+  set_fact:
+    the_configure_pgdata: "{{ PGDATA }}"
+    the_configure_pghome: "{{ PGHOME }}"
+  when: action_type == 'install' or postgres
+
+- name: Block traffic for {{ PGPORT_OLD }}
+  block:
+
+    - name: block traffic for {{ PGPORT_OLD }}
+      include_role:
+        name: common
+        tasks_from: block_traffic
+      vars:
+        block_traffic: true
+        the_current_haproxy_port: "{{ ports.haproxy }}"
+        the_current_pgbouncer_port: "{{ ports.pgbouncer }}"
+        the_current_pg_port: "{{ ports.pg }}"
+      when: action_type == 'update_minor'
+
+    - name: tuning
+      block:
+
+        - name: update extensions
+          block:
+
+            - name: copy extension script to master
+              template:
+                src: 'update_extensions.sh.j2'
+                dest: '{{ REMOTE_TMP }}/update_extensions.sh'
+                owner: postgres
+                group: postgres
+                mode: '0755'
+
+            - name: run update_extensions script
+              shell: 'timeout 10s {{ REMOTE_TMP }}/update_extensions.sh'
+              environment:
+                - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+                - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+              become_user: postgres
+
+          when: "'update' in action_type"
+
+        - name: create default roles
+          import_tasks: roles.yml
+
+        - name: create db objects, if action_type not update
+          import_tasks: objects.yml
+          when: "'update' not in action_type"
+
+        - name: get list of databases
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: SELECT datname FROM pg_database WHERE datname NOT LIKE 'template0'
+          register: current_dbs
+
+        - name: create ext schema
+          postgresql_schema:
+            db: "{{ item.datname }}"
+            name: ext
+            owner: "{{ db_admin }}"
+            port: "{{ ports.pg }}"
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: add description for ext schema
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            db: "{{ item.datname }}"
+            query: "COMMENT ON SCHEMA ext IS 'Schema for extensions';"
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: import task for apply sql scripts
+          import_tasks: update_apply_sql_scripts.yml
+          vars:
+            moving_extensions: true
+            search_path_ext: true
+          when: "'update' in action_type"
+
+        - name: update functions
+          import_tasks: update_functions.yml
+          when: "'update' in action_type"
+
+    #  - name: create ldap sec_officer role
+    #    postgresql_user:
+    #      port: "{{ports.pg}}"
+    #      name: "{{ sec_officer }}"
+    #      password: "{{ transport_password }}"
+    #      groups: "{{ sec_admin }}"
+    #      expires: "{{ ROLES_EXPIRES_DATE }}"
+    #      conn_limit: 1
+
+        - name: create extensions
+          postgresql_ext:
+            name: "{{ item }}"
+            schema: ext
+            db: postgres
+            port: "{{ ports.pg }}"
+          with_items:
+            - "pgse_backup"
+            - "pg_pathman"
+            - "pg_repack"
+            - "pgstattuple"
+
+        - name: create extensions pg_cron if install
+          postgresql_ext:
+            name: pg_cron
+            schema: ext
+            port: "{{ ports.pg }}"
+            db: postgres
+          when: "'update' not in action_type"
+          
+        - name: create extension pg_stat_statements
+          postgresql_ext:
+            name: pg_stat_statements
+            schema: ext
+            port: "{{ ports.pg }}"
+            db: "{{ item.datname }}"
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: create extension pg_hint_plan
+          postgresql_ext:
+            name: pg_hint_plan
+            port: "{{ ports.pg }}"
+            db: "{{ item.datname }}"
+          with_items: "{{ current_dbs.query_result }}"
+
+        - name: GRANT privs to objects
+          import_tasks: grants.yml
+
+        - name: configure pgaudit for group roles
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: "{{ item }}"
+          with_items:
+            - ALTER ROLE {{ db_admin }} SET pgaudit.log = 'ddl, role, connection, misc_set';
+      #TODO - ALTER ROLE {{ sec_admin }} SET pgaudit.log = 'role, read, write, ddl, connection';
+            - ALTER ROLE "monitoring_php" SET pgaudit.log = 'write, ddl, role, connection, misc_set';
+            - ALTER ROLE "auditor" SET pgaudit.log = 'role, read, write, ddl, connection, misc_set';
+            - ALTER ROLE {{ as_group }} SET pgaudit.log = 'ddl, role, connection, misc_set';
+            - ALTER ROLE "zabbix_oasubd" SET pgaudit.log = 'write, ddl, role, connection, misc_set';
+
+        - name: configure pgaudit for backup_user
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: "{{ item }}"
+          with_items:
+            - ALTER ROLE "backup_user" SET pgaudit.log = 'write, ddl, role, connection, misc_set';
+          when: SRC
+
+      #  - name: configure pgaudit for ldap users - sec_admin
+      #    postgresql_query:
+      #      port: "{{ports.pg}}"
+      #      query: ALTER ROLE "{{ sec_officer }}" SET pgaudit.log = 'role, read, write, ddl, connection'
+
+        - name: check {{ as_admins }} role
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: SELECT pg_roles.rolname FROM pg_roles WHERE rolname='{{ item }}';
+          loop: "{{ as_admins }}"
+          register: result_as_admins
+          when: "'update' not in action_type"
+
+        - name: configure pgaudit for ldap users - as_admins
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: ALTER ROLE "{{ item }}" SET pgaudit.log = 'ddl, role, connection, misc_set';
+          loop: "{{ as_admins }}"
+          loop_control:
+            index_var: index
+          when: "'update' not in action_type and result_as_admins.results[ index ].rowcount == 1"
+
+        - name: delete pgbouncer user and all his objects
+          import_tasks: pgbouncer.yml
+          when: "'update' in action_type"
+
+        - name: copy grants script to master
+          template:
+            src: 'grants_on_functions.sql.j2'
+            dest: '{{ REMOTE_TMP }}/grants_on_functions.sql'
+            owner: postgres
+            group: postgres
+            mode: 0644
+
+        - name: grants on functions postgres
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            path_to_script: "{{ REMOTE_TMP }}/grants_on_functions.sql"
+            db: "{{ item.datname }}"
+          with_items: "{{ current_dbs.query_result }}"
+
+      run_once: true
+      environment:
+        - PGHOST: "{{ ansible_fqdn }}"
+        - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+        - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+      become: true
+      become_user: postgres
+      when: ansible_fqdn == current_master
+
+    - name: create encrypt space for pg_backup
+      block:
+
+        - name: check exist pg_probackup
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: SELECT * FROM pg_user WHERE pg_user.usename = 'backup_user'
+          register: is_backup_user
+
+        - name: create encrypt space for backup_user
+          include_role:
+            name: postgresql
+            tasks_from: create_encrypt_space
+          vars:
+            username: "{{ item.username }}" 
+            database: "{{ item.database }}"
+            password: "{{ item.password }}"
+            address: "{{ item.address }}"
+          with_items: 
+            - { username: "backup_user", database: "postgres", password: "{{ pg_backup_user_passwd }}", address: "{{ hostvars['master'].ansible_fqdn }}" }
+            - { username: "backup_user", database: "postgres", password: "{{ pg_backup_user_passwd }}", address: "{{ hostvars['replica'].ansible_fqdn }}" }
+            - { username: "backup_user", database: "postgres", password: "{{ pg_backup_user_passwd }}", address: "{{ hostvars['master'].ansible_default_ipv4.address }}" }
+            - { username: "backup_user", database: "postgres", password: "{{ pg_backup_user_passwd }}", address: "{{ hostvars['replica'].ansible_default_ipv4.address }}" }
+            - { username: "backup_user", database: "postgres", password: "{{ pg_backup_user_passwd }}", address: "localhost" }
+            - { username: "backup_user", database: "postgres", password: "{{ pg_backup_user_passwd }}", address: "127.0.0.1" }
+          when: "installation_type == 'cluster' and is_backup_user.rowcount|int != 0"
+      
+        - name: create encrypt space for backup_user
+          include_role:
+            name: postgresql
+            tasks_from: create_encrypt_space
+          vars:
+            username: "{{ item.username }}"
+            database: "{{ item.database }}"
+            password: "{{ item.password }}"
+            address: "{{ item.address }}"
+          with_items: 
+            - { username: "backup_user", database: "postgres", password: "{{ pg_backup_user_passwd }}", address: "{{ hostvars['master'].ansible_fqdn }}" }
+            - { username: "backup_user", database: "postgres", password: "{{ pg_backup_user_passwd }}", address: "{{ hostvars['master'].ansible_default_ipv4.address }}" }
+            - { username: "backup_user", database: "postgres", password: "{{ pg_backup_user_passwd }}", address: "localhost" }
+            - { username: "backup_user", database: "postgres", password: "{{ pg_backup_user_passwd }}", address: "127.0.0.1" }
+          when: "installation_type == 'standalone' and is_backup_user.rowcount|int != 0"
+
+      environment:
+        - PGHOST: "{{ ansible_fqdn }}"
+        - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+        - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+      become: true
+      become_user: postgres
+      when: inventory_hostname != 'etcd'
+
+    - name: check if diuid var exists
+      debug: msg="Stand will not set up to monitoring because of diuid var is undefined. \
+                  Please set up to monitoring manually by folowing instruction \
+                  https://sbtatlas.sigma.sbrf.ru/wiki/pages/viewpage.action?pageId=2310838234#id-%D0%98%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%86%D0%B8%D1%8F%D0%BF%D0%BE%D0%B8%D0%BD%D1%81%D1%82%D0%B0%D0%BB%D1%8F%D1%86%D0%B8%D0%B8PostgreSQLSberEdition%D0%B4%D0%BB%D1%8F%D0%B2%D1%81%D0%B5%D1%85%D1%81%D1%80%D0%B5%D0%B4%D0%BF%D0%BElegacy%D0%BF%D1%80%D0%BE%D1%86%D0%B5%D1%81%D1%81%D1%83-%D0%A1%D0%BE%D0%B7%D0%B4%D0%B0%D0%BD%D0%B8%D0%B5%D0%97%D0%9D%D0%9E%D0%BD%D0%B0%D0%BF%D0%BE%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D1%83%D0%BD%D0%B0%D0%BC%D0%BE%D0%BD%D0%B8%D1%82%D0%BE%D1%80%D0%B8%D0%BD%D0%B3%D0%BD%D0%B0%D0%BA%D0%BE%D0%BC%D0%B0%D0%BD%D0%B4%D1%83SberInfra"
+      when: "diuid is undefined"
+
+    - name: install monitoring
+      import_tasks: monitoring.yml
+      when: "monitoring_zabbix is defined and monitoring_zabbix and diuid is defined"
+
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            configuration: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            configuration: true
+      when: inventory_hostname == 'master'
+      
+  always:
+
+    - name: unblock traffic for {{ PGPORT_OLD }}
+      include_role:
+        name: common
+        tasks_from: block_traffic
+      vars:
+        block_traffic: false
+        the_current_haproxy_port: "{{ ports.haproxy }}"
+        the_current_pgbouncer_port: "{{ ports.pgbouncer }}"
+        the_current_pg_port: "{{ ports.pg }}"
+      when: action_type == 'update_minor'
+
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+- name: Import create dynamic message
+  import_tasks: welcome_message.yml

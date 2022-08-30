@@ -1,0 +1,13 @@
+apiVersion: maistra.io/v1
+kind: ServiceMeshMember
+metadata:
+  name: default
+  namespace: {{ project }}
+  labels:
+{% for key, value in labels.items() %}
+    {{ key }}: {{ value }}
+{% endfor %}
+spec:
+  controlPlaneRef:
+    namespace: {{ sm.cpNamespace }}
+    name: {{ sm.cpName }}

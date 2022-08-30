@@ -1,0 +1,33 @@
+- name: Define version of current python interpreter
+  set_fact:
+    previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+- name: Define current python interpreter
+  set_fact:
+    _runcheckpoint_ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+  when: _runcheckpoint_ansible_python_interpreter is undefined
+
+- name: Execute checkpoint procedure
+  block:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ _runcheckpoint_ansible_python_interpreter }}'
+    
+    - name: checkpoint before restart DB
+      postgresql_query:
+        port: "{{ _runcheckpoint_database_port }}"
+        query: checkpoint;
+      environment:
+        - PGHOST: "{{ ansible_fqdn }}"
+        - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+        - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+
+  always:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ previous_python_interpreter }}'
+  
+  become_user: postgres
+  become: true

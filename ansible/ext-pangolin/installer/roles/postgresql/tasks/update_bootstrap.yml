@@ -1,0 +1,28 @@
+- name: Update bootstrap.dcs in etcd DB
+  block:
+
+    - name: fetch bootstrap section back to the local Ansible host
+      fetch:
+        src : "{{ item }}"
+        dest: "{{ playbook_dir }}"
+      with_items: "{{ merge_cfg.diff_bootstrap_cfg }}"
+      become: true
+
+    - name: load {{ merge_cfg.diff_bootstrap_cfg }} 
+      set_fact:
+        file_contents_lines: "{{ lookup('file', '{{ playbook_dir }}/master{{ merge_cfg.diff_bootstrap_cfg }}').splitlines() }}"
+
+    - name: content in diff bootstrap
+      debug:
+        msg: "{{ item }}"
+      with_items: "{{ file_contents_lines }}"
+
+    - name: update etcd DB via patroni
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        change_params: '{{ item }}'
+      loop: "{{ file_contents_lines }}"
+
+  when: inventory_hostname == 'master'

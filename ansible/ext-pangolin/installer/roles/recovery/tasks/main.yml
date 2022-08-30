@@ -1,0 +1,13 @@
+- name: Check that recovery is available
+  assert:
+    that: "(hostvars['master'].update_errors.components.pg or \
+           hostvars['master'].update_errors.components.etcd or \
+           hostvars['master'].update_errors.components.patroni or \
+           hostvars['master'].update_errors.components.pgbouncer) and \
+           hostvars['master'].update_errors.aggregate"
+    fail_msg: "Recovery operation is unavailable for this error types: {{ hostvars['master'].update_errors }}"
+  run_once: true
+
+- name: Import {{ action_type }}
+  import_tasks: "{{ action_type }}_{{ recovery_type }}.yml"
+  when: handle_update_errors

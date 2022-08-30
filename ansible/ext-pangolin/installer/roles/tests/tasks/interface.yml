@@ -1,0 +1,109 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+- name: Define current master role of the cluster
+  include_role:
+    name: patroni
+    tasks_from: update_define_roles_of_nodes.yml
+
+- name: Create and tune tuz_for_test TUZ roles only for tests
+  block:
+
+    - name: create tuz_for_test TUZ roles
+      postgresql_user:
+        groups: "{{ TUZ_group }}"
+        port: "{{ ports.pg }}"
+        name: tuz_for_test
+        password: "{{ db_group_roles.transport.pass.open }}"
+        role_attr_flags: INHERIT
+
+    - name: tune role's search_path
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: 'ALTER ROLE tuz_for_test SET search_path="{{ schema_name }}","$user";'
+
+    - name: alter role as_admin LOGIN
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER ROLE "{{ as_group }}" LOGIN;
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres
+  when: "ansible_fqdn == current_master"
+
+- name: Enable tuz_for_test and {{ as_group }} connection in pg_hba
+  include_role:
+    name: common
+    tasks_from: update_edit_pghba
+  vars:
+    the_insert_params: [ [ '^(.*)(host) all.*0.0.0.0/0 md5(.*)$', '        - host all tuz_for_test 0.0.0.0/0 md5' ], 
+                          [ '^(.*)(hostssl) all postgres 127.0.0.1/32 cert(.*)$', '        - host all {{ as_group }} 0.0.0.0/0 scram-sha-256'] ]
+    pghba_action: 'add'
+  when: ansible_fqdn != 'etcd'
+
+- name: Check select, insert, update, drop for TUZ by {{ ports.pg }}
+  import_tasks: sub_interface.yml
+  vars:
+    the_subinterface_port: "{{ ports.pg }}"
+
+- name: check exists pgbouncer
+  stat: 
+    path: "{{ pgbouncer_files.bin_path }}"
+  register: pgbouncer_exists
+  become: true
+
+- name: Check select, insert, update, drop for TUZ by {{ ports.pgbouncer }}
+  import_tasks: sub_interface.yml
+  vars:
+    the_subinterface_port: "{{ ports.pgbouncer }}"
+  when: pgbouncer_exists.stat.exists
+
+- name: check exists haproxy
+  stat: path="{{ haproxy_files.bin_path }}"
+  register: haproxy_exists
+  become: true
+
+- name: Check select, insert, update, drop for TUZ by {{ ports.haproxy }}
+  import_tasks: sub_interface.yml
+  vars:
+    the_subinterface_port: "{{ ports.haproxy }}"
+  when: haproxy_exists.stat.exists
+
+- name: Remove tuz_for_test TUZ roles and alter role as_admin NOLOGIN
+  block:
+
+    - name: remove tuz_for_test TUZ roles
+      postgresql_user:
+        port: "{{ ports.pg }}"
+        name: tuz_for_test
+        priv: ALL
+        db: "{{ db_name }}"
+        state: absent
+
+    - name: alter role as_admin NOLOGIN
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER ROLE "{{ as_group }}" NOLOGIN;
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres
+  when: "ansible_fqdn == current_master"
+
+- name: Disable tuz_for_test and {{ as_group }} connection in pg_hba
+  include_role:
+    name: common
+    tasks_from: update_edit_pghba
+  vars:
+    the_remove_params: [ '^(.*)host all tuz_for_test 0.0.0.0/0 md5(.*)$',
+                         '^(.*)host all {{ as_group }} 0.0.0.0/0 scram-sha-256(.*)$' ]
+    pghba_action: 'remove'
+  when: ansible_fqdn != 'etcd'

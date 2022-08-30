@@ -1,0 +1,16 @@
+---
+- name: Locating all files in files dir
+  find:
+    path: "/mnt/log"
+  register: cleanup
+  ignore_errors: true
+
+- name: Removing all files previously found in files dir
+  file:
+    path: "{{item.path}}"
+    state: absent
+  with_items: "{{ cleanup.files }}"
+  ignore_errors: true
+
+- debug:
+    msg: "log folder cleared"

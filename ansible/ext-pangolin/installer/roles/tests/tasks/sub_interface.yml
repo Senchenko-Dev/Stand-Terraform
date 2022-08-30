@@ -1,0 +1,137 @@
+- name: Check select, insert, update, drop for TUZ
+  block:
+
+    - name: delete the test table if it exists
+      postgresql_query:
+        login_user: postgres
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'DROP TABLE IF EXISTS "{{ schema_name }}".table_test;'
+
+    - name: create a test table
+      postgresql_query:
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'CREATE TABLE "{{ schema_name }}".table_test (id int);'
+      register: create_table
+      ignore_errors: true
+
+    - name: check the creation of a test table
+      assert:
+        that: create_table.changed and create_table.statusmessage == "CREATE TABLE"
+        fail_msg: "the table was not created"
+        success_msg: "the table is created"
+
+    - name: insert data into a test table
+      postgresql_query:
+        login_user: tuz_for_test
+        login_password: "{{ db_group_roles.transport.pass.open }}"
+        port: "{{ the_subinterface_port }}"
+        db: "{{ db_name }}"
+        query: 'INSERT INTO "{{ schema_name }}".table_test (id) VALUES (1);'
+      register: insert_table
+      ignore_errors: true
+
+    - name: delete the test table if data could not be written
+      postgresql_query:
+        login_user: postgres
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'DROP TABLE "{{ schema_name }}".table_test;'
+      ignore_errors: true
+      when: not insert_table.changed
+
+    - name: check whether data is inserted into the test table
+      assert:
+        that: insert_table.changed and insert_table.statusmessage == "INSERT 0 1"
+        fail_msg: "data was not successfully inserted into the table"
+        success_msg: "data was successfully inserted into the table"
+
+    - name: select data from a test table
+      postgresql_query:
+        login_user: tuz_for_test
+        login_password: "{{ db_group_roles.transport.pass.open }}"
+        port: "{{ the_subinterface_port }}"
+        db: "{{ db_name }}"
+        query: 'SELECT * FROM "{{ schema_name }}".table_test;'
+      register: select_table
+      ignore_errors: true
+
+    - name: check the selected data in the test table
+      assert:
+        that: select_table.query_result[0].id|int == 1
+        fail_msg: "data was not selected successfully"
+        success_msg: "the data has been successfully selected"
+
+    - name: update data in the test table
+      postgresql_query:
+        login_user: tuz_for_test
+        login_password: "{{ db_group_roles.transport.pass.open }}"
+        port: "{{ the_subinterface_port }}"
+        db: "{{ db_name }}"
+        query: 'UPDATE "{{ schema_name }}".table_test SET id = 2 WHERE id = 1;'
+      register: update_table
+      ignore_errors: true
+
+    - name: check for data updates in the test table
+      assert:
+        that: update_table.changed and update_table.statusmessage == "UPDATE 1"
+        fail_msg: "data was not updated successfully"
+        success_msg: "data was updated successfully"
+
+    - name: select data from a test table
+      postgresql_query:
+        login_user: tuz_for_test
+        login_password: "{{ db_group_roles.transport.pass.open }}"
+        port: "{{ the_subinterface_port }}"
+        db: "{{ db_name }}"
+        query: 'SELECT * FROM "{{ schema_name }}".table_test;'
+      register: select_table
+      ignore_errors: true
+
+    - name: check the selected data in the test table
+      assert:
+        that: select_table.query_result[0].id|int == 2
+        fail_msg: "data was not selected successfully"
+        success_msg: "the data has been successfully selected"
+
+    - name: delete a test table by the TUZ user
+      postgresql_query:
+        login_user: tuz_for_test
+        login_password: "{{ db_group_roles.transport.pass.open }}"
+        port: "{{ the_subinterface_port }}"
+        db: "{{ db_name }}"
+        query: 'DROP TABLE "{{ schema_name }}".table_test;'
+      register: drop_table_tuz
+      ignore_errors: true
+
+    - name: check that the TUZ user cannot delete the table
+      assert:
+        that: not drop_table_tuz.changed
+        fail_msg: "failure. the test table was deleted by the user TUZ"
+        success_msg: "successfully. the test table cannot be deleted by the TUZ user"
+
+    - name: delete a test table
+      postgresql_query:
+        login_user: postgres
+        port: "{{ ports.pg }}"
+        db: "{{ db_name }}"
+        query: 'DROP TABLE "{{ schema_name }}".table_test;'
+      register: drop_table
+      ignore_errors: true
+
+    - name: check for deleting a test table
+      assert:
+        that: drop_table.changed and drop_table.statusmessage == "DROP TABLE"
+        fail_msg: "the test table was not deleted successfully"
+        success_msg: "the test table was successfully deleted"
+
+  environment:
+    - PGHOST: "{{ current_master }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: yes
+  become_user: postgres
+  when: "postgres|bool and schema_name|length > 0 and db_name|length > 0 and tablespace_name|length > 0 and ansible_fqdn == current_master"

@@ -1,0 +1,102 @@
+- name: Define current PGDATA and PGHOME
+  set_fact:
+    the_editpghba_pgdata: "{{ PGDATA_OLD }}"
+    the_editpghba_pghome: "{{ PGHOME_OLD }}"
+  when: "'update' in action_type and not postgres"
+
+- name: Define current PGDATA and PGHOME
+  set_fact:
+    the_editpghba_pgdata: "{{ PGDATA }}"
+    the_editpghba_pghome: "{{ PGHOME }}"
+  when: action_type == 'install' or postgres
+
+- name: Check exists patroni
+  stat: path="{{ python.patroni_venv }}/bin/patroni"
+  register: patroni_exists
+  become: true
+
+- name: Define pghba file name
+  set_fact:
+    the_editpghba_cfg: "{{ patroni_files.conf_dir }}/postgres.yml"
+  when: patroni_exists.stat.exists
+
+- name: Define pghba file name
+  set_fact:
+    the_editpghba_cfg: "{{ the_editpghba_pgdata }}/pg_hba.conf"
+  when: not patroni_exists.stat.exists
+
+- name: Enable tuz_for_test connection in pg_hba
+  block:
+
+    - name: update pg_hba.conf
+      block:
+
+        - name: enable tuz_for_tests connection in pg_hba
+          lineinfile:
+            path: '{{ the_editpghba_cfg }}'
+            insertafter: "{{ item[0] }}"
+            line: "{{ item[1].replace('        - ', '') }}"
+          loop: "{{ the_insert_params }}"
+
+        - name: send reload command to postgresql
+          shell: "{{ the_editpghba_pghome }}/bin/pg_ctl reload -D {{ the_editpghba_pgdata }}"
+          become_user: postgres
+
+      when: not patroni_exists.stat.exists
+
+    - name: update postgres.yml
+      block:
+
+        - name: enable tuz_for_tests connection in pg_hba
+          lineinfile:
+            path: '{{ the_editpghba_cfg }}'
+            insertafter: "{{ item[0] }}"
+            line: "{{ item[1] }}"
+          loop: "{{ the_insert_params }}"
+
+        - name: send reload command to patroni
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl
+          vars:
+            endpoint_name: reload
+
+      when: patroni_exists.stat.exists
+
+  become: true
+  when: pghba_action == 'add'
+
+- name: Disable tuz_for_test connection in pg_hba
+  block:
+
+    - name: disable tuz_for_tests connection in pg_hba
+      lineinfile:
+        path: '{{ the_editpghba_cfg }}'
+        regexp: "{{ item }}"
+        state: absent
+      loop: "{{ the_remove_params }}"
+
+    - name: send reload command to postgresql
+      shell: "{{ the_editpghba_pghome }}/bin/pg_ctl reload -D {{ the_editpghba_pgdata }}"
+      become_user: postgres
+      when: not patroni_exists.stat.exists
+
+    - name: send reload command to patroni
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl
+      vars:
+        endpoint_name: reload
+      when: patroni_exists.stat.exists
+
+  become: true
+  when: pghba_action == 'remove'
+
+- name: Wait when pgsql open port
+  shell: '{{ the_editpghba_pghome }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ ports.pg }}'
+  register: result
+  until: result.stdout.find("accepting connections") != -1
+  retries: 60
+  delay: 1
+  become: true
+  become_user: postgres

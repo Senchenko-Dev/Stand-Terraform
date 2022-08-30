@@ -1,0 +1,44 @@
+---
+- hosts: all
+  become: yes
+  serial: "{{ rolling_update_serial | default('50%') }}"
+  gather_facts: no
+
+  tasks:
+
+    - name: Import secrets
+      include_vars: "{{ vault_file }}"
+      when: vault_file is defined
+      tags: always
+
+    - name: Collect facts
+      setup:
+      tags: always
+
+    - name: Copy additional files
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+        owner: "{{ item.owner }}"
+        group: "{{item.group }}"
+      loop: "{{ list_maps_custom_files | default([]) }}"
+
+
+    - name: Copy additional templated files
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        force: "{{ force | default('yes') }}"
+        mode: "{{ item.mode}}" # If mode is not specified and the destination file does exist, the mode of the existing file will be us
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+      loop: "{{ list_maps_custom_templates | default([]) }}"
+
+################-test-#################
+    - name: execute bash script
+      shell: "{{item.dest}}"
+      loop: "{{ list_maps_custom_files | default([]) + list_maps_custom_templates | default([]) }}"
+      when:
+        - item.execute is defined
+        - item.execute|bool

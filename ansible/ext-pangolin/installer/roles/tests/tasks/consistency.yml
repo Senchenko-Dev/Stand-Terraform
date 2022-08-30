@@ -1,0 +1,65 @@
+- name: Check for readme.txt
+  block:
+
+    - name: retrieve file status readme.txt
+      stat: path={{ PGHOME }}/readme.txt
+      register: stat_readme_txt
+
+    - name: check file status readme.txt
+      assert:
+        that: stat_readme_txt.stat.exists
+        fail_msg: "No file readme.txt in {{ PGHOME }}/"
+        success_msg: "There is a file readme.txt in {{ PGHOME }}/"
+
+  become: yes
+  become_user: postgres
+
+- name: Check for releasenotes.json
+  block:
+
+    - name: retrieve file status releasenotes.json
+      stat: path={{ PGHOME }}/releasenotes.json
+      register: stat_releasenotes_json
+
+    - name: check file status releasenotes.json
+      assert:
+        that: stat_releasenotes_json.stat.exists
+        fail_msg: "No file releasenotes.json in {{ PGHOME }}/"
+        success_msg: "There is a file releasenotes.json in {{ PGHOME }}/"
+
+  become: yes
+  become_user: postgres
+
+- name: Get a list of files doc
+  command: "ls {{ local_distr_path }}/doc/"
+  run_once: true
+  register: dir_out
+  delegate_to: localhost
+
+- name: Check for doc
+  block:
+
+    - name: retrieve directory status doc
+      stat: path={{ PGHOME }}/doc
+      register: stat_doc
+
+    - name: check directory status doc
+      assert:
+        that: stat_doc.stat.exists
+        fail_msg: "There is no doc directory in {{ PGHOME }}"
+        success_msg: "There is a doc directory in {{ PGHOME }}"
+
+    - name: retrieve files status doc/*
+      stat: path="{{ PGHOME }}/doc/{{ item }}"
+      register: stat_doc_files
+      with_items: "{{ dir_out.stdout_lines }}"
+
+    - name: check files status doc
+      assert:
+        that: "{{ item.stat.exists }}"
+        fail_msg: "No file {{ item.stat.path }}"
+        success_msg: "There is a file {{ item.stat.path }}"
+      with_items: "{{ stat_doc_files.results }}"
+
+  become: yes
+  become_user: postgres

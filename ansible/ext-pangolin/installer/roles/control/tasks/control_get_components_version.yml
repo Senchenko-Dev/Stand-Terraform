@@ -1,0 +1,144 @@
+- name: Components for standalone-postgresql-only
+  block:
+    - name: component versions
+      shell: |
+        set -o pipefail
+        {{ PGHOME }}/bin/pg_ctl --version | awk '{print $4}'
+      register: component_versions
+      changed_when: "'changed' in component_versions.stdout"
+
+    - name: create json file {{ local_distr_path }}/{{ filename }}.json
+      copy:
+        content: "{{ json_structure | to_json }}"
+        dest: "{{ local_distr_path }}/{{ filename }}.json"
+      delegate_to: localhost
+  vars:
+    filename: rlm
+    json_structure:
+      postgresql_se:
+        configuration: '{{ tag | regex_replace("-.*") }}'
+        components:
+          postgresql: '{{ component_versions.stdout_lines[0] }}'
+  when: tag == "standalone-postgresql-only"
+
+- name: Components for standalone-patroni-etcd-pgbouncer
+  block:
+    - name: component versions
+      shell: |
+        set -o pipefail
+        etcd --version | head -1 | awk '{print $3}'
+        {{ PGHOME }}/bin/pg_ctl --version | awk '{print $4}'
+        {{ python.patroni_venv }}/bin/patroni --version | awk '{print $2}'
+        /usr/local/bin/pgbouncer --version | head -1 | cut -d ' ' -f2
+      register: component_versions
+      changed_when: "'changed' in component_versions.stdout"
+
+    - name: create json file {{ local_distr_path }}/{{ filename }}.json
+      copy:
+        content: "{{ json_structure | to_json }}"
+        dest: "{{ local_distr_path }}/{{ filename }}.json"
+      delegate_to: localhost
+  vars:
+    filename: rlm
+    json_structure:
+      postgresql_se:
+        configuration: '{{ tag | regex_replace("-.*") }}'
+        components:
+          etcd: '{{ component_versions.stdout_lines[0] }}'
+          postgresql: '{{ component_versions.stdout_lines[1] }}'
+          patroni: '{{ component_versions.stdout_lines[2] }}'
+          pgbouncer: '{{ component_versions.stdout_lines[3] }}'
+  when: tag == "standalone-patroni-etcd-pgbouncer"
+
+- name: Components for cluster-patroni-etcd-pgbouncer
+  block:
+    - name: component versions
+      shell: |
+        set -o pipefail
+        etcd --version | head -1 | awk '{print $3}'
+        {{ PGHOME }}/bin/pg_ctl --version | awk '{print $4}'
+        {{ python.patroni_venv }}/bin/patroni --version | awk '{print $2}'
+        {{ confd_files.path_dir }}/bin/confd --version | awk '{print $2}'
+        /usr/local/bin/pgbouncer --version | head -1 | cut -d ' ' -f2
+      become: true
+      register: component_versions
+      changed_when: "'changed' in component_versions.stdout"
+
+    - name: create json file {{ local_distr_path }}/{{ filename }}.json
+      copy:
+        content: "{{ json_structure | to_json }}"
+        dest: "{{ local_distr_path }}/{{ filename }}.json"
+      delegate_to: localhost
+  vars:
+    filename: rlm
+    json_structure:
+      postgresql_se:
+        configuration: '{{ tag | regex_replace("-.*") }}'
+        components:
+          etcd: '{{ component_versions.stdout_lines[0] }}'
+          postgresql: '{{ component_versions.stdout_lines[1] }}'
+          patroni: '{{ component_versions.stdout_lines[2] }}'
+          confd: '{{ component_versions.stdout_lines[3] }}'
+          pgbouncer: '{{ component_versions.stdout_lines[4] }}'
+  when: tag == "cluster-patroni-etcd-pgbouncer"
+
+- name: Components for cluster-patroni-etcd-pgbouncer-haproxy
+  block:
+    - name: component versions
+      shell: |
+        set -o pipefail
+        etcd --version | head -1 | awk '{print $3}'
+        {{ PGHOME }}/bin/pg_ctl --version | awk '{print $4}'
+        {{ python.patroni_venv }}/bin/patroni --version | awk '{print $2}'
+        /usr/local/bin/pgbouncer --version | head -1 | cut -d ' ' -f2
+        haproxy -v | head -1 | awk '{print $3}'
+      become: true
+      register: component_versions
+      changed_when: "'changed' in component_versions.stdout"
+
+    - name: create json file {{ local_distr_path }}/{{ filename }}.json
+      copy:
+        content: "{{ json_structure | to_json }}"
+        dest: "{{ local_distr_path }}/{{ filename }}.json"
+      delegate_to: localhost
+  vars:
+    filename: rlm
+    json_structure:
+      postgresql_se:
+        configuration: '{{ tag | regex_replace("-.*") }}'
+        components:
+          etcd: '{{ component_versions.stdout_lines[0] }}'
+          postgresql: '{{ component_versions.stdout_lines[1] }}'
+          patroni: '{{ component_versions.stdout_lines[2] }}'
+          pgbouncer: '{{ component_versions.stdout_lines[3] }}'
+          haproxy: '{{ component_versions.stdout_lines[4] }}'
+  when: tag == "cluster-patroni-etcd-pgbouncer-haproxy"
+
+- name: Components for cluster-patroni-etcd-pgbouncer-load_balancer
+  block:
+    - name: component versions
+      shell: |
+        set -o pipefail
+        etcd --version | head -1 | awk '{print $3}'
+        {{ PGHOME }}/bin/pg_ctl --version | awk '{print $4}'
+        {{ python.patroni_venv }}/bin/patroni --version | awk '{print $2}'
+        /usr/local/bin/pgbouncer --version | head -1 | cut -d ' ' -f2
+      register: component_versions
+      changed_when: "'changed' in component_versions.stdout"
+
+    - name: create json file {{ local_distr_path }}/{{ filename }}.json
+      copy:
+        content: "{{ json_structure | to_json }}"
+        dest: "{{ local_distr_path }}/{{ filename }}.json"
+      delegate_to: localhost
+  vars:
+    filename: rlm
+    json_structure:
+      postgresql_se:
+        configuration: '{{ tag | regex_replace("-.*") }}'
+        components:
+          etcd: '{{ component_versions.stdout_lines[0] }}'
+          postgresql: '{{ component_versions.stdout_lines[1] }}'
+          patroni: '{{ component_versions.stdout_lines[2] }}'
+          pgbouncer: '{{ component_versions.stdout_lines[3] }}'
+  when: tag == "cluster-patroni-etcd-pgbouncer-load_balancer"

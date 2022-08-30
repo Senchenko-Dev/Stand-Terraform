@@ -1,0 +1,94 @@
+---
+- name: Check exists disallow update_file as {{ update_status_files.disallow_update }}
+  stat: path="{{ update_status_files.disallow_update }}"
+  register: disallow_update_file_exists
+  become: true
+  run_once: true
+
+- name: Print rlm message if {{ update_status_files.disallow_update }} exists
+  assert:
+    that: not disallow_update_file_exists.stat.exists
+    fail_msg: "RLM.FAIL__Зафиксирована неудачная попытка обновления версии СУБД Pangolin. Перед повторным перезапуском сценария обновления, \
+              необходимо полностью восстановить состояние кластера предыдущей/исходной версии СУБД Pangolin. Обратитесь к администраторам БД__RLM.FAIL"
+  run_once: true
+
+- name: Gather packages info
+  package_facts:
+    manager: "auto"
+  no_log: "{{ nolog }}"
+
+- name: Check and use custom_config
+  include_role:
+    name: checkup
+    tasks_from: check_and_use_custom_config
+
+- name: Set pg_version
+  include_role:
+    name: checkup
+    tasks_from: find_package
+
+- name: Check and edit /etc/fstab
+  block:
+
+    - name: get fstab
+      shell:  cat /etc/fstab | grep /tmp
+      register: shell_result
+
+    - name: check /etc/fstab
+      debug:
+        msg: "WARNING file /etc/fstab contains noexec permition. Need to change it."
+      when: "'noexec' in shell_result.stdout"
+
+    - name: set noexec vars
+      set_fact:
+        exec_str: "{{ shell_result.stdout | replace('noexec','exec') }}"
+      when: "'noexec' in shell_result.stdout"
+
+    - name: change fstab
+      shell: 'sed -i "s|{{ shell_result.stdout }}|{{ exec_str }}|g" /etc/fstab'
+      when: "'noexec' in shell_result.stdout"
+
+    - name: remount fstab
+      shell: mount -o remount /tmp
+      when: "'noexec' in shell_result.stdout"
+
+  become: true
+
+- name: Create tmp python venv
+  set_fact:
+    python: "{{ python|combine(data, recursive=True) }}"
+  vars:
+    data:
+      postgresql_venv: "{{ REMOTE_TMP }}/postgresql_venv"
+
+- name: Include task file for install python venv for ansible use
+  include_role:
+    name: checkup
+    tasks_from: python_env
+
+- name: Prepare update
+  include_role:
+    name: checkup
+    tasks_from: prepare_update.yml
+
+- name: Write to process status work that scout process started
+  include_role:
+    name: common
+    tasks_from: add_process_status_logs
+  vars:
+    process_work_status: "{{ process_work_statuses.scout.start }}"
+    scout_key: true
+
+- name: Unlock OS postgres user
+  shell: "chage {{ item }} -1 postgres"
+  with_items:
+    - "-E"
+    - "-M"
+    - "-I"
+  become: true
+
+- name: Generate certs for version below 4.2.1
+  import_tasks: 'prepare_update_certs.yml'
+
+- name: Scout servers
+  import_tasks: 'scout.yml'

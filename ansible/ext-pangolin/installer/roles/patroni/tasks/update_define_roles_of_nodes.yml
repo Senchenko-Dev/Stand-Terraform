@@ -1,0 +1,27 @@
+- name: Define roles of cluster members for cluster installation
+  block:
+
+    - name: get data from etcd via patroni api
+      uri:
+        url: "http://{{ ansible_fqdn }}:{{ ports.patroni }}"
+        status_code: [503, 200]
+        return_content: yes
+      register: json_content
+      become: true
+      become_user: postgres
+
+    - name: define current master and current replica
+      set_fact:
+        current_master: "{% if json_content.json.role == 'master' %}{{ hostvars[inventory_hostname].ansible_fqdn }}\
+                         {% else %}{% for host in groups['postgres_nodes'] %}{% if host != inventory_hostname  %}\
+                         {{ hostvars[host].ansible_fqdn }}{% endif %}{% endfor %}{% endif %}"
+        current_replica: "{% if json_content.json.role == 'replica' %}{{ hostvars[inventory_hostname].ansible_fqdn }}\
+                          {% else %}{% for host in groups['postgres_nodes'] %}{% if host != inventory_hostname  %}\
+                          {{ hostvars[host].ansible_fqdn }}{% endif %}{% endfor %}{% endif %}"
+
+  when: inventory_hostname != 'etcd' and installation_type == 'cluster'
+
+- name: Define current_master for standalone installation
+  set_fact:
+    current_master: "{{ hostvars['master'].ansible_fqdn }}"
+  when: inventory_hostname != 'etcd' and installation_type == 'standalone'

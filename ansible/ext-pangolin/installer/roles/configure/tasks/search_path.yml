@@ -1,0 +1,114 @@
+- name: Add search_path for {{ install_users }}
+  block:
+
+    - name: check {{ install_users }} role
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT pg_roles.rolname FROM pg_roles WHERE rolname='{{ user }}'
+      loop: "{{ install_users }}"
+      loop_control:
+        loop_var: user
+      register: list_all_users
+
+    - name:  tune search_path of roles
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER ROLE "{{ user }}" SET search_path="{{ schema_name }}",ext
+      loop: "{{ install_users }}"
+      loop_control:
+        index_var: index
+        loop_var: user
+      when: list_all_users.results[ index ].rowcount == 1
+
+  when: "'update' not in action_type"
+
+- name: Update search_path for {{ update_users }}
+  block:
+    
+    - name: get {{ update_users }} users
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT rolname FROM pg_roles WHERE ARRAY[oid] <@ (SELECT grolist FROM pg_group WHERE groname = '{{ update_users }}')
+      register: list_all_users
+
+    - name: get list skipped users
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: (SELECT usename  FROM (
+                SELECT usename, unnest(useconfig) useconf FROM pg_user) us
+                WHERE useconf LIKE '%search_path%')
+      register: skipped_users 
+
+    - name: create skipped users list
+      set_fact:
+        list_skip_users: []
+
+    - name: formed skipped users list
+      set_fact:
+        list_skip_users: '{{ list_skip_users + [users_skip.usename] }}'
+      loop: '{{ skipped_users.query_result }}'
+      loop_control:
+        loop_var: users_skip
+
+    - name: get user databases
+      postgresql_query:
+         port: "{{ ports.pg }}"
+         query: "SELECT datname FROM pg_database WHERE datdba = (SELECT oid FROM pg_roles WHERE rolname = 'db_admin')\ 
+                UNION SELECT datname FROM pg_database WHERE datdba = (SELECT oid FROM pg_roles WHERE rolname = 'as_admin');"
+      register: list_database
+
+    - name: get user schemas from db
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        db: '{{ dbname.datname }}'
+        query: "SELECT schema_name FROM information_schema.schemata WHERE schema_owner = 'db_admin' and schema_name not like 'ext' \
+              UNION SELECT schema_name FROM information_schema.schemata WHERE schema_owner = 'as_admin' and schema_name not like 'ext';"
+      register: list_schemas
+      loop: "{{ list_database.query_result }}"
+      loop_control:
+        loop_var: dbname
+    
+    - name: create database list for update
+      set_fact:
+        list_result_from_all_db: []
+
+    - name: formed database list for update
+      set_fact:
+        list_result_from_all_db: '{{ list_result_from_all_db + [schema_for_update.query_result] }}'
+      loop: '{{ list_schemas.results }}'
+      loop_control:
+        loop_var: schema_for_update
+
+    - name: create schema list for update
+      set_fact:
+        list_schemas: []
+   
+    - name: formed schema list for update
+      set_fact:
+        list_schemas: '{{ list_schemas + [ list_for_update ] }}'
+      loop: '{{ list_result_from_all_db }}'
+      loop_control:
+        loop_var: list_for_update
+ 
+    - name: create schema variable for formed all list user schemas
+      set_fact:
+        schemas_variable: []
+        
+    - name: get list schemas
+      include_role:
+        name: configure
+        tasks_from: get_schema.yml
+      vars:
+        list_schems: '{{ item.schema_name }}'
+      with_items: '{{ list_schemas }}'
+
+    - name: update search_path {{ update_users }}
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER ROLE "{{ user.rolname }}" SET search_path={% if schemas_variable|length != 0 %}{{ schemas_variable | add_quotes_to_values | join(',')}},ext{% else %}ext{% endif %}
+      loop: "{{ list_all_users.query_result }}" 
+      loop_control:
+        loop_var: user
+        index_var: index
+      when: list_all_users.query_result[index].rolname not in list_skip_users
+  when: "'update' in action_type"

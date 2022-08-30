@@ -1,0 +1,16 @@
+---
+- hosts: KafkaNodes:ZookeeperNodes
+  gather_facts: no
+  become: yes
+  become_user: "{{ kafka_user }}"
+  vars:
+    - ansible_user: "{{kafka_user}}"
+    - ansible_password: "{{kafka_default_password}}"
+    - ansible_become_user: "{{kafka_user}}"
+    - ansible_become_password: "{{kafka_default_password}}"
+  roles:
+     - select_deploy_mode
+     - check_distro_apache_or_confluent
+     - check_deploy_config_settings
+     - start_kafka
+     - summary_information

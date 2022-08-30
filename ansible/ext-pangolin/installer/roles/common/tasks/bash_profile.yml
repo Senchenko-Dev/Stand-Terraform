@@ -1,0 +1,120 @@
+- name: Install or update only postgresql part of bash_profile
+  block:
+
+    - name: remove old exports and some aliases
+      lineinfile:
+        path:   "{{ shell_profile_file }}"
+        regexp: "{{ item }}"
+        state:   absent
+      with_items:
+        - ^export
+        - ^NOW
+        - ^alias errors
+        - ^alias hba
+        - ^alias pglog
+        - ^alias pgver
+        - ^alias psql
+
+    - name: write new exports and aliases to bash_profile file if istallation without patroni
+      lineinfile:
+        path:        "{{ shell_profile_file }}"
+        line:        "{{ item }}"
+        state:       present
+        insertafter: EOF
+      with_items:
+        - export LD_LIBRARY_PATH={{ PGHOME }}/lib
+        - export PATH={{ PGHOME }}/bin:$PATH
+        - export PG_PLUGINS_PATH={{ PGHOME }}/lib
+        - export PGHOME={{ PGHOME }}
+        - export PGDATABASE=postgres
+        - export PGUSER=postgres
+        - export PGHOST={{ ansible_default_ipv4.address }}
+        - export PGPORT={{ ports.pg }}
+        - export PGSSLCERT={{ pg_certs.ssl_cert }}
+        - export PGSSLKEY={{ pg_certs.ssl_key }}
+        - export PGSSLROOTCERT={{ PGSSL }}/root.crt
+        - export PGCLIENTENCODING=UTF8
+        - export CLNAME={{ clustername }}
+        - NOW=$(date +"%Y-%m-%d")
+        - export PGDATA={{ PGDATA }}
+        - export MANPATH=$PGHOME/share/man:$MANPATH
+        - alias errors="ls -t {{ PGLOGS }}/postgresql-$NOW*.log | head -1 | xargs tail -F | grep -E 'WARNING|ERROR|FATAL'"
+        - alias hba='vim $PGDATA/pg_hba.conf'
+        - alias pglog='ls -t {{ PGLOGS }}/postgresql-$NOW*.log | head -1 | xargs tail -300'
+        - alias pgver="psql -c 'select version();'"
+
+  become: true
+  become_user: postgres
+  when: component_name == 'postgresql'
+
+- name: Install or update only patroni part of bash_profile
+  block:
+
+    - name: delete old exports and aliases from bash_profile file for istallation with patroni
+      lineinfile:
+        path:   "{{ shell_profile_file }}"
+        regexp: "{{ item }}"
+        state:  absent
+      with_items:
+        - patroni_venv
+        - ^export CLNAME
+        - ^alias fail
+        - ^alias hist
+        - ^alias list
+        - ^alias pgconfig
+        - ^alias ptlog
+        - ^alias ptver
+        - ^alias reload
+        - ^alias restart
+        - ^alias status
+        - ^alias switch
+
+    - name: write new exports and aliases to bash_profile file if istallation with patroni
+      lineinfile:
+        path:        "{{ shell_profile_file }}"
+        line:        "{{ item }}"
+        state:       present
+        insertafter: EOF
+      with_items:
+        - export PATH={{ python.patroni_venv }}/bin:$PATH
+        - export CLNAME={{ clustername }}
+        - alias fail='patronictl -c {{ patroni_files.conf_dir }}/postgres.yml failover $CLNAME'
+        - alias hist='patronictl -d etcd://localhost:2379 history $CLNAME'
+        - alias list='patronictl -d etcd://localhost:2379 list $CLNAME'
+        - alias pgconfig='curl -s http://localhost:8008/config | jq'
+        - alias ptlog='sudo journalctl -u patroni'
+        - alias ptver="patronictl version"
+        - alias reload='patronictl -c {{ patroni_files.conf_dir }}/postgres.yml reload $CLNAME'
+        - alias restart='patronictl -c {{ patroni_files.conf_dir }}/postgres.yml restart $CLNAME'
+        - alias status='sudo systemctl status patroni --no-pager --full'
+        - alias switch='patronictl -c {{ patroni_files.conf_dir }}/postgres.yml switchover $CLNAME'
+
+  become: true
+  become_user: postgres
+  when: component_name == 'patroni'
+
+- name: Install or update only etcd part of bash_profile
+  block:
+
+    - name: remove old exports and aliases
+      shell: "{{ item }}"
+      with_items:
+        - sed -i "/alias.*health=.*\$/d"   "{{ shell_profile_file }}"
+        - sed -i "/alias.*members=.*\$/d"  "{{ shell_profile_file }}"
+        - sed -i "/alias.*etcd_cfg=.*\$/d" "{{ shell_profile_file }}"
+
+    - name: write new exports and aliases to bash_profile file if istallation with etcd
+      lineinfile:
+        path:        "{{ shell_profile_file }}"
+        line:        "{{ item }}"
+        state:       present
+        insertafter: EOF
+      with_items:
+        - export CLNAME={{ clustername }}
+        - alias health='ETCDCTL_API=2 etcdctl cluster-health 2>&1'
+        - alias members='ETCDCTL_API=3 etcdctl member list -w table'
+        - alias etcd_cfg='ETCDCTL_API=2 etcdctl get /service/{{ clustername }}/config | jq .'
+  
+  become: true
+  become_user: postgres
+  when: component_name == 'etcd'

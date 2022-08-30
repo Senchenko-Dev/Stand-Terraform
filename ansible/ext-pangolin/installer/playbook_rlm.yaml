@@ -1,0 +1,13 @@
+- name: Get ping response
+  hosts: all
+  tasks:
+    - action: ping
+  tags: standalone,cluster
+
+- hosts: master
+  roles:
+    - { role: control, tags: standalone }
+
+- hosts: replica:master
+  roles:
+    - { role: control, tags: cluster }

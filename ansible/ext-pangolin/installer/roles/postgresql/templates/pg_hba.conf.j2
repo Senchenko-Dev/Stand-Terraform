@@ -1,0 +1,30 @@
+local all all md5
+hostssl all postgres 127.0.0.1/32 cert
+{% if 'patroni' in tag %}
+host all patroni 127.0.0.1/32 scram-sha-256
+{% endif %}
+host all {{ as_group }} 0.0.0.0/0 scram-sha-256
+{% for host in groups['postgres_group'] %}
+hostssl all postgres {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} cert
+{% if 'patroni' in tag%}
+host all patroni {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} scram-sha-256
+{% endif %}
+{% endfor %}
+{% if 'patroni' in tag%}
+host replication patroni 127.0.0.1/32 scram-sha-256
+{% endif %}
+{% for host in groups['postgres_group'] %}
+{% if 'patroni' in tag%}
+host replication patroni {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} scram-sha-256
+{% endif %}
+{% endfor %}
+{{ pam_hba }}
+{% if action_type == 'install' %}
+host all +as_TUZ, backup_user, zabbix_oasubd, monitoring_php, auditor 0.0.0.0/0 scram-sha-256
+{% else %}
+host all cron, backup_user, zabbix_oasubd, monitoring_php, auditor 0.0.0.0/0 scram-sha-256
+host all +as_TUZ 0.0.0.0/0 md5
+{% endif %}
+{% for rule in other_hba %}
+{{ rule }}
+{% endfor %}

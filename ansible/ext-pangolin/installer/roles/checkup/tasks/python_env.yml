@@ -1,0 +1,208 @@
+- name: Check exist {{ python.postgresql_venv }} 
+  stat: 
+    path: "{{ python.postgresql_venv }}"
+  register: postgresql_venv
+  become: true
+
+- name: Check exist {{ python.packages }} 
+  stat:
+    path: "{{ python.packages }}"
+  register: python_packets
+  become: true
+
+- name: Create {{ python.postgresql_venv }}
+  block:
+
+    - name: prepare clear {{ python.postgresql_venv }}
+      file:
+        path:  "{{ item.path }}"
+        state: "{{ item.state }}"
+        owner:  postgres
+        group:  postgres
+        mode:   0700
+      with_items:
+        - { state: absent,    path: "{{ python.postgresql_venv }}" }
+        - { state: directory, path: "{{ PGHOME }}" }
+      become_user: root
+
+    - name: upgrade pip
+      pip:
+        virtualenv: "{{ python.postgresql_venv }}"
+        virtualenv_python: python3
+        virtualenv_command: "{{ python.global_virtualenv_bin }}"
+        name: pip
+        state: latest
+        extra_args: "--index-url={{ pip_repository.index_url }} --trusted-host={{ pip_repository.trusted_host }}"
+
+    - name: create python environment
+      pip:
+        virtualenv:         "{{ python.postgresql_venv }}"
+        virtualenv_python:  python3
+        virtualenv_command: "{{ python.global_virtualenv_bin }}"
+        name:
+          - PyYAML==5.3.1
+          - netaddr==0.7.19
+          - psycopg2-binary==2.8.4
+          - flake8==3.7.9
+          - ruamel.yaml==0.16.12
+          - argparse==1.4.0
+          - requests==2.23.0
+          - python-daemon==2.2.4
+          - pexpect==4.8.0
+          - cryptography==3.3.1
+          - ansible-core==2.11.5
+        extra_args: "--index-url={{ pip_repository.index_url }} --trusted-host={{ pip_repository.trusted_host }}"
+      when: ansible_os_family in ('RedHat', 'Debian')
+
+    - name: create python environment
+      pip:
+        virtualenv:         "{{ python.postgresql_venv }}"
+        virtualenv_python:  python3
+        virtualenv_command: "{{ python.global_virtualenv_bin }}"
+        name:
+          - PyYAML==5.4.1
+          - netaddr==0.7.19
+          - psycopg2-binary==2.9.1
+          - flake8==3.9.2
+          - ruamel.yaml==0.16.12
+          - argparse==1.4.0
+          - requests==2.23.0
+          - python-daemon==2.2.4
+          - pexpect==4.8.0
+          - cryptography==3.3.1
+          - ansible-core==2.11.5
+        extra_args: "--index-url={{ pip_repository.index_url }} --trusted-host={{ pip_repository.trusted_host }}"
+      when: ansible_os_family == "Altlinux"
+
+    - name: create pip config for python virtual environment
+      block:
+
+        - name: set external pip repository
+          shell: "source {{ python.postgresql_venv }}/bin/activate && \
+                  pip config set global.index-url {{ pip_repository.index_url }} && \
+                  pip config set global.trusted-host {{ pip_repository.trusted_host }}"
+
+        - name: copy created pip file to directory with python virtualenv
+          copy:
+            src: "~/.config/pip/pip.conf"
+            dest: "{{ python.postgresql_venv }}/pip.conf"
+            remote_src: yes
+
+  become: true
+  become_user: postgres
+  when: not postgresql_venv.stat.exists
+
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+- name: Download python requirements of patroni
+  block:
+
+    - name: ensure {{ python.packages }}
+      file:
+        path: "{{ python.packages }}"
+        state: "{{ item }}"
+        owner: postgres
+        group: postgres
+        mode: 0700
+      with_items:
+        - absent
+        - directory
+      become_user: root
+
+    - name: copy requirements.txt file
+      copy:
+        src:  "{% if ansible_os_family == 'Altlinux' %}\
+                  requirements.altlinux.txt\
+               {% else %}\
+                  requirements.txt\
+               {% endif %}"
+        dest: "{{ python.packages }}/requirements.txt"
+
+    - name: download packages
+      shell: "source {{ python.postgresql_venv }}/bin/activate && \
+              pip download -r {{ python.packages }}/requirements.txt --dest {{ python.packages }} --only-binary :all"
+
+  become: true
+  become_user: postgres
+  when: not python_packets.stat.exists
+
+- name: Create python venv for patroni
+  block:
+
+    - name: prepare clear old and create new {{ python.patroni_venv }}
+      file:
+        path: "{{ python.patroni_venv }}"
+        state: "{{ item.state }}"
+        owner: postgres
+        group: postgres
+        mode: 0700
+        recurse: "{{ item.recurse }}"
+      with_items:
+        - { state: absent, recurse: no }
+        - { state: directory, recurse: yes }
+      become_user: root
+
+    - name: upgrade pip
+      pip:
+        virtualenv: "{{ python.patroni_venv }}"
+        virtualenv_python: python3
+        virtualenv_command: "{{ python.global_virtualenv_bin }}"
+        name: pip
+        state: latest
+        extra_args: "--index-url={{ pip_repository.index_url }} --trusted-host={{ pip_repository.trusted_host }}"
+
+    - name: install packages for python environment
+      pip:
+        virtualenv:         "{{ python.patroni_venv }}"
+        virtualenv_python:  python3
+        virtualenv_command: "{{ python.global_virtualenv_bin }}"
+        requirements:       "{{ python.packages }}/requirements.txt"
+        extra_args:         "--no-index --find-links=file:///{{ python.packages }}"
+
+    - name: create pip config for python virtual environment
+      block:
+
+        - name: set external pip repository
+          shell: "source {{ python.patroni_venv }}/bin/activate && \
+                  pip config set global.index-url {{ pip_repository.index_url }} && \
+                  pip config set global.trusted-host {{ pip_repository.trusted_host }}"
+
+        - name: copy created pip file to directory with python virtualenv
+          copy:
+            src: "~/.config/pip/pip.conf"
+            dest: "{{ python.patroni_venv }}/pip.conf"
+            remote_src: yes
+
+  become: true
+  become_user: postgres
+  when: component_name is defined and component_name == 'patroni'
+
+#TODO
+# - name: Copy dnf tarball
+#   copy:
+#     src: dnf-0.0.1-py2.py3-none-any.whl
+#     dest: "{{REMOTE_TMP}}/dnf-0.0.1-py2.py3-none-any.whl"
+
+
+# - name: Install python dnf module
+#   pip:
+#     name: file:///{{REMOTE_TMP}}/dnf-0.0.1-py2.py3-none-any.whl
+#     virtualenv_python: python3
+#     virtualenv_command: virtualenv-3
+#     virtualenv: "{{REMOTE_TMP}}/postgres_env"
+#   become: true
+#   become_user: postgres
+
+# - set_fact:
+    # ansible_python_interpreter: /tmp/PostgreSQL/postgres_env/bin/python3
+
+# - name: Check python version
+#   assert:
+#     that: ansible_python_version|version <= 3.6
+#     fail_msg: "Current python version on remote host: {{ansible_python_version}}. Needed ansible version: 3.6 or higher"
+#     success_msg: "Version of python interpretator on remote host is correct"
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'

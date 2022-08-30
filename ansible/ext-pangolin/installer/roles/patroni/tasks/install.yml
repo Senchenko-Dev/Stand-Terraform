@@ -1,0 +1,192 @@
+- name: Check etcd initialized key
+  shell: etcdctl get service/{{ clustername }}/initialize
+  register: initialize_key
+  ignore_errors: yes
+  run_once: yes
+  become: true
+  become_user: postgres
+  when: master is defined
+
+- name: Check that patroni cluster doesn't initialize
+  fail: msg='Cluster have been initialized earlier, patroni wont start'
+  when: master is defined and initialize_key.stdout != ""
+
+- name: Create new python virtual environment with patroni
+  include_role:
+    name: checkup
+    tasks_from: python_env
+  vars:
+    component_name: patroni
+  
+- name: Check patroni module
+  command: 
+    cmd: "{{ python.patroni_venv }}/bin/python -m patroni"
+  become_user: postgres
+  become: true
+  register: patroni_check_service
+  ignore_errors: yes
+
+- name: Install patroni service
+  block:
+
+    - name: copy patroni files to node
+      unarchive:
+        src: "{{ local_distr_path }}/patroni/{{ item.name }}.tar.gz"
+        dest: "{{ item.path }}"
+        group: postgres
+        owner: postgres
+        mode: "{{ item.mode }}"
+      loop:
+        - { name: patroni,            path: "{{ python.patroni_venv }}/bin/", mode: '0700' }
+        - { name: postgresql_se_libs, path: "{{ python.patroni_venv }}/lib/", mode: '0700' }
+      become_user: postgres
+
+    - name: copy patroni se version file
+      copy:
+        src: "{{ local_distr_path }}/patroni/se_version"
+        dest: "{{ python.patroni_venv }}/bin/se_version"
+        owner: postgres
+        group: postgres
+        mode: 0600
+
+    - name: write shell profile file
+      lineinfile:
+        path: "{{ shell_profile_file }}"
+        insertafter: EOF
+        line: 'export PATH=$PATH:{{ python.patroni_venv }}/bin'
+        state: present 
+      become_user: postgres
+
+  become: true
+  when: patroni_check_service.stderr | length > 0
+
+- name: setup patroni configuration
+  block:
+
+    - name: create patroni configuration diretory
+      file:
+        path: "{{ patroni_files.conf_dir }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: 0700
+      become: true
+      become_user: root
+    
+    - name: encrypt passwords
+      block:
+
+        - name: delete newline symbol from tuz_password
+          set_fact:
+            ldap_bind_tuz_password: "{{ ldap_bind_tuz_password | replace('\n', '')}}"
+
+        - name: encrypt patroni_yml_pass
+          block:
+
+            - name: encrypt patroni_yml_pass
+              include_role:
+                name: postgresql
+                tasks_from: create_encrypt_password
+              vars:
+                password: "{{ patroni_yml_pass }}"
+
+            - name: update patroni_yml_pass
+              set_fact:
+                encpassword_restapi: "{{ _createencryptpass_password[0:-1] }}"
+
+        - name: encrypt patroni_etcd_pass
+          block:
+          
+            - name: encrypt patroni_etcd_pass
+              include_role:
+                name: postgresql
+                tasks_from: create_encrypt_password
+              vars:
+                password: "{{ patroni_etcd_pass }}"
+
+            - name: update patroni_etcd_pass
+              set_fact:
+                encpassword_etcd: "{{ _createencryptpass_password[0:-1] }}"
+
+        - name: encrypt ldap_bind_tuz_password
+          block:
+          
+            - name: encrypt ldap_bind_tuz_password
+              include_role:
+                name: postgresql
+                tasks_from: create_encrypt_password
+              vars:
+                password: "{{ ldap_bind_tuz_password }}"
+
+            - name: update ldap password
+              set_fact:
+                ldap_bind_tuz_password: "{{ _createencryptpass_password[0:-1] }}"
+
+      no_log: "{{ nolog }}"
+
+    - name: copy patroni configuration files to nodes
+      template:
+        src: postgres.yml.j2
+        dest: "{{ patroni_files.conf_dir }}/postgres.yml"
+        owner: postgres
+        group: postgres
+        mode: 0600
+        trim_blocks: False
+
+    - name: create callback script for change role action
+      template:
+        src: reload_pgbouncer.sh.j2
+        dest: "{{ patroni_files.conf_dir }}/reload_pgbouncer.sh"
+        owner: postgres
+        group: postgres
+        mode: 0500
+        trim_blocks: False
+
+    - name: update password for restapi and etcd
+      replace:
+        path: "{{ patroni_files.conf_dir }}/postgres.yml"
+        after: "{{ item.after }}"
+        regexp: "{{ item.rexexp }}"
+        replace: "{{ item.replace }}"
+      loop:
+        - { after: "username: patroniyml", rexexp: "^(.*)        password:.*", replace: '        password: {{ encpassword_restapi }}'}
+        - { after: "username: patronietcd", rexexp: "^(.*)    password:.*",    replace: '    password: {{ encpassword_etcd }}'}
+      no_log: "{{ nolog }}"
+      when: action_type == 'install'
+
+    - name: create patroni configuration file for systemd
+      template:
+        src: patroni.service.j2
+        dest: "{{ service_path_dir }}/patroni.service"
+
+    - name: stop postgresql daemon
+      shell: "{{ PGHOME }}/bin/pg_ctl stop -D {{ PGDATA }} &"
+      become_user: postgres
+
+    - name: wait postgresql shutdown
+      pause:
+        seconds: 10
+
+    - name: start patroni service
+      service:
+        name: patroni
+        state: started
+        daemon_reload: yes
+        enabled: yes
+
+    - name: wait when pgsql open port
+      shell: '{{ PGHOME }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ ports.pg }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+      become_user: postgres
+
+  become: true 
+
+- name: Include_role
+  include_role:
+    name: common
+    tasks_from: bash_profile
+  vars:
+    component_name: 'patroni'

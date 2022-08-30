@@ -1,0 +1,176 @@
+- name: Set new password for {{ _genupdatepass_dbuser }}
+  block:
+
+    - name: define version of current python interpreter
+      set_fact:
+        previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+    - name: check exist user {{ _genupdatepass_dbuser }}
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT * FROM pg_user WHERE pg_user.usename = '{{ _genupdatepass_dbuser }}'
+      register: is_user
+
+    - name: get default password policy for {{ _genupdatepass_dbuser }} and generate password, if user not exist
+      block:
+
+        - name: get default password policy for {{ _genupdatepass_dbuser }} and generate password, if user not exist
+          password_generator:
+            ANSIBLE_MODULE_ARGS:
+              min_length: "{{ password_policy_params.min_length }}"
+              alpha_numeric: "{{ password_policy_params.alpha_numeric }}"
+              min_alpha_chars: "{{ password_policy_params.min_alpha_chars }}"
+              min_special_chars: "{{ password_policy_params.min_special_chars }}"
+              min_uppercase: "{{ password_policy_params.min_uppercase }}"
+              min_lowercase: "{{ password_policy_params.min_lowercase }}"
+              max_rpt_chars: "{{ password_policy_params.max_rpt_chars }}"
+          register: new_pass
+
+        - name: to be used random password
+          set_fact:
+            _genupdatepass_generated_pass: "{{ new_pass.message }}"
+          when: _genupdatepass_generated_pass is undefined
+          
+      no_log: "{{ nolog }}"
+      when: is_user.rowcount|int == 0
+      
+    - name: get actual password policy for {{ _genupdatepass_dbuser }} and generate password, if user exist
+      block:
+
+        - name: get actual password policy for {{ _genupdatepass_dbuser }}
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: SELECT value FROM recognize_password_policy_detailed('{{ _genupdatepass_dbuser }}') WHERE policy_name='{{ item_params }}'
+          loop: 
+            - min_length
+            - alpha_numeric
+            - min_alpha_chars
+            - min_special_chars
+            - min_uppercase
+            - min_lowercase
+            - max_rpt_chars
+          loop_control:
+            index_var: index
+            loop_var: item_params
+          register: policy_params
+
+        - name: generate new password for {{ _genupdatepass_dbuser }}
+          password_generator:
+            ANSIBLE_MODULE_ARGS:
+              min_length: "{{ policy_params.results[ 0 ].query_result[ 0 ].value }}"
+              alpha_numeric: "{{ policy_params.results[ 1 ].query_result[ 0 ].value }}"
+              min_alpha_chars: "{{ policy_params.results[ 2 ].query_result[ 0 ].value }}"
+              min_special_chars: "{{ policy_params.results[ 3 ].query_result[ 0 ].value }}"
+              min_uppercase: "{{ policy_params.results[ 4 ].query_result[ 0 ].value }}"
+              min_lowercase: "{{ policy_params.results[ 5 ].query_result[ 0 ].value }}"
+              max_rpt_chars: "{{ policy_params.results[ 6 ].query_result[ 0 ].value }}"
+          register: new_pass
+
+        - name: to be used random password
+          set_fact:
+            _genupdatepass_generated_pass: "{{ new_pass.message }}"
+          when: _genupdatepass_generated_pass is undefined
+          
+      no_log: "{{ nolog }}"
+      when: is_user.rowcount|int != 0
+
+    - name: try set new password for {{ _genupdatepass_dbuser }}
+      block:
+
+        - name: to be used random password
+          set_fact:
+            _genupdatepass_generated_pass: "{{ new_pass.message }}"
+          when: _genupdatepass_generated_pass is undefined
+
+        - name: create user with pass or update user pass for {{ _genupdatepass_dbuser }}
+          include_role:
+            name: configure
+            tasks_from: update_user_pass
+          vars:
+            password: "{{ _genupdatepass_generated_pass }}"
+            username: "{{ _genupdatepass_dbuser }}"
+          
+      no_log: "{{ nolog }}"
+      rescue:
+
+        - name: it is exseption, if test password didn't work
+          assert:
+            that: "inner_install is defined"
+            fail_msg: "test password didn't work"
+
+        - name: get actual password policy for {{ _genupdatepass_dbuser }}, if user exist
+          block:
+
+            - name: get actual password policy for {{ _genupdatepass_dbuser }}, if user exist
+              password_generator:
+                ANSIBLE_MODULE_ARGS:
+                  min_length: "{{ policy_params.results[ 0 ].query_result[ 0 ].value }}"
+                  alpha_numeric: "{{ policy_params.results[ 1 ].query_result[ 0 ].value }}"
+                  min_alpha_chars: "{{ policy_params.results[ 2 ].query_result[ 0 ].value }}"
+                  min_special_chars: "{{ policy_params.results[ 3 ].query_result[ 0 ].value }}"
+                  min_uppercase: "{{ policy_params.results[ 4 ].query_result[ 0 ].value }}"
+                  min_lowercase: "{{ policy_params.results[ 5 ].query_result[ 0 ].value }}"
+                  max_rpt_chars: "{{ policy_params.results[ 6 ].query_result[ 0 ].value }}"
+              register: new_pass
+
+            - name: to be used random password
+              set_fact:
+                _genupdatepass_generated_pass: "{{ new_pass.message }}"
+                
+          no_log: "{{ nolog }}"
+          when: is_user.rowcount|int != 0
+
+        - name: get default password policy for {{ _genupdatepass_dbuser }} and generate password, if user not exist
+          block:
+
+            - name: get default password policy for {{ _genupdatepass_dbuser }} and generate password, if user not exist
+              password_generator:
+                ANSIBLE_MODULE_ARGS:
+                  min_length: "{{ password_policy_params.min_length }}"
+                  alpha_numeric: "{{ password_policy_params.alpha_numeric }}"
+                  min_alpha_chars: "{{ password_policy_params.min_alpha_chars }}"
+                  min_special_chars: "{{ password_policy_params.min_special_chars }}"
+                  min_uppercase: "{{ password_policy_params.min_uppercase }}"
+                  min_lowercase: "{{ password_policy_params.min_lowercase }}"
+                  max_rpt_chars: "{{ password_policy_params.max_rpt_chars }}"
+              register: new_pass
+
+            - name: to be used random password
+              set_fact:
+                _genupdatepass_generated_pass: "{{ new_pass.message }}"
+
+          no_log: "{{ nolog }}"
+          when: is_user.rowcount|int == 0
+        
+        - name: define what the pass to be used
+          set_fact:
+            _genupdatepass_generated_pass: "{{ new_pass.message }}"
+          no_log: "{{ nolog }}"
+
+        - name: create user with pass or update user pass for {{ _genupdatepass_dbuser }}
+          include_role:
+            name: configure
+            tasks_from: update_user_pass
+          vars:
+            password: "{{ _genupdatepass_generated_pass }}"
+            username: "{{ _genupdatepass_dbuser }}"
+          no_log: "{{ nolog }}"
+
+      always:
+
+        - name: set python interpretator
+          set_fact:
+            ansible_python_interpreter: '{{ previous_python_interpreter }}'
+      
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+    - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
+  become: true
+  become_user: postgres
+  when: inventory_hostname == 'master'

@@ -1,0 +1,11 @@
+---
+- name: Create backup-awx
+  file:
+    path: /root/backup-awx
+    state: directory
+
+- name: Backup
+  copy:
+    src: /root/awx-operator
+    dest: /root/backup-awx
+    remote_src: yes

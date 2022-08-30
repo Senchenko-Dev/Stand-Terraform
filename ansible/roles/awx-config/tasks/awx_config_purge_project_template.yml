@@ -1,0 +1,78 @@
+#- name: "Get sa token"
+#  shell: "kubectl -n {{ awx_k8s_sa_project }} get sa {{ awx_k8s_sa_name }} -o jsonpath='{.secrets[1].name}'"
+#  register: kek1
+
+#- debug:
+#    msg: "KEK1 {{ kek1 }}"
+
+#- name: "Get sa token"
+#  shell: "kubectl -n {{ awx_k8s_sa_project }} get secret {{ kek1.stdout }} -o jsonpath='{.data.token}' | base64 --decode"
+#  register: kek2
+
+#- debug:
+#    msg: "KEK2 {{ kek2 }}"
+
+- name: "Get sa token"
+  shell: "kubectl -n {{ awx_k8s_sa_project }} get secret $(kubectl -n {{ awx_k8s_sa_project }} get sa {{ awx_k8s_sa_name }} -o jsonpath='{.secrets[1].name}') -o jsonpath='{.data.token}' | base64 --decode"
+  register: kubectl_token_output
+
+- set_fact:
+    current_kubeconfig: "{{ lookup('file', kubeconfig) | from_yaml }}"
+
+- set_fact:
+    new_user: "{{ current_kubeconfig.users[0] | combine({'user':{'token':kubectl_token_output.stdout}}) }}"
+
+- set_fact:
+    awx_kubeconfig: "{{ current_kubeconfig | combine({'users':[new_user]}) | to_yaml }}"
+    projects: "{{ lookup('fileglob', 'project_vars/*.yml').split(',') | map('basename') | map('regex_replace', '.yml') | list }}"
+
+#- debug:
+#    msg: "{{ awx_k8s_sa_project }} {{ awx_k8s_sa_name }} {{ kubectl_token_output }}"
+
+#- debug:
+#    msg: "{{ awx_kubeconfig }}"
+
+- name: Create kubeconfig cred
+  awx.awx.credential:
+    name: K8S Credential
+    organization: "{{ org_name }}"
+    state: present
+    credential_type: kubeconfig
+    inputs:
+      kube_config: "{{ awx_kubeconfig }}"
+
+- name: Создание шаблонов
+  awx.awx.job_template:
+    name: "purge_projects" # если инвентарь на выбор
+    job_type: "run"
+    execution_environment: "kubectl-ee"
+    organization: "{{ org_name }}"
+    inventory: "Local"
+    project: "{{ org_name }}-project"
+    playbook: "ansible/k8s_project.yml "
+    job_tags: "purge-project"
+    credentials:
+      - "K8S Credential"
+    state: "present"
+    become_enabled: yes
+    timeout: 37
+    survey_enabled: true
+    survey_spec:
+      name: ""
+      description: ""
+      spec:
+        - question_name: "Project"
+          question_description: "Choose project to purge"
+          required: true
+          choices: "{{ projects }}"
+          variable: "project"
+          type: "multiplechoice"
+        - question_name: "Selector"
+          question_description: "Choose object labels to purge"
+          required: true
+          variable: "selector"
+          type: "text"
+  register: result
+  until: result is not failed
+  retries: 5
+  delay: 3

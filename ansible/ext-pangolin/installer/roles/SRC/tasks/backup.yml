@@ -1,0 +1,33 @@
+- name: Backup files for src
+  block:
+
+    - name: create backup directory
+      file:
+        path: "{{ backup.src }}"
+        state: "{{ item }}"
+        owner: postgres
+        group: postgres
+        mode: 0700
+      with_items:
+        - "absent"
+        - "directory"
+
+    - name: backup files
+      copy:
+        src: "{{ manage_backup_bin }}/11_{{ item }}"
+        dest: "{{ backup.src }}/11_{{ item }}"
+        remote_src: true
+      with_items: "{% if ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0 %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.py']|list}}\
+                   {% else %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.bin']|list}}{% endif %}"
+      when: ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 0
+
+    - name: backup files
+      copy:
+        src: "{{ manage_backup_bin }}/04_{{ item }}"
+        dest: "{{ backup.src }}/04_{{ item }}"
+        remote_src: true
+      with_items: "{% if ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0 %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.py']|list}}\
+                   {% else %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.bin']|list}}{% endif %}"
+      when: ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 1
+
+  when: SRC

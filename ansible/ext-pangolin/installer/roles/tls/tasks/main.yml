@@ -1,0 +1,3 @@
+- name: Import task for enable LDAP TLS
+  import_tasks: enable_tls.yml
+  when: ldap_tls

@@ -1,0 +1,2 @@
+- name: Start {{ operation_type }} operation
+  include_tasks: "{{ operation_type }}.yml"

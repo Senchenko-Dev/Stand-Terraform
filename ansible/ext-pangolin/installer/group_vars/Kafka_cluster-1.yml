@@ -1,0 +1,5 @@
+### KAFKA SBER EDITION ###
+
+#installation_type
+KDeployConf: "deploy-plaintext__zk_plain_no_auth__kafka_plaintext_no_auth.sh"
+

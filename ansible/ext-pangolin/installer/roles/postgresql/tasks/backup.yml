@@ -1,0 +1,93 @@
+- name: Execute for all nodes
+  block:
+
+    - name: ensure {{ backup_root_dir }}{{ PGUSERHOME }}
+      file:
+        path: "{{ backup_root_dir }}{{ PGUSERHOME }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: 0700
+
+    - name: backup shell profile
+      copy:
+        src: "{{ shell_profile_file }}"
+        dest: "{{ backup_root_dir }}{{ shell_profile_file }}"
+        remote_src: yes
+        owner: postgres
+        group: postgres
+
+  become: true 
+
+- name: Run this block only for master and replica, not etcd
+  block:
+
+    - name: ensure {{ backup_root_dir }}
+      file:
+        path: "{{ item.src }}"
+        state: "{{ item.state }}"
+        owner: postgres
+        group: postgres
+        mode: 0700
+      with_items:
+        - { src: "{{ backup.postgresql }}",                        state: absent }
+        - { src: "{{ backup.postgresql }}/{{ PGDATA_OLD }}",       state: directory }
+        - { src: "{{ backup_root_dir }}{{ global_scripts }}",      state: directory }
+
+    - name: backup postgresql.conf, pg_hba.conf, postgresql.auto.conf
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: postgres
+        group: postgres
+        remote_src: yes
+      with_items:
+        - { src: '{{ PGDATA_OLD }}/pg_hba.conf',          dest: '{{ backup.postgresql }}{{ PGDATA_OLD }}/pg_hba.conf' }
+        - { src: '{{ PGDATA_OLD }}/postgresql.conf',      dest: '{{ backup.postgresql }}{{ PGDATA_OLD }}/postgresql.conf' }
+        - { src: '{{ PGDATA_OLD }}/postgresql.auto.conf', dest: '{{ backup.postgresql }}{{ PGDATA_OLD }}/postgresql.auto.conf' }
+      
+    - name: check exists pg service
+      stat: path="{{ service_path_dir }}/postgresql.service"
+      register: postgresql_service_exists
+
+    - name: backup postgresql service
+      copy:
+        src: "{{ service_path_dir }}/postgresql.service"
+        dest: "{{ backup_root_dir }}{{ service_path_dir }}/postgresql.service"
+        owner: postgres
+        group: postgres
+        remote_src: yes
+      when: postgresql_service_exists.stat.exists and not patroni
+
+    - name: backup old PG SE version directory
+      copy:
+        src: "{{ PGHOME_OLD }}"
+        dest: "{{ backup.postgresql }}"
+        owner: postgres
+        group: postgres
+        mode: 0700
+        remote_src: yes
+
+    - name: remove old python venv from "{{ PGHOME_OLD_NAME }}"
+      file:
+        path: "{{ backup.postgresql }}/{{ PGHOME_OLD_NAME }}/postgres_venv"
+        state: absent
+      become_user: root
+
+    - name: check exists cron job
+      stat: path="{{ global_scripts }}/postgresql_clean_logs"
+      register: cron_job_exists
+
+    - name: backup cron job
+      copy:
+        src: "{{ global_scripts }}/postgresql_clean_logs"
+        dest: "{{ backup_root_dir }}{{ global_scripts }}/postgresql_clean_logs"
+        owner: postgres
+        group: postgres
+        mode: 0700
+        remote_src: yes
+      become_user: root
+      when: cron_job_exists.stat.exists
+
+  become: true   
+  when: inventory_hostname != 'etcd'

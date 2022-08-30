@@ -1,0 +1,24 @@
+- name: Define role of the specified host
+  block:
+
+    - name: check connection parameter in patroni config
+      reciter:
+        src: "{{ patroni_files.conf_dir }}/postgres.yml"
+        action: get
+        parameter: restapi
+        inner_parameter: connect_address
+      register: patroni_connect_address
+      become_user: postgres
+      become: true
+
+    - name: get status code via patroni api
+      uri:
+        url: "http://{{ patroni_connect_address.message }}"
+        status_code: [ 503, 200 ]
+      register: result
+
+    - name: сheck if host is master
+      assert:
+        that: result.status == 200
+        fail_msg: "Host is not a master. Please enter the correct host for master node"
+        success_msg: "Host is a master"

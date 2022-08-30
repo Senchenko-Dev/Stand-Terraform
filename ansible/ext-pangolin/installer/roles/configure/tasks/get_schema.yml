@@ -1,0 +1,15 @@
+- name: Get schema from {{ list_schems }}
+  block:
+
+    - name: create schema variable  
+      set_fact:
+        schemas: []
+
+    - name: get schemas from list_schema
+      set_fact:
+        schemas: '{{ schemas + [ item ] }}'
+      with_items: '{{ list_schems }}'
+    
+    - name: update list schemas
+      set_fact:
+        schemas_variable: '{{ schemas_variable + schemas }}'

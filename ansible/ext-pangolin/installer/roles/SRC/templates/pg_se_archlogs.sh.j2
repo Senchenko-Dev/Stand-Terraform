@@ -1,0 +1,186 @@
+#!/bin/bash
+
+usage() {
+    cat <<EOF
+Usage: $0 [-o start|stop] Arguments:
+  -o start|stop
+    process to initiate with archlogs
+        Default: start
+    PostgreSQL SE (support_PostgreSQL_sbt@sberbank.ru)
+EOF
+}
+
+while getopts "o:" optname
+do
+        case "$optname" in
+          "o")
+                OPTION="$OPTARG"
+          ;;
+          "?")
+                printf "Unknown option $OPTARG\n\n"
+                usage
+                exit 1
+                ;;
+          ":")
+                printf "No argument value for option $OPTARG\n\n"
+                usage
+                exit 1
+            ;;
+          *)
+                printf "Unknown error while processing options\n\n"
+                usage
+                exit 1 ;;
+        esac
+done
+
+if [[ -z "$SESSIONID" ]]
+then
+    echo "Environment variable \$SESSIONID not found, script should be executed by dataprotector"
+    exit 1
+fi
+
+if [[ -z "$OPTION" ]]
+then
+    TYPE="start"
+fi
+
+BACKUP_DIR="{{ PGBACKUP }}"
+PGINSTANCE="{{ clustername }}"
+WALSTATE_FILE=$BACKUP_DIR/wals_to_delete
+SOME_ARCHIVE_ABSENT=0
+SOME_ARCHIVE_WAS_NOT_REMOVED=0
+INVALID_PATH=0
+LOG_FILE=$BACKUP_DIR/archive.log
+{% if 'update' in action_type %}
+{% if ([ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 0 %}
+#TODO This is crutch! Path to bash files should be changed to name which containing major pg se version
+#4.2.x-4.4.x
+MANAGE_BACKUP_SCRIPT={{ manage_backup_bin }}/11_manage_backup.sh
+{% elif ([ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int != 0 %}
+#4.3.0-4.4.x && 4.4.0-4.5.0
+MANAGE_BACKUP_SCRIPT={{ manage_backup_bin }}/{{ pg_major_version }}_manage_backup.sh
+{% endif %}
+{% elif action_type == 'install' %}
+MANAGE_BACKUP_SCRIPT={{ manage_backup_bin }}/{{ pg_major_version }}_manage_backup.sh
+{% endif %}
+
+touch $LOG_FILE
+chmod 666 $LOG_FILE
+
+function log {
+    echo "$(date +"%Y-%m-%d %H:%M:%S") SESSIONID=$SESSIONID: $1"  |& tee -a $LOG_FILE
+}
+
+if [[ "$OPTION" = "start" ]]
+then
+    if [ -f $WALSTATE_FILE ]
+    then
+        log "ERROR: found $WALSTATE_FILE file, previous backup session may still be active, wait for previous session to complete. If there is no backup session, manually remove $WALSTATE_FILE file"
+        exit 1
+    fi
+
+    log "Starting to copy WAL archives"
+
+    touch $WALSTATE_FILE
+    #  allow file to be deleted by DB admin in case we need to recover from some error
+    chmod 666 $WALSTATE_FILE
+    for f in $(find $BACKUP_DIR/wal/$PGINSTANCE -type f -name '*.gz')
+    do
+        echo $f >> $WALSTATE_FILE
+        #log $f
+    done
+    ${MANAGE_BACKUP_SCRIPT} wal-backup-started $SESSIONID
+fi
+
+if [[ "$OPTION" = "stop" ]]
+then
+    log "Backup finished"
+
+    if [[ -z "$SMEXIT" ]]
+    then
+        log "Environment variable \$SMEXIT not found, script should be executed by dataprotector"
+        ${MANAGE_BACKUP_SCRIPT} wal-backup-failed $SESSIONID
+        exit 1
+    fi
+
+    if [[ "$SMEXIT" != "0" ]]
+    then
+        log "There were errors wile performing backup or not all files were copied -> do not delete WALS"
+        rm $WALSTATE_FILE
+        ${MANAGE_BACKUP_SCRIPT} wal-backup-failed $SESSIONID
+        exit 1
+    fi
+
+    if [ ! -f $WALSTATE_FILE ]
+    then
+        log "ERROR: file $WALSTATE_FILE not found -> cannot cleanup old wal archives"
+        ${MANAGE_BACKUP_SCRIPT} wal-backup-failed $SESSIONID
+        exit 1
+    fi
+
+    WALS_REMOVED=0
+    log "Remove local WALs archive as not necessary"
+    for f in $(cat $WALSTATE_FILE)
+    do
+        name=$(basename "$f")
+        dir=$(dirname "$f")
+        if [ "$dir" != "$BACKUP_DIR/wal/$PGINSTANCE" ] # || "${name##*.}" != "gz" ]
+        then
+            log "WARNING: wals_to_delete file contains invalid path to WAL archive: '$f'. Path should be in $BACKUP_DIR/wal/$PGINSTANCE"
+            INVALID_PATH=1
+            continue
+        fi
+
+        if [ "${name##*.}" != "gz" ]
+        then
+            log "WARNING: wals_to_delete file contains invalid path to WAL archive: '$f'. WAL acrhive should have .gz format"
+            INVALID_PATH=1
+            continue
+        fi
+
+        if [ ! -f $f ]
+        then
+            log "WARNING: WAL archive '$f' does not exist"
+            SOME_ARCHIVE_ABSENT=1
+            continue
+        fi
+
+        rm $f
+        REMOVE_CODE=$?
+        if [ $REMOVE_CODE = 0 ]
+        then
+            #log "WAL archive: '$f' was removed"
+            ((WALS_REMOVED++))
+        else
+            log "WARNING: WAL archive: '$f' was not removed. exit_code = $REMOVE_CODE"
+            $SOME_ARCHIVE_WAS_NOT_REMOVED = 1
+        fi
+    done
+
+    log "$WALS_REMOVED WALs were removed"
+
+    rm $WALSTATE_FILE
+
+    if [ "$SOME_ARCHIVE_ABSENT" != "0" ]
+    then
+        log "ERROR: some archives from $WALSTATE_FILE were not found, they were possibely removed by other process -> check backup for consistency"
+        ${MANAGE_BACKUP_SCRIPT} wal-backup-failed $SESSIONID
+        exit 1
+    fi
+
+    if [ "$SOME_ARCHIVE_WAS_NOT_REMOVED" != "0" ]
+    then
+        log "ERROR: some archives from $WALSTATE_FILE were not removed, check $BACKUP_DIR/wal/$PGINSTANCE"
+        ${MANAGE_BACKUP_SCRIPT} wal-backup-failed $SESSIONID
+        exit 1
+    fi
+
+    if [ "$INVALID_PATH" != "0" ]
+    then
+        log "ERROR: some path from 'wals_to_delete' were invalid. File could be modified by user"
+        ${MANAGE_BACKUP_SCRIPT} wal-backup-failed $SESSIONID
+        exit 1
+    fi
+
+    ${MANAGE_BACKUP_SCRIPT} wal-backup-ok $SESSIONID
+fi

@@ -1,0 +1,12 @@
+{{ pgbouncer_files.log_dir }}/pgbouncer.log {
+      rotate 10
+      missingok
+      sharedscripts
+      notifempty
+      compress
+      daily
+      create 0640 postgres postgres
+      postrotate
+           /bin/kill -HUP `cat {{ pgbouncer_files.pid_dir }}/pgbouncer.pid 2> /dev/null` 2>/dev/null ||true
+      endscript
+}

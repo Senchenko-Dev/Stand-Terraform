@@ -1,0 +1,17 @@
+---
+- name: restart_service
+  include_tasks: control/restart.yaml
+  tags: always
+
+#- service:
+#    name: nginx.service
+#    state: restarted
+
+
+- name: "set_service_state"
+  service:
+    name: nginx.service
+    state: "{{ service_state }}"
+  when: service_state != "restarted"
+  tags: always
+

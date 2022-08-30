@@ -1,0 +1,35 @@
+[Unit]
+Description=Runners to orchestrate a high-availability PostgreSQL
+After=syslog.target network.target
+ 
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+ 
+# Read in configuration file if it exists, otherwise proceed
+
+Environment="LD_LIBRARY_PATH={{ PGHOME }}/lib"
+Environment="PG_PLUGINS_PATH={{ PGHOME }}/lib"
+Environment="PATRONI_LIBRARY_PATH={{ python.patroni_venv }}/lib/postgresql_se_libs"
+Environment="PATRONI_PLUGINS_PATH={{ python.patroni_venv }}/lib/postgresql_se_libs"
+Environment="PYTHONPATH={{ python.patroni_venv_package }}"
+
+# Pre-commands to start watchdog device
+# Uncomment if watchdog is part of your patroni setup
+PermissionsStartOnly=true
+ExecStartPre=-/bin/mkdir -p /var/run/postgresql
+ExecStartPre=/bin/chown -R postgres:postgres /var/run/postgresql
+#ExecStartPre=-/usr/bin/sudo /sbin/modprobe softdog
+#ExecStartPre=-/usr/bin/sudo /bin/chown postgres /dev/watchdog
+
+WorkingDirectory={{ PATRONI_HOME }}
+ExecStart={{ python.patroni_venv }}/bin/patroni_bin/patroni.bin {{ patroni_files.conf_dir }}/postgres.yml
+Restart=on-failure
+KillMode=process
+
+# Disable restart limits
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target

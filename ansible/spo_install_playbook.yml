@@ -1,0 +1,67 @@
+---
+- hosts: all
+  become: yes
+  serial: "{{ rolling_update_serial | default('50%') }}"
+  gather_facts: no
+
+  tasks:
+  
+    - name: Import secrets
+      include_vars: "{{ vault_file }}"
+      when: vault_file is defined
+      tags: always
+      delegate_to: localhost
+    #      no_log: yes todo !!!!!!
+
+    - name: Collect facts
+      setup:
+      tags: always
+
+    - import_role:
+        name: "{{ spo_role_name }}"
+
+    - name: Copy additional files
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+        owner: "{{ item.owner }}"
+        group: "{{item.group }}"
+      loop: "{{ list_maps_custom_files | default([]) }}"
+      notify: restart_service
+
+    - name: Copy additional templated files
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        force: "{{ force | default('yes') }}"
+        mode: "{{ item.mode}}" # If mode is not specified and the destination file does exist, the mode of the existing file will be us
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+      loop: "{{ list_maps_custom_templates | default([]) }}"
+      notify: restart_service
+
+    - name: Execute destination file if requested
+      shell: "{{item.dest}}"
+      loop: "{{ list_maps_custom_files | default([]) + list_maps_custom_templates | default([]) }}"
+      when:
+        - item.execute is defined
+        - item.execute|bool
+
+
+
+################-test-#################
+    - name: execute bash script
+      shell: "{{item.dest}}"
+      loop: "{{ list_maps_custom_files | default([]) + list_maps_custom_templates | default([]) }}"
+      when:
+        - item.execute is defined
+        - item.execute|bool
+
+
+
+# todo import? иначе надо прописывать тэги во всей роли sbt-spo-utils
+#    - import_role:
+#        name: sbt-spo-utils
+#        tasks_from: additional.yml
+#      tags: always

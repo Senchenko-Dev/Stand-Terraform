@@ -1,0 +1,44 @@
+- name: Sync dictionary for each host
+  block:
+
+    - name: define host_name variable, if cluster
+      set_fact:
+        host_name: "{% if hostvars['replica'].update_errors.aggregate %}replica\
+                    {% elif hostvars['etcd'].update_errors.aggregate %}etcd\
+                    {% else %}master{% endif %}"
+      when: installation_type == 'cluster'
+
+    - name: define host_name variable, if standalone
+      set_fact:
+        host_name: "master"
+      when: installation_type == 'standalone'
+
+    - name: update errors sync to hosts
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: "{{ hostvars[host_name].update_errors.aggregate }}"
+          hosts:
+            master: "{{ hostvars[host_name].update_errors.hosts.master }}"
+            replica: "{{ hostvars[host_name].update_errors.hosts.replica }}"
+            etcd: "{{ hostvars[host_name].update_errors.hosts.etcd }}"
+          components:
+            pg: "{{ hostvars[host_name].update_errors.components.pg }}"
+            etcd: "{{ hostvars[host_name].update_errors.components.etcd }}"
+            patroni: "{{ hostvars[host_name].update_errors.components.patroni }}"
+            pgbouncer: "{{ hostvars[host_name].update_errors.components.pgbouncer }}"
+            haproxy: "{{ hostvars[host_name].update_errors.components.haproxy }}"
+            configuration: "{{ hostvars[host_name].update_errors.components.configuration }}"
+          types:
+            pg:
+              not_started_db: "{{ hostvars[host_name].update_errors.types.pg.not_started_db }}"
+              started_db: "{{ hostvars[host_name].update_errors.types.pg.started_db }}"
+              role_switched: "{{ hostvars[host_name].update_errors.types.pg.role_switched }}"
+              bootstrap: "{{ hostvars[host_name].update_errors.types.pg.bootstrap }}"
+              remove_pgaudit: "{{ hostvars[host_name].update_errors.types.pg.remove_pgaudit }}"
+              
+  run_once: true
+
+  # TODO добавить синхронизацию для статуса обновления: patroni_is_updated: true/false и тд

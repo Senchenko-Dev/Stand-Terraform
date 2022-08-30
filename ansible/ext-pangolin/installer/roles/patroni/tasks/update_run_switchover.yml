@@ -1,0 +1,41 @@
+- name: Check data lag and switchover
+  block:
+
+    - name: set default current PGHOME
+      set_fact:
+        _runswitchover_pghome: "{{ PGHOME }}"
+      when: _runswitchover_pghome is undefined
+
+    - name: wait cluster synchronization
+      include_tasks: update_wait_cluster_synchronization.yml
+
+    - name: define variable if need special switchover
+      set_fact:
+        specific_switchover: true
+      when: db_stopped_with_patroni is defined
+
+    - name: define variable if need special switchover
+      set_fact:
+        specific_switchover: false
+      when: db_stopped_with_patroni is undefined
+
+    - name: send switch command to patroni
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl
+      vars:
+        endpoint_name: switch
+
+    - name: wait when pgsql open port
+      shell: '{{ _runswitchover_pghome }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ current_database_port }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+
+    - name: define current master role of the cluster
+      import_tasks: update_define_roles_of_nodes.yml
+
+  become: true
+  become_user: postgres
+  when: inventory_hostname != 'etcd' and installation_type == 'cluster' and patroni

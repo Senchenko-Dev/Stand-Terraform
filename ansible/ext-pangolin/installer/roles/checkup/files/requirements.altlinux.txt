@@ -1,0 +1,15 @@
+urllib3==1.25.9
+PyYAML==5.4.1
+six==1.12.0
+kazoo==2.8.0
+psycopg2-binary==2.8.4
+flake8
+python-dateutil==2.7.3
+boto==2.49.0
+requests==2.23.0
+python-etcd
+click==6.7
+prettytable==2.2.1
+psutil==5.8.0
+cdiff==1.0
+python-daemon==2.3.0

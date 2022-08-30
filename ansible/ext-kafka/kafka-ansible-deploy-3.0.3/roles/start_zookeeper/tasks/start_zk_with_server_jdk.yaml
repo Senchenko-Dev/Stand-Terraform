@@ -1,0 +1,13 @@
+---
+- name: Start Zookeeper
+  command: "{{ item.0 }}/bin/zookeeper-server-start{{ script_extension }} -daemon {{ item.0 }}/{{ config_sub_dir }}/zookeeper.properties"
+  environment:
+    LOG_DIR: "{{ item.1 }}"
+  with_together:
+    - "{{ DistroDirs }}"
+    - "{{ ZLogDirs }}"
+  register: start_zk
+  until: start_zk is not failed
+  retries: 3
+  delay: 5
+  when: item.1 is defined

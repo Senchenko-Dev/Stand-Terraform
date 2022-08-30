@@ -1,0 +1,21 @@
+---
+- name: Notify set_service_state handler
+  debug: msg="Notify set_service_state handler"
+  changed_when: yes
+  notify: "set_service_state"
+  tags:
+    - install
+    - control
+    - configure
+  when: service_state != "restarted"
+
+- name: Notify restart_service handler
+  debug: msg="Notify restart_service handler"
+  changed_when: yes
+  notify: restart_service
+  tags:
+    - install
+    - control
+    - configure
+  when: service_state == "restarted"
+

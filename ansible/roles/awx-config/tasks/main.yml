@@ -1,0 +1,28 @@
+- name: import stand config
+  import_tasks: awx_config_stand.yml
+  tags:
+    - stand
+    - never
+
+- name: import group config
+  import_tasks: awx_config_group.yml
+  tags:
+    - group
+    - never
+
+- name: Import purge template tasks
+  import_tasks: awx_config_purge_project_template.yml
+  tags:
+    - purge-template
+    - never
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+    K8S_AUTH_KUBECONFIG : "{{ kubeconfig }}"
+
+- name: force_project_sync
+  awx.awx.schedule:
+    name: project update
+    state: present
+    unified_job_template: "{{ org_name }}-project"
+    rrule: "DTSTART;TZID=Europe/Moscow:{{ lookup('pipe', 'date --date=\"+2 minutes\" +%Y%m%dT%H%M%S') }} RRULE:INTERVAL=1;COUNT=1;FREQ=MINUTELY"
+  tags: always

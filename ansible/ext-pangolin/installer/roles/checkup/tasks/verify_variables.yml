@@ -1,0 +1,48 @@
+- name: Find whitespaces in variables
+  assert:
+    that: "not item.value | find_element_in_variable(' ')"
+    fail_msg: "Parameter {{ item.parameter }} can't contain whitespaces. Remove whitespaces and try again"
+  with_items:
+    - { parameter: 'Список технологических учетных записей', value: '{{ as_TUZ }}' }
+    - { parameter: 'Список логин ldap/AD Администраторов АС', value: '{{ as_admins }}' }
+
+#TODO
+# - name: Find upper letters in variables
+#   assert:
+#     that: "not item.value | check_letters_in_variable"
+#     fail_msg: "Parameter {{ item.parameter }} can't contain upper letters. Remove upper letters from this parameter and try again"
+#   with_items:
+#     - { parameter: 'Список технологических учетных записей', value: '{{ as_TUZ }}' }
+#     - { parameter: 'Список логин ldap/AD Администраторов АС', value: '{{ as_admins }}' }
+
+- name: Find special symbols in variables
+  assert:
+    that: "not item.value | find_element_in_variable(item.symbols)"
+    fail_msg: "Parameter {{ item.parameter }} can't contain special symbols. Remove it and try again"
+  with_items:
+    - { parameter: 'Список технологических учетных записей', value: '{{ as_TUZ }}',
+        symbols: ['@', '.', '!', '#', '$', '%', '^', '&', '*', '(', ')', '{', '}', '\', '/', '?', '+', ';', ':', '#', '<', '>', '`'] }
+    - { parameter: 'Список логин ldap/AD Администраторов АС', value: '{{ as_admins }}',
+        symbols: ['@', '.', '!', '#', '$', '%', '^', '&', '*', '(', ')', '{', '}', '\', '/', '?', '+', ';', ':', '#', '<', '>', '`'] }
+
+- name: Check public schema variable
+  assert:
+    that: 'not {{ schema_name | to_json }} | find_text_in_variable("public")'
+    fail_msg: "schema public can't be use as user's schema. Please modify parameter 'Пользовательская схема'"
+
+- name: Check as_admins variable
+  assert:
+    that: 'not {{ as_TUZ | to_json }} | find_text_in_variable({{ as_admins | to_json }})'
+    fail_msg: "Login of database administrator can't be as technical user. Please remove database administrator login from parameter
+              'Список технологических учетных записей'"
+
+- name: Check "pg_" in name objects
+  assert:
+    that: 'not {{ item }} is match(pg_regex)'
+    fail_msg: "You can't use the 'pg_' prefix for object names."
+  with_items:
+    - '{{ schema_name | to_json }}'
+    - '{{ db_name | to_json }}'
+    - '{{ tablespace_name | to_json }}'
+  vars:
+    - pg_regex: '^(?i)pg_'

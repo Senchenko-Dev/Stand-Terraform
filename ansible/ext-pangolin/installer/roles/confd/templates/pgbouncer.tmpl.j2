@@ -1,0 +1,36 @@
+[databases]
+{% raw %}{{with get "/leader"}}{{$leader := .Value}}{{$leadkey := printf "/members/%s" $leader}}{{with get $leadkey}}{{$data := json .Value}}{{$hostport := base (replace (index (split $data.conn_url "/") 2) "@" "/" -1)}}{{ $host := base (index (split $hostport ":") 0)}}{{ $port := base (index (split $hostport ":") 1)}}* = host={{ $host }} port={{ $port }}{{end}}{{end}}{% endraw %} auth_port={{ ports.pgbouncer_pg_auth }} auth_pool_size=1
+
+[pgbouncer]
+ listen_port = {{ ports.pgbouncer }}
+ listen_addr = *
+ auth_type = scram-sha-256
+ auth_file = {{ pgbouncer_files.conf_dir }}/userlist.txt
+ auth_proxy = on
+ auth_failure_threshold = 3
+ auth_inactivity_period = 60
+ auth_last_size = 10
+ log_audit = 1
+ logfile = {{ pgbouncer_files.log_dir }}/pgbouncer.log
+ pidfile = {{ pgbouncer_files.pid_dir }}/pgbouncer.pid
+ admin_users = pgbouncer
+ max_client_conn = {{ ansible_processor_vcpus*100 }}
+ pool_mode = transaction
+ min_pool_size = 0
+ default_pool_size = {{ pg_max_connections|int - pg_coef_conns }}
+ max_db_connections = {{ pg_max_connections|int - pg_coef_conns }}
+ max_user_connections = {{ pg_max_connections|int - pg_coef_conns }}
+ ignore_startup_parameters = extra_float_digits
+ unix_socket_dir =
+#  TLS settings
+#  server_tls_protocols = all
+#  server_tls_sslmode = verify-ca
+#  server_tls_ca_file = ./crt/root.crt
+#  server_tls_cert_file = ./crt/pgbouncer.crt
+#  server_tls_key_file = ./crt/pgbouncer.key
+#  server_tls_ciphers = normal
+#  client_tls_protocols = all
+#  client_tls_sslmode = verify-full
+#  client_tls_ca_file = ./crt/root.crt
+#  client_tls_cert_file = ./crt/server.crt
+#  client_tls_key_file = ./crt/server.key

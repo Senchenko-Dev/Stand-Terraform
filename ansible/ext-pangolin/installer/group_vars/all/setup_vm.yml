@@ -1,0 +1,8 @@
+# YUM репозиторий на выбор
+yum:
+  baseurl_epel_yandex: "https://mirror.yandex.ru/epel/$releasever/$basearch/"
+  baseurl_epel_sbercloud: "http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/EPEL"
+  baseurl_centos_yandex: "https://mirror.yandex.ru/centos/$releasever/os/$basearch/"
+baseurl_epel: "{{ yum.baseurl_epel_sbercloud }}"
+
+# 

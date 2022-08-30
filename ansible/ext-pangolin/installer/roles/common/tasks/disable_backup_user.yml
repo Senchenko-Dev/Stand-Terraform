@@ -1,0 +1,36 @@
+- name: Define version of current python interpreter
+  set_fact:
+    previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+- name: Disable backup_user in database
+  block:
+
+    - name: check exist pg_probackup
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT pg_roles.rolname FROM pg_roles WHERE rolname='backup_user'
+      register: is_backup_user
+
+    - name: disable special technical user
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER USER "backup_user" NOLOGIN
+      when: is_backup_user.rowcount|int != 0
+
+  always:
+ 
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ previous_python_interpreter }}'
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres
+  when: inventory_hostname == 'master'

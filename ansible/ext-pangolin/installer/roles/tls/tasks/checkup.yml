@@ -1,0 +1,36 @@
+- name: Check files and parameters for enable ldap tls
+  block:
+
+    - name: check openldap config
+      lineinfile:
+        name: "{{ openldap_config }}"
+        regexp: '^TLS_CACERT(.*){{ cert_dir }}'
+        state: absent
+      check_mode: yes
+      changed_when: false
+      register: conf
+
+    - name: check exist certificates
+      find:
+        paths: "{{ cert_dir }}"
+        file_type: file
+        patterns: '*.pem,*.cer'
+      register: files
+
+    - name: disable LDAP TLS if it didn't configured
+      block:
+
+        - name: disable LDAP TLS if it didn't configured
+          set_fact:
+            ldap_tls: false
+
+        - name: print that LDAP TLS is disabled
+          debug:
+            msg: "WARNING: LDAP TLS is disabled"
+            
+      when: "cert_dir is match('TBF') or \
+             not conf.found or \
+             files.matched == 0"
+
+  become: true
+  when: inventory_hostname != 'etcd'

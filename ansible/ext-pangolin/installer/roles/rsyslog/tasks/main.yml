@@ -1,0 +1,34 @@
+---
+- name: Rsyslog configuration
+  block:
+
+    - name: configure iptable
+      iptables:
+        chain: INPUT
+        protocol: udp
+        destination_port: "{{ SOC_server_port }}"
+        jump: ACCEPT
+
+    - name: configure {{ SOC_config_file }}
+      lineinfile:
+        path: "{{ SOC_config_file }}"
+        line: "{{ item }}"
+      with_items:
+        - module(load="imfile" Mode="inotify")
+        - input(type="imfile" File="{{ PGLOGS }}/postgresql*.log" Tag="postgresql_se" Facility="local3")
+        - if $syslogfacility-text == "local3" and $syslogtag == "postgresql_se" and $msg contains_i "AUDIT:" then @{{ SOC_server }}:{{ SOC_server_port }}
+
+    - name: replace line in "{{ SOC_config_file }}"
+      lineinfile:
+        path: "{{ SOC_config_file }}"
+        regexp: "/var/log/messages"
+        line: "*.info;mail.none;authpriv.none;cron.none;local0.none;local3.none    /var/log/messages"
+
+    - name: restart rsyslog service
+      service:
+        name: rsyslog
+        state: restarted
+        enabled: yes
+
+  become: yes
+  become_user: root

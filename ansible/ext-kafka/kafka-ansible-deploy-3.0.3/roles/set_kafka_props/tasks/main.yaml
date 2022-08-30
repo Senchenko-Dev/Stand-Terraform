@@ -1,0 +1,105 @@
+---
+- name: Create Kafka log.dirs
+  file:
+    path: "{{ item }}"
+    state: directory
+    recurse: yes
+    owner: "{{kafka_user }}"
+  with_items: "{{ KDataDirs }}"
+  when: item is defined
+
+- name: Modify server.properties - broker.id
+  lineinfile:
+    path: "{{ item.0 }}/{{ config_sub_dir }}/server.properties"
+    regexp: '^broker.id='
+    line: "broker.id={{ item.1 }}"
+  with_together:
+    - "{{ DistroDirs }}"
+    - "{{ KBrokerIds }}"
+  when: item.1 is defined
+
+- name: Modify server.properties - log.dirs
+  lineinfile:
+    path: "{{ item.0 }}/{{ config_sub_dir }}/server.properties"
+    regexp: '^log.dirs='
+    line: "log.dirs={{ item.1 }}"
+  with_together:
+    - "{{ DistroDirs }}"
+    - "{{ KDataDirs }}"
+  when: item.1 is defined
+
+- name: Get or Generate Zk Client Ports
+  include_tasks: roles/get_generate_and_check_ports/tasks/get_values_of_zk_client_ports.yaml
+
+- name: Get Connection String for Zookeeper Cluster Mode for Single Host Deploy
+  block:
+    - set_fact:
+        connect_string: []
+    - set_fact:
+        connect_string: "{{ connect_string + [ hostvars[groups['ZookeeperNodes'][0]]['ansible_host'] + \":\" + item | string ] }}"
+      with_items: "{{ zk_client_ports }}"
+  always:
+    - set_fact:
+        connect_string: "{{ connect_string | join(',') }}"
+  when: groups['ZookeeperNodes'] | length | int == 1
+
+- name: Get Connect String for Zookeeper Cluster Mode for Multiple Host Deploy
+  block:
+    - set_fact:
+        connect_string: []
+    - set_fact:
+#        connect_string: "{{ connect_string | default([]) + [ item.0 + \":\" + item.1 | string ] }}"
+        connect_string: "{{ connect_string | default([]) + [ hostvars[item.0]['ansible_host'] + \":\" + item.1 | string ] }}"
+      with_together:
+        - "{{ groups['ZookeeperNodes'] }}"
+        - "{{ zk_client_ports }}"
+  always:
+    - set_fact:
+        connect_string: "{{ connect_string | join(',') }}"
+  when: groups['ZookeeperNodes'] | length | int > 1
+
+- name: Add zookeeper.connect String
+  lineinfile:
+    path: "{{ item }}/{{ config_sub_dir }}/server.properties"
+    regexp: '^zookeeper.connect='
+    line: "zookeeper.connect={{ connect_string }}"
+  with_items: "{{ DistroDirs }}"
+
+- name: Modify listeners String
+  lineinfile:
+    path: "{{ item.0 }}/{{ config_sub_dir }}/server.properties"
+    backrefs: yes
+    regexp: '(^listeners=[a-zA-Z-_]*:\/\/)(.*)'
+    line: '\g<1>{{ ansible_host }}:{{ item.1 }}'
+  with_together:
+    - "{{ DistroDirs }}"
+    - "{{ kafka_brokers_ports }}"
+  when: item.1 is defined
+
+- name: Get Kafka Properties List
+  set_fact:
+    kafka_props_list: "{{ hostvars[inventory_hostname] | select('match','^Kafka_.*') | list }}"
+#  run_once: yes
+
+- name: Get Kafka Properties Keys / Values
+  set_fact:
+    kafka_props_keys: "{{ kafka_props_keys  | default([]) + [ item | regex_replace('^(Kafka_)(.*)','\\2') ] }}"
+    kafka_props_values: "{{ kafka_props_values | default([]) + [ lookup('vars', item) ] }}"
+  with_items: "{{ kafka_props_list }}"
+  when: lookup('vars', item) | string | length > -1
+#  run_once: yes
+
+- name: Get Kafka Properties to Comment Out
+  set_fact:
+    kafka_props_key_commented_out: "{{ kafka_props_key_commented_out | default([]) + [ item | regex_replace('^(Kafka_)(.*)','\\2') ] }}"
+  with_items: "{{ kafka_props_list }}"
+  when: lookup('vars', item) | string | length == 0
+#  run_once: yes
+
+- name: Set Kafka Properties from Inventory
+  include_tasks: set_kafka_properties.yaml
+  with_items:
+    - "{{ DistroDirs }}"
+  loop_control:
+    loop_var: path_item
+  when: KBrokerIds is defined

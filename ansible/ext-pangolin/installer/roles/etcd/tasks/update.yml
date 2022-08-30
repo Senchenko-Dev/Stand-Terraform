@@ -1,0 +1,199 @@
+- name: Update etcd
+  block:
+
+    - name: backup intermediate etcd values
+      block:
+
+        - name: ensure {{ backup.etcd_intermediate }}
+          file:
+            path: "{{ backup.etcd_intermediate }}{{ PGUSERHOME }}"
+            state: directory
+            owner: postgres
+            group: postgres
+            mode: 0700
+
+        - name: backup shell profile
+          copy:
+            src:  "{{ shell_profile_file }}"
+            dest: "{{ backup.etcd_intermediate }}{{ shell_profile_file }}"
+            remote_src: yes
+            owner: postgres
+            group: postgres
+        
+      become: true
+
+    - name: check that etcd cluster is healthy before update
+      command:
+        cmd:  etcdctl cluster-health
+      register: result
+      until: result.stdout.find("cluster is healthy") != -1
+      retries: 10
+      delay: 1
+
+    - name: get installed etcd version
+      uri:
+        url: "http://localhost:{{ ports.etcd_inner }}/version"
+      register: installed_version_etcd
+
+    - name: stop, update and start new version of etcd
+      block:
+
+        - name: remove etcd configure
+          shell: etcdctl rm service/{{ clustername }}/initialize
+          ignore_errors: yes
+
+        - name: stop etcd service
+          service:
+            name: etcd
+            state: stopped
+
+        - name: loop wait for etcd stopped
+          shell: "systemctl show -p ActiveState etcd | cut -d'=' -f2"
+          register: result
+          until: result.stdout == 'inactive'
+          retries: 60
+          delay: 1
+
+        - name: remove etcd package
+          yum:
+            name: etcd
+            state: absent
+
+        - name: remove etcd local data directory
+          file:
+            path: "{{ etcd_files.data_dir }}"
+            state: absent
+
+        - name: register etcd service in systemd
+          template:
+            src: etcd.service.j2
+            dest: "{{ service_path_dir }}/etcd.service"
+            owner: root
+            group: root
+            mode: 0640
+
+        - name: make etcd config from template
+          template:
+            src: etcd.conf.j2
+            dest: "{{ etcd_files.conf_dir }}/etcd.conf"
+
+        - name: change permissions for etcd directory
+          file:
+            path: "{{ etcd_files.conf_dir }}"
+            recurse: yes
+            owner: postgres
+            group: postgres
+            mode: 0700
+
+        - name: install new version of etcd
+          yum:
+            name: etcd-{{ versions.etcd }}
+            state: latest
+
+        - name: reload systemd and start service
+          systemd:
+            name: etcd
+            state: started
+            daemon_reload: yes
+            enabled: yes
+
+        - name: check that etcd cluster is healthy after update
+          command:
+            cmd:  etcdctl cluster-health
+          register: result
+          until: result.stdout.find("cluster is healthy") != -1
+          retries: 10
+          delay: 1
+
+        - name: wait when patroni insert cache from bootstrap to etcd db
+          uri:
+            url: http://{{ ansible_fqdn }}:{{ ports.patroni }}/cluster
+            timeout: 5
+            return_content: yes
+          register: result
+          until: result.status != -1
+          retries: 5
+          delay: 4
+          when: inventory_hostname != 'etcd'
+
+      become: true
+
+    - name: update auth params for etcd service
+      block:
+
+        - name: add roles and users in etcd
+          command:
+            cmd: '{{ item }}'
+          with_items:
+            - "etcdctl user add root:'{{ etcd_root_pass }}'"
+            - "etcdctl user add patronietcd:'{{ patroni_etcd_pass }}'"
+            - "etcdctl -u root:'{{ etcd_root_pass }}' role add patroni"
+            - "etcdctl role grant patroni -path '/service/*' -readwrite"
+            - "etcdctl -u root:'{{ etcd_root_pass }}' user grant patronietcd -roles patroni"
+            - "etcdctl -u root:'{{ etcd_root_pass }}' auth enable"
+          no_log: "{{ nolog }}"
+
+        - name: check that etcd cluster is healthy after adding roles and users
+          command:
+            cmd:  etcdctl cluster-health
+          register: result
+          until: result.stdout.find("cluster is healthy") != -1
+          retries: 10
+          delay: 1
+          
+      become: true
+      when: inventory_hostname == 'master'
+
+    - name: Include_role
+      include_role:
+        name: common
+        tasks_from: bash_profile
+      vars:
+        component_name: 'etcd'
+    
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            etcd: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            etcd: true
+      when: inventory_hostname == 'master'
+    
+    - name: etcd updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            etcd: true
+          components:
+            etcd: true
+      when: inventory_hostname == 'etcd'
+
+  always:
+  
+    - name: Set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'

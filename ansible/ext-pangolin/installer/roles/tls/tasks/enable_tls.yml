@@ -1,0 +1,46 @@
+- name: Enable LDAP TLS
+  block:
+
+    - name: edit config without patroni
+      block:
+
+        - name: enable tls in {{ PGDATA }}/pg_hba.conf
+          replace:
+            path: "{{ PGDATA }}/pg_hba.conf"
+            regexp: "ldap(.*)ldapserver"
+            replace: "ldap ldaptls=1 ldapserver"
+
+        - name: send reload command to postgresql
+          shell: "{{ PGHOME }}/bin/pg_ctl reload -D {{ PGDATA }}"
+          become_user: postgres
+
+        - name: wait when pgsql open port
+          shell: '{{ PGHOME }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ ports.pg }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 60
+          delay: 1
+          become_user: postgres
+
+      when: "'patroni' not in tag"
+
+    - name: edit config with patroni
+      block:
+
+        - name: enable tls in {{ patroni_files.conf_dir }}/postgres.yml
+          replace:
+            path: "{{ patroni_files.conf_dir }}/postgres.yml"
+            regexp: "ldap(.*)ldapserver"
+            replace: "ldap ldaptls=1 ldapserver"
+
+        - name: send reload command to patroni
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl
+          vars:
+            endpoint_name: reload
+
+      when: "'patroni' in tag"
+
+  become: yes
+  when: inventory_hostname == 'master'

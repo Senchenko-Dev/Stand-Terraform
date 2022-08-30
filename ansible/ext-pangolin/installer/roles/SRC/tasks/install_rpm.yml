@@ -1,0 +1,18 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+- name: Initialize PGBACKUP directory
+  shell: "{{ PGHOME }}/bin/pg_probackup init -B {{ PGBACKUP }}"
+  become_user: postgres
+  become: true
+
+- name: Determine instance
+  shell: "{{ PGHOME }}/bin/pg_probackup add-instance -B {{ PGBACKUP }} -D {{ PGDATA }} --instance {{ clustername }}"
+  become_user: postgres
+  become: true
+
+- name: Add parameters to config
+  shell: "{{ PGHOME }}/bin/pg_probackup set-config -B {{ PGBACKUP }} -D {{ PGDATA }} --instance {{ clustername }} -d postgres -h {{ ansible_host }} -p {{ ports.pg }} -U backup_user"
+  become_user: postgres
+  become: true

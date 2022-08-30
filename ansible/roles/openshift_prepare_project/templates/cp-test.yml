@@ -1,0 +1,116 @@
+
+apiVersion: maistra.io/v2
+kind: ServiceMeshControlPlane
+metadata:
+  name: {{ cp.name }}
+  namespace: {{ project }}
+spec:
+  security:
+    controlPlane:
+      mtls: false
+    dataPlane:
+      mtls: false
+  tracing:
+    sampling: 10000
+    type: Jaeger
+  profiles:
+    - default
+  proxy:
+    accessLogging:
+      file:
+        name: /dev/stdout
+    networking:
+      trafficControl:
+        inbound: {}
+        outbound:
+          policy: REGISTRY_ONLY
+    runtime:
+      container:
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 200m
+            memory: 256Mi
+  gateways:
+    enabled: false
+  techPreview:
+    global:
+      defaultConfigVisibilitySettings:
+        - .
+    tracing:
+      jaeger:
+        install: true
+  policy:
+    type: Istiod
+  addons:
+    grafana:
+      enabled: true
+    jaeger:
+      install:
+        ingress:
+          enabled: true
+        storage:
+          type: Memory
+    kiali:
+      enabled: true
+    prometheus:
+      enabled: true
+  version: v2.0
+  runtime:
+    components:
+      grafana:
+        container:
+          resources:
+            limits:
+              cpu: 300m
+              ephemeral-storage: 2000Mi
+              memory: 750Mi
+            requests:
+              cpu: 300m
+              ephemeral-storage: 2000Mi
+              memory: 750Mi
+      kiali:
+        container:
+          resources:
+            limits:
+              cpu: 600m
+              memory: 750Mi
+            requests:
+              cpu: 400m
+              memory: 750Mi
+      pilot:
+        container:
+          resources:
+            limits:
+              cpu: 400m
+              memory: 750Mi
+            requests:
+              cpu: 400m
+              memory: 750Mi
+        deployment:
+          replicas: 1
+      prometheus:
+        container:
+          resources:
+            limits:
+              cpu: 400m
+              ephemeral-storage: 2000Mi
+              memory: 750Mi
+            requests:
+              cpu: 400m
+              ephemeral-storage: 2000Mi
+              memory: 750Mi
+    defaults:
+      container:
+        resources:
+          limits:
+            cpu: 200m
+            memory: 500Mi
+          requests:
+            cpu: 200m
+            memory: 500Mi
+  telemetry:
+    type: Istiod
+  cluster: {}

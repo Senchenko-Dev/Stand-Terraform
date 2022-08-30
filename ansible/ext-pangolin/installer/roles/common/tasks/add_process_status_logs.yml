@@ -1,0 +1,53 @@
+- name: Add process work status to log file
+  block:
+
+    - name: set default key
+      set_fact:
+        recovery_key: false
+        scout_key: false
+        _addprocessworkstatustologfile_ver_substr: ""
+
+    - name: synchronize error status between hosts
+      include_role: 
+        name: common
+        tasks_from: update_errors_sync_to_hosts.yml
+
+    - name: get UTC current time
+      command: "date '+%Y-%m-%d %H:%M:%S'"
+      register: date_utc
+      environment:
+        TZ: UTC
+
+    - name: get substring as from OLD version to NEW version PG SE
+      set_fact:
+        _addprocessworkstatustologfile_ver_substr: ", с версии {{ pg_current_version }} на версию {{ pg_version }}, статус обновления: {{ update_errors }}"
+      when: "'update' in action_type and not scout_key"
+    
+    - name: get substring as current installed version PG SE
+      set_fact:
+        _addprocessworkstatustologfile_ver_substr: ", текущая версия {{ pg_version }}"
+      when: "'install' == action_type"
+
+    - name: get substring as recovery from NEW version to OLD version
+      set_fact:
+        _addprocessworkstatustologfile_ver_substr: ", версия до начала обновления {{ pg_current_version }}, статус обновления: {{ update_errors }}"
+      when: "'update' in action_type and recovery_key"
+
+    - name: create log file, if not exists
+      file:
+        path: "{{ process_work_statuses.log_file }}"
+        owner: postgres
+        group: postgres
+        mode: '600'
+        state: touch
+
+    - name: add process work status to log file
+      lineinfile:
+        path: "{{ process_work_statuses.log_file }}"
+        insertafter: EOF
+        line: "{{ date_utc.stdout }}: {{ process_work_status }}, текущая конфигурация {{ tag }}{{ _addprocessworkstatustologfile_ver_substr }}"
+        state: present
+      become_user: postgres
+
+  become: true
+  when: "inventory_hostname != 'etcd'"

@@ -1,0 +1,16 @@
+required_packages:
+  - "autoconf"
+  - "automake"
+  - "jq"
+  - "libcrack2"
+  - "libcurl"
+  - "libjsoncpp"
+  - "libtool"
+  - "libyaml-0-2"
+  - "logrotate"
+  - "openssl"
+  - "perl-openssl-defaults"
+  - "python3-pip"
+  - "python3.6"
+  - "python3.6-dev"
+  

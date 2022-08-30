@@ -1,0 +1,18 @@
+- name: Install {{ _install_versioned_package_name }} version {{ _install_versioned_package_version }}
+  block:
+
+    - name: install package {{ _install_versioned_package_name }} version {{ _install_versioned_package_version }}
+      package:
+        name: "{{ _install_versioned_package_name }}-{{ _install_versioned_package_version }}"
+        state: present
+      when: ansible_os_family == 'RedHat'
+
+    - name: install package {{ _install_versioned_package_name }} version {{ _install_versioned_package_version }}
+      command: "apt-get install -y {{ _install_versioned_package_name }}={{ _install_versioned_package_version }}"
+      when: ansible_os_family == 'Altlinux'
+
+    - name: install package {{ _install_versioned_package_name }} version {{ _install_versioned_package_version }}
+      command: "apt-get install -y --no-install-recommends {{ _install_versioned_package_name }}={{ _install_versioned_package_version }}"
+      when: ansible_os_family == 'Debian'
+
+  become: true

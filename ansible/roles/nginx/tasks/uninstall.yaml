@@ -1,0 +1,18 @@
+- name: Stop Nginx
+  shell: systemctl stop nginx.service
+  ignore_errors: yes
+  
+- name: Disable Nginx
+  shell: systemctl disable nginx.service
+  ignore_errors: yes
+
+- name: Remove NGINX user
+  shell: userdel -r nginx
+  ignore_errors: yes
+  
+- name: Delete nginx.x86_64 
+  shell: sudo yum remove nginx.x86_64 -y
+  
+- name: Delete nginx-filesystem.noarch  
+  shell: sudo yum remove nginx-filesystem.noarch  -y
+  

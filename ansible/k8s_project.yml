@@ -1,0 +1,32 @@
+---
+- hosts: localhost
+  gather_facts: no 
+  tasks:
+  
+    - name: Remove vault-id
+      file:
+        state: absent
+        path: "project_vars/{{ project }}.txt"
+      tags: "prepare-project"
+
+    - name: Pause for child resources
+      pause:
+        seconds: 15
+      tags: "prepare-project"
+
+    - name: include project  vars
+      include_vars: "{{ environment_file }}"
+      tags: "prepare-project"
+
+    - name: Include prepare_project role
+      import_role:
+        name: prepare_project
+      tags: "prepare-project"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+        K8S_AUTH_KUBECONFIG : "{{ kubeconfig }}"
+
+    - name: Include purge_project role
+      import_role:
+        name: purge_project
+      tags: "purge-project"

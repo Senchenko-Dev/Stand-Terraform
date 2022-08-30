@@ -1,0 +1,139 @@
+- name: Check exists components
+  block:
+
+    - name: check exists postgersql se
+      block:
+
+        - name: check exists postgersql se
+          stat: path="{{ PGHOME_OLD }}/bin/postgres"
+          register: pg_exists
+
+        - name: postgersql se not exists
+          set_fact:
+            postgres: False
+          when: not pg_exists.stat.exists
+
+    - name: check exists pgbouncer
+      block:
+
+        - name: check exists pgbouncer
+          stat: 
+            path: "{{ pgbouncer_files.bin_path }}"
+          register: pgbouncer_exists
+
+        - name: pgbouncer not exists
+          set_fact:
+            pgbouncer: False
+          when: not pgbouncer_exists.stat.exists
+
+    - name: check exists patroni
+      block:
+
+        - name: check exists patroni
+          stat: path="{{ PYTHON_VENV_OLD }}/bin/patroni"
+          register: patroni_exists
+
+        - name: patroni not exists
+          set_fact:
+            patroni: False
+          when: not patroni_exists.stat.exists
+
+    - name: check exists haproxy
+      block:
+
+        - name: check exists haproxy
+          stat: path="{{ haproxy_files.bin_path }}"
+          register: haproxy_exists
+
+        - name: haproxy not exists
+          set_fact:
+            haproxy: False
+          when: not haproxy_exists.stat.exists
+
+    - name: check exists confd
+      block:
+
+        - name: check exists confd
+          stat: path="{{ confd_files.path_dir }}/bin/confd"
+          register: confd_exists
+
+        - name: confd not exists
+          set_fact:
+            confd: False
+          when: not confd_exists.stat.exists
+
+    - name: check exists documentations
+      block:
+
+        - name: check exists doc
+          stat: path="{{ PGHOME_OLD }}/doc"
+          register: doc_exists
+
+        - name: doc not exists
+          set_fact:
+            documentations: False
+          when: not doc_exists.stat.exists
+
+  become: true
+  when: inventory_hostname != 'etcd'
+
+- name: Check exists etcd
+  block:
+
+    - name: check exists etcd
+      stat: path="{{ etcd_files.bin_path }}"
+      register: etcd_exists
+
+    - name: etcd not exists
+      set_fact:
+        etcd: False
+      when: not etcd_exists.stat.exists
+      
+  become: true
+
+- name: Define configuration type
+  block:
+
+    - name: configuration type has 'standalone-postgresql-only' name
+      set_fact:
+        tag: standalone-postgresql-only
+      when: "installation_type == 'standalone' \
+             and not pgbouncer_exists.stat.exists \
+             and not patroni_exists.stat.exists \
+             and not etcd_exists.stat.exists"
+
+    - name: configuration type has 'standalone-postgresql-pgbouncer' name
+      set_fact:
+        tag: standalone-postgresql-pgbouncer
+      when: "installation_type == 'standalone' \
+             and pgbouncer_exists.stat.exists \
+             and not patroni_exists.stat.exists \
+             and not etcd_exists.stat.exists"
+
+    - name: configuration type has 'standalone-patroni-etcd-pgbouncer' name
+      set_fact:
+        tag: standalone-patroni-etcd-pgbouncer
+      when: "installation_type == 'standalone' \
+             and pgbouncer_exists.stat.exists \
+             and patroni_exists.stat.exists \
+             and etcd_exists.stat.exists"
+
+    - name: configuration type has 'cluster-patroni-etcd-pgbouncer' name
+      set_fact:
+        tag: cluster-patroni-etcd-pgbouncer
+      when: "installation_type == 'cluster' \ 
+             and pgbouncer_exists.stat.exists \ 
+             and patroni_exists.stat.exists \ 
+             and etcd_exists.stat.exists \
+             and not haproxy_exists.stat.exists"
+
+    - name: configuration type has 'cluster-patroni-etcd-pgbouncer-haproxy' name
+      set_fact:
+        tag: cluster-patroni-etcd-pgbouncer-haproxy
+      when: "installation_type == 'cluster' \
+             and pgbouncer_exists.stat.exists \
+             and patroni_exists.stat.exists \
+             and etcd_exists.stat.exists \
+             and haproxy_exists.stat.exists"
+
+  when: inventory_hostname != 'etcd'

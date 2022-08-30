@@ -1,0 +1,3 @@
+etcd_cluster_name: "{{ '' | default('single', true) }}"
+clustername: "{{ '' | default('standalone', true) }}"
+installation_type: standalone
