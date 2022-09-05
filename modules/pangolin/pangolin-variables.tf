@@ -67,4 +67,4 @@ variable "pangolin_url" {
   default = ""
 } 
 
-variable "ans_props" {}
+variable "vault_file" {}

@@ -111,14 +111,12 @@ resource "local_file" "awx-inventory" {
         file_path = "ansible/spo_install_playbook.yml"
       }
       inventory_file = local_file.awx-inventory.filename
-      extra_vars     = merge({
+      extra_vars     = {
         spo_role_name : var.spo_role_name
-        vault_file : var.ans_props.vault_file
+        vault_file : var.vault_file
         awx_port : var.awx_props.awx_port
         pod_nginx_port : var.awx_props.pod_nginx_port
-      },
-        var.ans_props
-      )
+      }
       vault_id = ["./ansible/login.sh"]
     }
 
@@ -130,11 +128,10 @@ resource "local_file" "awx-inventory" {
       }
       hosts      = ["localhost"]
       extra_vars = merge({
-        vault_file : var.ans_props.vault_file
+        vault_file : var.vault_file
         spo_role_name : var.spo_role_name
       },
         var.awx_props,
-        var.ans_props,
         {
           awx_host : vcd_vm.VM-awx[0].network[0].ip
           awx_url : "http://${vcd_vm.VM-awx[0].network[0].ip}:${var.awx_props.awx_port}"

@@ -232,7 +232,7 @@ resource "local_file" "pangolin-inventory" {
       extra_vars = {
         download_url: var.pangolin_url
         download_dest: "ext-pangolin/distr/" # localhost
-        vault_file: var.ans_props.vault_file
+        vault_file: var.vault_file
         //        unpack_dest: "ext-pangolin/"
 //        unpack_regexp: "*-distrib.tar.gz"
 #        nexusUser: var.nexus_cred.nexususer
@@ -262,7 +262,7 @@ resource "local_file" "pangolin-inventory" {
 //        local_distr_path = "${abspath(path.root)}/ext-pangolin/" todo check
         etcd_cluster_name = "${var.vm_props.stand_name}-${var.inventory_group_name}_etcd"
         clustername = "${var.vm_props.stand_name}-${var.inventory_group_name}"
-        vault_file = var.ans_props.vault_file
+        vault_file = var.vault_file
       }
       verbose = true
       vault_id = ["./ansible/login.sh"]

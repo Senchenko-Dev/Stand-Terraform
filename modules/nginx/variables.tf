@@ -12,7 +12,7 @@ variable "ansible_extra_vars" {
 variable "spo_role_name" {
   default = "nginx"
 }
-variable "ans_props" {}
+variable "vault_file" {}
 
 variable "memory" {
   description = "RAM of Virtual Machine"

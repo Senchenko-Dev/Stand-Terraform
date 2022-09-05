@@ -173,6 +173,6 @@ module "config_awx_k8s_templates" {
   source = "./modules/awx_config_k8s_templates"
   kubeconfig = local.oc_kubeconfig
   awx_props = local.awx_props
-  ans_props = local.ans_props
+  vault_file = local.vault_file
 }
 

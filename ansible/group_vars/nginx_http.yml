@@ -13,7 +13,7 @@ nginx_group: nginx
 nginx_http_port: 8083
 #nginx_https_port: 8443
 
-#nginx_os_user_pwd: "nginx"
+nginx_os_user_pwd: "{{ secrets.nginx.nginx_os_user_pwd }}"
 nginx_conf_dir: "/etc/nginx"
 nginx_docroot: "{{ install_dir }}/html"
 

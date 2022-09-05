@@ -5,7 +5,7 @@ variable "spo_role_name" {}
 variable "awx_tags" {
   default = ""
 }
-variable "ans_props" {}
+variable "vault_file" {}
 variable "hosts" {}
 
 resource "null_resource" "awx-setup-group" {
@@ -30,7 +30,7 @@ resource "null_resource" "awx-setup-group" {
       verbose = true
       extra_vars = merge({
         group_name = var.inventory_group_name,
-        vault_file = var.ans_props.vault_file,
+        vault_file = var.vault_file,
         inventory_path = var.inventory_path,
         spo_role_name = var.spo_role_name,
        },

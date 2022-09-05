@@ -47,4 +47,4 @@ locals {
 
 variable "awx_props" {}
 
-variable "ans_props" {}
+variable "vault_file" {}

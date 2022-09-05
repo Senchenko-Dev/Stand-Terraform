@@ -45,4 +45,4 @@ variable "kafka_url" {
   default = ""
 }
 
-variable "ans_props" {}
+variable "vault_file" {}

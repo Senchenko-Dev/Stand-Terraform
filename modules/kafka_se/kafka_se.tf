@@ -123,7 +123,7 @@ resource "local_file" "kafka-inventory" {
         file_path = "${local.playbook_path}/playbook_install_deps.yaml"
       }
       extra_vars = {
-        vault_file: var.ans_props.vault_file
+        vault_file: var.vault_file
       }
       inventory_file = local_file.kafka-inventory.filename
       become = true
@@ -140,7 +140,7 @@ resource "local_file" "kafka-inventory" {
       extra_vars = {
         download_url: var.kafka_url
         download_dest: "${local.playbook_path}/roles/copy_distro_to_server/files/kafka.zip" # localhost!
-        vault_file: var.ans_props.vault_file
+        vault_file: var.vault_file
         //       nexusUser: var.nexus_cred.nexususer
 //       nexusPass: var.nexus_cred.nexuspass
       }

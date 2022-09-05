@@ -106,16 +106,13 @@ resource "local_file" "nginx-inventory" {
         file_path = "ansible/spo_install_playbook.yml"
       }
       inventory_file = local_file.nginx-inventory.filename
-      extra_vars = merge({
+      extra_vars = {
         rolling_update_serial: "50%"
         spo_role_name: var.spo_role_name
-        vault_file: var.ans_props.vault_file
-      },
-        var.ans_props
-      )
+        vault_file: var.vault_file
+      }
       vault_id = ["./ansible/login.sh"]
     }
-
 
     ansible_ssh_settings {
       insecure_no_strict_host_key_checking = true
@@ -130,6 +127,6 @@ module "config_awx_ansible" {
   inventory_group_name = var.inventory_group_name
   spo_role_name = var.spo_role_name
   awx_props = var.awx_props
-  ans_props = var.ans_props
+  vault_file = var.vault_file
   hosts = vcd_vm.VM-nginx
 }

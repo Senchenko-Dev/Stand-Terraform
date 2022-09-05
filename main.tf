@@ -4,6 +4,8 @@ locals {
   stand_name = "silim-test-stand1"
   network_name = "main_VDC02"
 
+  vault_file = "secrets.yml"
+
 # передается в модуль (затем в провайдер VCD_VM)
   vm_props_default = {
     template_name = "CentOS7_64-bit_custom2"
@@ -29,10 +31,10 @@ locals {
 
 # Для setup_vm
   ssh_keys_list = [
-    { username: "user", ssh_key: "${local.secrets.ssh.user}"},
-    { username: "provuser", ssh_key: "${local.secrets.ssh.provuser}", sudo: true},
-    { username: "sentsov", ssh_key: "${local.secrets.ssh.sentsov}", sudo: true},
-    { username: "root", ssh_key: "${local.secrets.ssh.root}"},
+    { username: "user", ssh_key: local.secrets.ssh.user},
+    { username: "provuser", ssh_key: local.secrets.ssh.provuser, sudo: true},
+    { username: "sentsov", ssh_key: local.secrets.ssh.sentsov, sudo: true},
+    { username: "root", ssh_key: local.secrets.ssh.root},
   ]
 }
 
@@ -79,7 +81,7 @@ module "AWX" {
   force_ansible_run = "000"
 
   awx_props = local.install_awx_props
-  ans_props = local.ans_props
+  vault_file = local.vault_file
   inventory_group_name = "awx-group" // для связи с group_vars/group_name.yml
 }
 
@@ -95,7 +97,7 @@ locals {
 }
 
 module "Nginx-1" {
-#  count = 0
+  count = 0
 # TF module properties
   source = "./modules/nginx"
 # VM properties
@@ -113,12 +115,12 @@ module "Nginx-1" {
   force_ansible_run = "0"
   inventory_group_name = "nginx_ssl" // для связи с group_vars/group_name.yml
   spo_role_name = "nginx"
-  ans_props = local.ans_props
+  vault_file = local.vault_file
 }
 
 
  module "KAFKA_standalone1" {
- //  count = 0
+   count = 0
    # TF module properties
    source = "./modules/kafka_se"
 
@@ -144,7 +146,7 @@ module "Nginx-1" {
 #   ]
 
    vm_props = local.vm_props_default
-   ans_props = local.ans_props
+   vault_file = local.vault_file
 
  }
 
@@ -169,12 +171,12 @@ module "Nginx-1" {
    vm_disk_data = [
  //    { size: "350G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
    ]
-   ans_props = local.ans_props
+   vault_file = local.vault_file
    vm_props = local.vm_props_default
  }
 
  module "PGSE_standalone" {
- //  count = 0
+   count = 0
    # TF module properties
    depends_on = []
    source = "./modules/pangolin"
@@ -207,7 +209,7 @@ module "Nginx-1" {
  //  ]
 
    vm_props = local.vm_props_default
-   ans_props = local.ans_props
+   vault_file = local.vault_file
  }
 
 /*

@@ -11,7 +11,7 @@
 
 - name: Define PWD
   set_fact:
-    nginx_pwd: "{{ secrets.nginx.nginx_os_user_pwd }}"
+    nginx_pwd: "{{nginx_os_user_pwd}}"
   no_log: true
   ignore_errors: yes
 
