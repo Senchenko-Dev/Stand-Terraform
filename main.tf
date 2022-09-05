@@ -1,4 +1,4 @@
-#0123456
+#0
 locals {
 #12s
   stand_name = "silim-test-stand1"
@@ -64,7 +64,7 @@ locals {
 
 module "AWX" {
 
-#  count = 0
+  count = 0
   # TF path to the module
   source = "./modules/awx"
 
@@ -86,6 +86,9 @@ module "AWX" {
 }
 
 locals {
+  awx_props = {}
+
+/*
   awx_props = merge(local.install_awx_props,
     {
       awx_host = module.AWX.awx_host_ip
@@ -94,6 +97,7 @@ locals {
       awx_k8s_sa_project = local.globals.devopsProject
     }
   )
+*/
 }
 
 module "Nginx-1" {
