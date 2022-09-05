@@ -1,7 +1,7 @@
 #0
 locals {
 #12s
-  stand_name = "silim-test-stand1"
+  stand_name = "sents2"
   network_name = "main_VDC02"
 
   vault_file = "secrets.yml"

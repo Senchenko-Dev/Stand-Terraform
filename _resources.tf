@@ -1,7 +1,7 @@
 locals {
   devopsSaName = "devops-pipeline-sa"
   controlPanelName = "control-panel"
-  projectPrefix = "silimtest1"
+  projectPrefix = "sents2"
 
   devopsProject = "${local.projectPrefix}-${local.devopsSaName}"
   devopsSaRole = "admin"
