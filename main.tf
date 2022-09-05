@@ -1,4 +1,4 @@
-#0123456
+#0
 locals {
 #12s
   stand_name = "silim-test-stand1"
