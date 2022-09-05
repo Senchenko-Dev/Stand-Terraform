@@ -1,7 +1,7 @@
 #0
 locals {
 #12s
-  stand_name = "silim-test-stand1"
+  stand_name = "sents2"
   network_name = "main_VDC02"
 
   vault_file = "secrets.yml"
@@ -101,7 +101,7 @@ locals {
 }
 
 module "Nginx-1" {
-  count = 0
+//  count = 0
 # TF module properties
   source = "./modules/nginx"
 # VM properties
