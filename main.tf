@@ -101,7 +101,7 @@ locals {
 }
 
 module "Nginx-1" {
-  count = 0
+//  count = 0
 # TF module properties
   source = "./modules/nginx"
 # VM properties
