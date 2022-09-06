@@ -103,7 +103,7 @@ locals {
 }
 
 # NGINX
-module "Nginx-1" {
+module "NginxG1" {
 //  count = 0
 # TF module properties
   source = "./modules/nginx"
