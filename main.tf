@@ -91,7 +91,7 @@ locals {
 # NGINX
 module "NginxG1" {
   count = 0
-  source = "modules/spo_nginx"
+  source = "./modules/spo_nginx"
 # VM properties
   cpu = 1
   memory = 512
@@ -112,7 +112,7 @@ module "NginxG1" {
 # KAFKA
 module "KAFKA_standalone1" {
    count = 0
-   source = "modules/spo_kafka_se"
+   source = "./modules/spo_kafka_se"
    # VM properties
    cpu = 2
    memory = 1024
@@ -132,7 +132,7 @@ module "KAFKA_standalone1" {
 # PG
 module "PGSE_standalone1" {
   count = 0
-  source = "modules/spo_pangolin"
+  source = "./modules/spo_pangolin"
   # VM properties
   vm_props = local.vm_props_default
   # для postgres nodes:
