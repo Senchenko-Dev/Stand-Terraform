@@ -106,7 +106,7 @@ locals {
 module "NginxG1" {
 //  count = 0
 # TF module properties
-  source = "./modules/nginx"
+  source = "modules/spo_nginx"
 # VM properties
   vm_count = 1
   memory = 512
@@ -127,7 +127,7 @@ module "NginxG1" {
  module "KAFKA_standalone1" {
    count = 0
    # TF module properties
-   source = "./modules/kafka_se"
+   source = "modules/spo_kafka_se"
 
    # Ansible properties
    inventory_group_name = "Kafka1"
@@ -154,7 +154,7 @@ module "NginxG1" {
  module "KAFKA_SSL1" {
    count = 0
    # TF module properties
-   source = "./modules/kafka_se"
+   source = "modules/spo_kafka_se"
 
    # Ansible properties
    inventory_group_name = "KafkaSSL"
@@ -179,7 +179,7 @@ module "NginxG1" {
 module "PGSE_standalone1" {
    count = 0
    # TF module properties
-   source = "./modules/pangolin"
+   source = "modules/spo_pangolin"
 
    # Ansible properties
    inventory_group_name = "Pangolin_alone-1"
