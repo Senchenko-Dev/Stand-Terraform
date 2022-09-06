@@ -16,6 +16,7 @@ locals {
     solution = "FRONTEND-STD"
   //  stashedControlPlaneNamespace = "control-panel-efs-cdjestnd"
     stashedControlPlaneNamespace = "${local.projectPrefix}-${local.controlPanelName}"
+    controlPlaneName = "basic-install"
     values = {
       pullCreds = [
         {
@@ -58,7 +59,6 @@ locals {
 locals {
   diOpenshiftServiceCore_projects = {
     devops-master-test = {
-//      oseProjectName = "devops-pipeline-sa-cdjestnd"
       oseProjectName = "${local.projectPrefix}-${local.devopsSaName}"
       values = {
         quota = {
@@ -69,7 +69,6 @@ locals {
       }
     },
     control-panel-test = {
-//      oseProjectName = "control-panel-efs-cdjestnd"
       oseProjectName = "${local.projectPrefix}-${local.controlPanelName}"
       values = {
         quota = {
@@ -77,7 +76,7 @@ locals {
           mem: 40
         }
         cp = {
-          name: "basic-install" # todo parametrize
+          name: local.globals.controlPlaneName
           template: "cp-2.0.2.yml"
         }
       }
@@ -100,7 +99,9 @@ module "diOpenshiftServiceCore"  {
   vault_password = var.vault_password
 }
 
+# Рабочие проекты
 locals {
+  empty = {}
   group1 = {
     diOpenshiftSessionSector = {
       projects = {
@@ -133,7 +134,7 @@ locals {
         values = {
           sm       = {
             cpNamespace = local.globals.stashedControlPlaneNamespace
-            cpName      = "basic-install" #todo parametrize
+            cpName      = local.globals.controlPlaneName
           }
           bindings = [
             {
@@ -166,7 +167,6 @@ module "diOpenshiftgroup1" {
 module "config_awx_k8s_templates" {
   depends_on = [module.AWX, module.diOpenshiftgroup1]
   count = "${length(local.awx_props) != 0 ? 1 : 0}"
-//  count = 0
   meta = fileset(path.root, "ansible/project_vars/*.yml")
   source = "./modules/awx_config_k8s_templates"
   kubeconfig = local.oc_kubeconfig
