@@ -6,16 +6,16 @@
     - name: Import secrets
       include_vars: "{{ vault_file }}"
       when: vault_file is defined
-#      tags: always
-#      no_log: yes todo !!!!!!
+    #      tags: always
+    #      no_log: yes todo
 
     - name: Download distr to {{ download_dest }}
       get_url:
         url: "{{ download_url }}"
         dest: "{{ download_dest }}"
         validate_certs: no
-        username: "{{ secrets.nexus.user }}"
-        password: "{{ secrets.nexus.pass }}"
+        username: "{{ nexususer }}"
+        password: "{{ nexuspass }}"
         mode: '0755'
       when:
         - download_url is defined
@@ -24,33 +24,13 @@
     - name: Debug
       shell: ls -a {{ download_dest }}
 
-    - block:
-      - find:
-          patterns: ["*-distrib.tar.gz"]
-#          patterns: ["{{ download_dest | basename }}"]
-          paths: ["{{ download_dest }}"]
-        register: files_found
-
-      - debug:
-          msg: "KEK {{ files_found.files.0.path }}"
-
-      - name: Unarchive
-        unarchive:
-          src: "{{ files_found.files.0.path }}"
-#          src: "{{ download_dest }}"
-          dest: "{{ playbook_dir }}/{{ unpack_dest }}"
+    - name: Unarchive
+      unarchive:
+        src: "{{ download_dest }}"
+        dest: "{{ unpack_dest }}"
       when:
-#        - unpack_regexp is defined
         - unpack_dest is defined
 
-#      rescue:
-#        - debug:
-#            msg: "unpack_regexp and/or unpack_dest is not defined. Skipping unarchive"
-
-#        download_dest: "./ext-pangolin/" # localhost!
-#        unpack_dest: "./ext-pangolin/"
-#        unpack_regexp: "*-distrib.tar.gz"
-
-
-
-
+#        download_url: var.pangolin_url # filename! If the file needs to be unpacked, download_dest must be a Folder!
+#        download_dest: "${local.playbook_path}/../distr/" # localhost.
+#        unpack_dest: "${abspath(path.root)}/ansible/ext-pangolin/"
