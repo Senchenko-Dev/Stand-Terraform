@@ -59,8 +59,12 @@ locals {
 
 
 
-variable "installation_type" {}
-variable "installation_subtype" {}
+variable "installation_type" {
+  description = "Варианты:  standalone  или  cluster"
+}
+variable "installation_subtype" {
+  description = "Варианты: standalone-postgresql-only, standalone-postgresql-pgbouncer, standalone-patroni-etcd-pgbouncer, cluster-patroni-etcd-pgbouncer, cluster-patroni-etcd-pgbouncer-haproxy"
+}
 
 
 variable "pangolin_url" {
