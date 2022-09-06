@@ -75,7 +75,8 @@ module "AWX" {
 }
 
 locals {
-//  awx_props = {} # если awx не используется
+  awx_props = {} # если awx не используется
+/*
   awx_props = merge(local.install_awx_props,
     { #  При использовании внешнего AWX прописать хост и урл в явном виде.
       awx_host = module.AWX.awx_host_ip
@@ -84,6 +85,7 @@ locals {
       awx_k8s_sa_project = local.globals.devopsProject
     }
   )
+*/
 }
 
 # NGINX
