@@ -6,3 +6,5 @@ wf_os_group: "wfgroup"
 wf_install_dir: "/usr/WF/WF_PPRB"
 executed_by_terraform : "True"
 
+wildfly_21_url: "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000011_cloudspo/WildFly-21.0.2/CI90000011_cloudspo-WildFly-21.0.2-distrib.zip"
+wildfly_22_url: "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000011_cloudspo/WildFly-22.0.1/CI90000011_cloudspo-WildFly-22.0.1-distrib.zip"
