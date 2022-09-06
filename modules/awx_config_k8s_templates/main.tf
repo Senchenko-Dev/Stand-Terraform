@@ -27,7 +27,7 @@ resource "null_resource" "awx-k8s-templates-config" {
       },
       var.awx_props
       )
-      vault_id = ["./ansible/login.sh"]
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
 
     ansible_ssh_settings {

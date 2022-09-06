@@ -230,13 +230,13 @@ resource "local_file" "pangolin-inventory" {
       }
       verbose = true
       extra_vars = {
-        download_url: var.pangolin_url
-        download_dest: "ext-pangolin/distr/" # localhost
+        download_url: var.pangolin_url # filename
+        download_dest: "${abspath(path.root)}/ansible/ext-pangolin/distr/${basename(var.pangolin_url)}" # filename
+        unpack_dest: "${abspath(path.root)}/ansible/ext-pangolin/"
+        //       unarchive:
+        //        src: "{{ download_dest }}"
+        //        dest: "{{ unpack_dest }}"
         vault_file: var.vault_file
-        //        unpack_dest: "ext-pangolin/"
-//        unpack_regexp: "*-distrib.tar.gz"
-#        nexusUser: var.nexus_cred.nexususer
-#        nexusPass: var.nexus_cred.nexuspass
       }
       vault_id = ["${abspath(path.root)}/ansible/login.sh"]
       inventory_file = local_file.pangolin-inventory.filename
@@ -265,7 +265,7 @@ resource "local_file" "pangolin-inventory" {
         vault_file = var.vault_file
       }
       verbose = true
-      vault_id = ["./ansible/login.sh"]
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
     ansible_ssh_settings {
       insecure_no_strict_host_key_checking = true

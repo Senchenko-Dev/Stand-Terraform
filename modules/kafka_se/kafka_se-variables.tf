@@ -1,6 +1,10 @@
 # Input variable definitions
-variable "vm_count" {}
-variable "vm_props" {}
+variable "vm_count" {
+  description = "Количество идентичных машин в кластере"
+}
+variable "vm_props" {
+  description = "vm_props = local.vm_props_default"
+}
 variable "vm_disk_data" {
   default = []
 }
@@ -20,7 +24,7 @@ variable "cpu" {
 //variable "nexus_cred" {}
 
 variable "inventory_group_name" {
-  description = "inventory_group_name"
+  description = "Имя группы в инвентаре Ansible"
   type = string
 }
 

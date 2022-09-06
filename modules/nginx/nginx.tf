@@ -111,7 +111,7 @@ resource "local_file" "nginx-inventory" {
         spo_role_name: var.spo_role_name
         vault_file: var.vault_file
       }
-      vault_id = ["./ansible/login.sh"]
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
 
     ansible_ssh_settings {

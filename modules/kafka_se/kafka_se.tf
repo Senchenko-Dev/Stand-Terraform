@@ -141,8 +141,6 @@ resource "local_file" "kafka-inventory" {
         download_url: var.kafka_url
         download_dest: "${local.playbook_path}/roles/copy_distro_to_server/files/kafka.zip" # localhost!
         vault_file: var.vault_file
-        //       nexusUser: var.nexus_cred.nexususer
-//       nexusPass: var.nexus_cred.nexuspass
       }
       vault_id = ["${abspath(path.root)}/ansible/login.sh"]
       inventory_file = local_file.kafka-inventory.filename

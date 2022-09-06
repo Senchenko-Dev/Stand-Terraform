@@ -7,6 +7,7 @@ locals {
   vault_file = "secrets.yml"
 
 # передается в модуль (затем в провайдер VCD_VM)
+  # параметры для VCD_VM
   vm_props_default = {
     template_name = "CentOS7_64-bit_custom2"
     catalog_name = "Custom"
@@ -21,7 +22,7 @@ locals {
     private_key = local.secrets.ssh.key_rsa
     public_key = local.secrets.ssh.key_pub
   }
-
+  # дополнительные параметры для кастомизированного образа
   guest_properties_common = {
     "enablecustomization" : "enabled",
     "rootpassword" : local.secrets.guest_properties_common.rootpassword,
@@ -29,7 +30,7 @@ locals {
     "ansible_auth_pub_key" : local.secrets.ssh.key_pub # ключ пользователя ansible
   }
 
-# Для setup_vm
+# Для setup_vm. Публичные ключи для входа на хост.
   ssh_keys_list = [
     { username: "user", ssh_key: local.secrets.ssh.user},
     { username: "provuser", ssh_key: local.secrets.ssh.provuser, sudo: true},
@@ -38,6 +39,7 @@ locals {
   ]
 }
 
+# AWX
 locals {
   install_awx_props = {
     awx_port = 30800
@@ -86,11 +88,11 @@ module "AWX" {
 }
 
 locals {
-  awx_props = {}
+  awx_props = {} # awx не используется
 
 /*
   awx_props = merge(local.install_awx_props,
-    {
+    { #  При использовании внешнего AWX прописать хост и урл в явном виде.
       awx_host = module.AWX.awx_host_ip
       awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
       awx_k8s_sa_name = local.globals.devopsSaName
@@ -100,6 +102,7 @@ locals {
 */
 }
 
+# NGINX
 module "Nginx-1" {
 //  count = 0
 # TF module properties
@@ -108,21 +111,19 @@ module "Nginx-1" {
   vm_count = 1
   memory = 512
   cpu = 1
+  vm_props = local.vm_props_default
   vm_disk_data = [
 //   { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
 //   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
   ]
-  vm_props = local.vm_props_default
-  awx_props = local.awx_props
 
 # Ansible properties
-  force_ansible_run = "0"
   inventory_group_name = "nginx_ssl" // для связи с group_vars/group_name.yml
   spo_role_name = "nginx"
   vault_file = local.vault_file
 }
 
-
+# KAFKA
  module "KAFKA_standalone1" {
    count = 0
    # TF module properties
@@ -135,16 +136,12 @@ module "Nginx-1" {
    #000_${timestamp()}" #  "_${timestamp()}"
 
    # Download
- //  nexus_cred = {
- //    nexususer = local.secrets.nexususer,
- //    nexuspass = local.secrets.nexuspass,
- //  }
     kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
 
    # VM properties
    vm_count = 1
-   memory = 1024 #16*1024
-   cpu = 4
+   memory = 1024
+   cpu = 2
 #   vm_disk_data = [
 #     { size: "350G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
 #   ]
@@ -161,7 +158,6 @@ module "Nginx-1" {
 
    # Ansible properties
    inventory_group_name = "KafkaSSL"
- //  spo_role_name = ""
    force_ansible_run = ""
    #000_${timestamp()}" #  "_${timestamp()}"
 
@@ -179,10 +175,10 @@ module "Nginx-1" {
    vm_props = local.vm_props_default
  }
 
- module "PGSE_standalone" {
+# PG
+module "PGSE_standalone1" {
    count = 0
    # TF module properties
-   depends_on = []
    source = "./modules/pangolin"
 
    # Ansible properties
@@ -190,32 +186,26 @@ module "Nginx-1" {
    force_ansible_run = "000" #  "_${timestamp()}"
 
    # Download
- //  nexus_cred = {
- //    nexususer = local.secrets.nexususer,
- //    nexuspass = local.secrets.nexuspass,
- //  }
- //  pangolin_url = local.pangolin460-010_url  //
+  pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD_group/Nexus_PROD/CI02289206_PostgreSQL_Sber_Edition/D-04.006.01-164/CI02289206_PostgreSQL_Sber_Edition-D-04.006.01-164-distrib.tar.gz"
 
    # Install
-   installation_type = local.pangolin_installation_type.standalone
-   installation_subtype = local.pangolin_installation_subtype.standalone-postgresql-only
+  installation_type = "standalone"
+  installation_subtype = "standalone-postgresql-only"
 
    # VM properties
-   # только для postgres nodes
+  # для postgres nodes:
    cpu = 2
-   memory = 3048 #8*1024
+  memory = 4*1024
    vm_pg_disk_data = [
-     { size : "200G", mnt_dir : "/pgdata" },  # только для postgres nodes
+//    { size : "20G", mnt_dir : "/pgdata" },
    ]
-
- //  vm_etcd_disk_data = [
- //    { size : "2G", mnt_dir : local.pgdata_dir },  # только для postgres nodes
- //  ]
-
+  # для etcd nodes:
+  vm_etcd_disk_data = [
+//    { size : "2G", mnt_dir : "/pgdata" },  # только для postgres nodes
+  ]
    vm_props = local.vm_props_default
    vault_file = local.vault_file
  }
-
 /*
 module "PGSE_cluster" {
   # TF module properties
@@ -226,23 +216,18 @@ module "PGSE_cluster" {
   force_ansible_run = ""
 
   # Download
-  nexus_cred = {
-    nexususer = var.nexususer,
-    nexuspass = var.nexuspass,
-  }
-  pangolin_url = local.pangolin460-010_url// TODO перенести в файл настроек
+#  pangolin_url =
 
   # Install
-  installation_type = local.pangolin_installation_type.cluster
-  installation_subtype = local.pangolin_installation_subtype.cluster-patroni-etcd-pgbouncer
+  installation_type = "cluster"
+  installation_subtype = "cluster-patroni-etcd-pgbouncer"
 
   # VM properties
-  # только для postgres nodes
   vm_pg_disk_data = [
-    { size : "10G", mnt_dir : local.pgdata_dir },
+    { size : "10G", mnt_dir : "/pgdata" },
   ]
   vm_etcd_disk_data = [
-    { size : "2G", mnt_dir : local.pgdata_dir },
+    { size : "2G", mnt_dir : "/pgdata" },
   ]
   vm_props = local.vm_props_default
 }

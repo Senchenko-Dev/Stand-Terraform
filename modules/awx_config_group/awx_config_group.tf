@@ -36,7 +36,7 @@ resource "null_resource" "awx-setup-group" {
        },
       var.awx_props
       )
-      vault_id = ["./ansible/login.sh"]
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
 
     ansible_ssh_settings {

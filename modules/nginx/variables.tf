@@ -1,15 +1,20 @@
 # Input variable definitions
 variable "inventory_group_name" {
-  description = "inventory_group_name"
+  description = "Имя группы в инвентаре Ansible"
   type = string
 }
-variable "vm_count" {}
-variable "vm_props" {}
-variable "vm_disk_data" {}
-variable "ansible_extra_vars" {
-  default = {}
+variable "vm_count" {
+  description = "Количество идентичных машин в группе"
 }
+variable "vm_props" {
+  description = "vm_props = local.vm_props_default"
+}
+variable "vm_disk_data" {
+  description = "Список монтируемых дисков. Например, vm_disk_data = [{ size: \"350G\", mnt_dir: \"/KAFKA\" , owner: \"kafka\", group: \"kafka\", mode: \"0755\"}] "
+}
+
 variable "spo_role_name" {
+  description = "Переменная для использования альтернативной роли (например, для тестирования обновленной версии.)"
   default = "nginx"
 }
 variable "vault_file" {}

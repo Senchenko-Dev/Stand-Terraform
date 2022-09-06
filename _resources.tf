@@ -1,14 +1,12 @@
 locals {
   devopsSaName = "devops-pipeline-sa"
   controlPanelName = "control-panel"
-  projectPrefix = "sents2"
+  projectPrefix = local.stand_name
 
   devopsProject = "${local.projectPrefix}-${local.devopsSaName}"
   devopsSaRole = "admin"
   globals = {
-  //  projectPrefix = "efs-std"
     projectPrefix = local.projectPrefix
-    projectPostfix = ""
     devopsSaName = local.devopsSaName
     devopsProject = "${local.projectPrefix}-${local.devopsSaName}"
     devopsSaRole = "admin"

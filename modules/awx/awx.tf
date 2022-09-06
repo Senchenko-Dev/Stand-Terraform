@@ -117,7 +117,7 @@ resource "local_file" "awx-inventory" {
         awx_port : var.awx_props.awx_port
         pod_nginx_port : var.awx_props.pod_nginx_port
       }
-      vault_id = ["./ansible/login.sh"]
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
 
     // Подготовка стенда
@@ -137,7 +137,7 @@ resource "local_file" "awx-inventory" {
           awx_url : "http://${vcd_vm.VM-awx[0].network[0].ip}:${var.awx_props.awx_port}"
         }
       )
-      vault_id = ["./ansible/login.sh"]
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
     ansible_ssh_settings {
       insecure_no_strict_host_key_checking = true
