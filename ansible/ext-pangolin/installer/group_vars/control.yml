@@ -8,15 +8,11 @@ control_msgs:
     patroni_stopped:            "{{ control_name }}.FAIL__Patroni не запущен на сервере. Обратитесь к администраторам БД__{{ control_name }}.FAIL"
     db_pgse_started:            "{{ control_name }}.FAIL__База данных уже запущена на сервере__{{ control_name }}.FAIL"
     patroni_started:            "{{ control_name }}.FAIL__Patroni уже запущен на сервере__{{ control_name }}.FAIL"
-    json_not_created:           "{{ control_name }}.FAIL__Системный файл не был создан. Необходимо проверить свободное место в точке монтирования home__{{ control_name }}.FAIL"
-    json_not_exists:            "{{ control_name }}.FAIL__Выбранные для запуска серверы были остановлены без использования {{ control_name }} или остановлены некорректно. \
-                                 Запуск возможно выполнить только вручную.__{{ control_name }}.FAIL"
+    json_not_exists:            "{{ control_name }}.FAIL__Выбранные для запуска сервера были остановлены без использования {{ control_name }}. Запуск возможно выполнить только вручную.__{{ control_name }}.FAIL"
     rlm_data_not_exists:        "{{ control_name }}.FAIL__Отсутствует обязательный входной параметр rlm_data. Обратитесь к администраторам {{ control_name }}__{{ control_name }}.FAIL"
     scenario:                   "{{ control_name }}.FAIL__Сценарий завершился с ошибкой. Обратитесь к администраторам {{ control_name }}__{{ control_name }}.FAIL"
     unlock_user:                "{{ control_name }}.FAIL__Ошибка во время разблокировки пользователя user_name_and_msg__{{ control_name }}.FAIL"
     reset_user_password:        "{{ control_name }}.FAIL__Ошибка во время смены пароля для пользователя user_name_and_msg__{{ control_name }}.FAIL"
-    check_unused_service_file:  "{{ control_name }}.FAIL__Для конфигурации СУБД с patroni должен отсутствовать /etc/systemd/system/postgresql.service и наоборот. \
-                                 Обратитесь к администраторам БД__{{ control_name }}.FAIL"
     create_user_exist:          "{{ control_name }}.FAIL__Создание УЗ пользователя БД не возможно. УЗ пользователя существует в БД__{{ control_name }}.FAIL"
     role_type:                  "{{ control_name }}.FAIL__Создание УЗ пользователя БД не возможно. Неизвестный тип УЗ пользователя__{{ control_name }}.FAIL"
     create_user_error:          "{{ control_name }}.FAIL__Ошибка во время создания новой УЗ пользователя БД: _msg__{{ control_name }}.FAIL"
@@ -34,8 +30,7 @@ control_msgs:
                                 Рекомендуем обратиться к администраторам СУБД и изменить значение на scram-sha-256, либо предварительно обновить версию СУБД Pangolin на 4.5.0 и выше__{{ control_name }}.FAIL"
   ok:
     switchover:                 "{{ control_name }}.OK__Переключение ролей узлов в кластере PostgreSQL SE успешно выполнено__{{ control_name }}.OK"
-    stop_database:              "{{ control_name }}.OK__База данных на выбранных серверах успешно остановлена. После перезагрузки ОС СУБД не поднимется самостоятельно – \
-                                 необходим запуск сценария PostgreSQL SE Старт СУБД__{{ control_name }}.OK"
+    stop_database:              "{{ control_name }}.OK__База данных на выбранных серверах успешно остановлена__{{ control_name }}.OK"
     start_database:             "{{ control_name }}.OK__База данных на выбранных серверах успешно запущена__{{ control_name }}.OK"
     scouting_users:             "{{ control_name }}.OK__Разведка пользователей успешно выполнена__{{ control_name }}.OK"
     unlock_reset_user:          "{{ control_name }}.OK__Разблокировка УЗ и сброс паролей успешно выполнены__{{ control_name }}.OK"

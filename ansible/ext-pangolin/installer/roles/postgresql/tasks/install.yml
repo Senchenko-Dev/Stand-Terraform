@@ -151,7 +151,7 @@
 
         - name: encrypt ldap passwords 
           shell: >
-            {{ PGHOME }}/bin/pg_auth_password enc -W "{{ ldap_bind_tuz_password }}"
+            {{ PGHOME }}/bin/pg_auth_password enc -W "{{ ldap_bind_tuz_password }}" 
           register: encpassword_ldap
     
         - name: update ldap password

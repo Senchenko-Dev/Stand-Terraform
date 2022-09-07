@@ -1,0 +1,1038 @@
+.TH "PGBOUNCER" "1" "" "1.16.0" "Databases"
+.SH NAME
+.PP
+pgbouncer \- lightweight connection pooler for PostgreSQL
+.SH SYNOPSIS
+.IP
+.nf
+\f[C]
+pgbouncer\ [\-d][\-R][\-v][\-u\ user]\ <pgbouncer.ini>
+pgbouncer\ \-V|\-h
+\f[]
+.fi
+.PP
+On Windows, the options are:
+.IP
+.nf
+\f[C]
+pgbouncer.exe\ [\-v][\-u\ user]\ <pgbouncer.ini>
+pgbouncer.exe\ \-V|\-h
+\f[]
+.fi
+.PP
+Additional options for setting up a Windows service:
+.IP
+.nf
+\f[C]
+pgbouncer.exe\ \-\-regservice\ \ \ <pgbouncer.ini>
+pgbouncer.exe\ \-\-unregservice\ <pgbouncer.ini>
+\f[]
+.fi
+.SH DESCRIPTION
+.PP
+\f[B]pgbouncer\f[] is a PostgreSQL connection pooler.
+Any target application can be connected to \f[B]pgbouncer\f[] as if it
+were a PostgreSQL server, and \f[B]pgbouncer\f[] will create a
+connection to the actual server, or it will reuse one of its existing
+connections.
+.PP
+The aim of \f[B]pgbouncer\f[] is to lower the performance impact of
+opening new connections to PostgreSQL.
+.PP
+In order not to compromise transaction semantics for connection pooling,
+\f[B]pgbouncer\f[] supports several types of pooling when rotating
+connections:
+.TP
+.B Session pooling
+Most polite method.
+When a client connects, a server connection will be assigned to it for
+the whole duration the client stays connected.
+When the client disconnects, the server connection will be put back into
+the pool.
+This is the default method.
+.RS
+.RE
+.TP
+.B Transaction pooling
+A server connection is assigned to a client only during a transaction.
+When PgBouncer notices that transaction is over, the server connection
+will be put back into the pool.
+.RS
+.RE
+.TP
+.B Statement pooling
+Most aggressive method.
+The server connection will be put back into the pool immediately after a
+query completes.
+Multi\-statement transactions are disallowed in this mode as they would
+break.
+.RS
+.RE
+.PP
+The administration interface of \f[B]pgbouncer\f[] consists of some new
+\f[C]SHOW\f[] commands available when connected to a special "virtual"
+database \f[B]pgbouncer\f[].
+.SH QUICK\-START
+.PP
+Basic setup and usage is as follows.
+.IP "1." 3
+Create a pgbouncer.ini file.
+Details in \f[B]pgbouncer(5)\f[].
+Simple example:
+.RS 4
+.IP
+.nf
+\f[C]
+[databases]
+template1\ =\ host=localhost\ port=5432\ dbname=template1
+
+[pgbouncer]
+listen_port\ =\ 6432
+listen_addr\ =\ localhost
+auth_type\ =\ md5
+auth_file\ =\ userlist.txt
+logfile\ =\ pgbouncer.log
+pidfile\ =\ pgbouncer.pid
+admin_users\ =\ someuser
+\f[]
+.fi
+.RE
+.IP "2." 3
+Create a \f[C]userlist.txt\f[] file that contains the users allowed in:
+.RS 4
+.IP
+.nf
+\f[C]
+"someuser"\ "same_password_as_in_server"
+\f[]
+.fi
+.RE
+.IP "3." 3
+Launch \f[B]pgbouncer\f[]:
+.RS 4
+.IP
+.nf
+\f[C]
+$\ pgbouncer\ \-d\ pgbouncer.ini
+\f[]
+.fi
+.RE
+.IP "4." 3
+Have your application (or the \f[B]psql\f[] client) connect to
+\f[B]pgbouncer\f[] instead of directly to the PostgreSQL server:
+.RS 4
+.IP
+.nf
+\f[C]
+$\ psql\ \-p\ 6432\ \-U\ someuser\ template1
+\f[]
+.fi
+.RE
+.IP "5." 3
+Manage \f[B]pgbouncer\f[] by connecting to the special administration
+database \f[B]pgbouncer\f[] and issuing \f[C]SHOW\ HELP;\f[] to begin:
+.RS 4
+.IP
+.nf
+\f[C]
+$\ psql\ \-p\ 6432\ \-U\ someuser\ pgbouncer
+pgbouncer=#\ SHOW\ HELP;
+NOTICE:\ \ Console\ usage
+DETAIL:
+\ \ SHOW\ [HELP|CONFIG|DATABASES|FDS|POOLS|CLIENTS|SERVERS|SOCKETS|LISTS|VERSION|...]
+\ \ SET\ key\ =\ arg
+\ \ RELOAD
+\ \ PAUSE
+\ \ SUSPEND
+\ \ RESUME
+\ \ SHUTDOWN
+\ \ [...]
+\f[]
+.fi
+.RE
+.IP "6." 3
+If you made changes to the pgbouncer.ini file, you can reload it with:
+.RS 4
+.IP
+.nf
+\f[C]
+pgbouncer=#\ RELOAD;
+\f[]
+.fi
+.RE
+.SH COMMAND LINE SWITCHES
+.TP
+.B \f[C]\-d\f[], \f[C]\-\-daemon\f[]
+Run in the background.
+Without it, the process will run in the foreground.
+.RS
+.PP
+In daemon mode, setting \f[C]pidfile\f[] as well as \f[C]logfile\f[] or
+\f[C]syslog\f[] is required.
+No log messages will be written to stderr after going into the
+background.
+.PP
+Note: Does not work on Windows; \f[B]pgbouncer\f[] need to run as
+service there.
+.RE
+.TP
+.B \f[C]\-R\f[], \f[C]\-\-reboot\f[]
+Do an online restart.
+That means connecting to the running process, loading the open sockets
+from it, and then using them.
+If there is no active process, boot normally.
+Note: Works only if OS supports Unix sockets and the
+\f[C]unix_socket_dir\f[] is not disabled in configuration.
+Does not work on Windows.
+Does not work with TLS connections, they are dropped.
+.RS
+.RE
+.TP
+.B \f[C]\-u\f[] \f[I]USERNAME\f[], \f[C]\-\-user=\f[]\f[I]USERNAME\f[]
+Switch to the given user on startup.
+.RS
+.RE
+.TP
+.B \f[C]\-v\f[], \f[C]\-\-verbose\f[]
+Increase verbosity.
+Can be used multiple times.
+.RS
+.RE
+.TP
+.B \f[C]\-q\f[], \f[C]\-\-quiet\f[]
+Be quiet: do not log to stderr.
+This does not affect logging verbosity, only that stderr is not to be
+used.
+For use in init.d scripts.
+.RS
+.RE
+.TP
+.B \f[C]\-V\f[], \f[C]\-\-version\f[]
+Show version.
+.RS
+.RE
+.TP
+.B \f[C]\-h\f[], \f[C]\-\-help\f[]
+Show short help.
+.RS
+.RE
+.TP
+.B \f[C]\-\-regservice\f[]
+Win32: Register pgbouncer to run as Windows service.
+The \f[B]service_name\f[] configuration parameter value is used as the
+name to register under.
+.RS
+.RE
+.TP
+.B \f[C]\-\-unregservice\f[]
+Win32: Unregister Windows service.
+.RS
+.RE
+.SH ADMIN CONSOLE
+.PP
+The console is available by connecting as normal to the database
+\f[B]pgbouncer\f[]:
+.IP
+.nf
+\f[C]
+$\ psql\ \-p\ 6432\ pgbouncer
+\f[]
+.fi
+.PP
+Only users listed in the configuration parameters \f[B]admin_users\f[]
+or \f[B]stats_users\f[] are allowed to log in to the console.
+(Except when \f[C]auth_type=any\f[], then any user is allowed in as a
+stats_user.)
+.PP
+Additionally, the user name \f[B]pgbouncer\f[] is allowed to log in
+without password, if the login comes via the Unix socket and the client
+has same Unix user UID as the running process.
+.SS Show commands
+.PP
+The \f[B]SHOW\f[] commands output information.
+Each command is described below.
+.SS SHOW STATS
+.PP
+Shows statistics.
+In this and related commands, the total figures are since process start,
+the averages are updated every \f[C]stats_period\f[].
+.TP
+.B database
+Statistics are presented per database.
+.RS
+.RE
+.TP
+.B total_xact_count
+Total number of SQL transactions pooled by \f[B]pgbouncer\f[].
+.RS
+.RE
+.TP
+.B total_query_count
+Total number of SQL queries pooled by \f[B]pgbouncer\f[].
+.RS
+.RE
+.TP
+.B total_received
+Total volume in bytes of network traffic received by \f[B]pgbouncer\f[].
+.RS
+.RE
+.TP
+.B total_sent
+Total volume in bytes of network traffic sent by \f[B]pgbouncer\f[].
+.RS
+.RE
+.TP
+.B total_xact_time
+Total number of microseconds spent by \f[B]pgbouncer\f[] when connected
+to PostgreSQL in a transaction, either idle in transaction or executing
+queries.
+.RS
+.RE
+.TP
+.B total_query_time
+Total number of microseconds spent by \f[B]pgbouncer\f[] when actively
+connected to PostgreSQL, executing queries.
+.RS
+.RE
+.TP
+.B total_wait_time
+Time spent by clients waiting for a server, in microseconds.
+.RS
+.RE
+.TP
+.B avg_xact_count
+Average transactions per second in last stat period.
+.RS
+.RE
+.TP
+.B avg_query_count
+Average queries per second in last stat period.
+.RS
+.RE
+.TP
+.B avg_recv
+Average received (from clients) bytes per second.
+.RS
+.RE
+.TP
+.B avg_sent
+Average sent (to clients) bytes per second.
+.RS
+.RE
+.TP
+.B avg_xact_time
+Average transaction duration, in microseconds.
+.RS
+.RE
+.TP
+.B avg_query_time
+Average query duration, in microseconds.
+.RS
+.RE
+.TP
+.B avg_wait_time
+Time spent by clients waiting for a server, in microseconds (average per
+second).
+.RS
+.RE
+.SS SHOW STATS_TOTALS
+.PP
+Subset of \f[B]SHOW STATS\f[] showing the total values
+(\f[B]total_\f[]).
+.SS SHOW STATS_AVERAGES
+.PP
+Subset of \f[B]SHOW STATS\f[] showing the average values
+(\f[B]avg_\f[]).
+.SS SHOW TOTALS
+.PP
+Like \f[B]SHOW STATS\f[] but aggregated across all databases.
+.SS SHOW SERVERS
+.TP
+.B type
+S, for server.
+.RS
+.RE
+.TP
+.B user
+User name \f[B]pgbouncer\f[] uses to connect to server.
+.RS
+.RE
+.TP
+.B database
+Database name.
+.RS
+.RE
+.TP
+.B state
+State of the pgbouncer server connection, one of \f[B]active\f[],
+\f[B]idle\f[], \f[B]used\f[], \f[B]tested\f[], \f[B]new\f[].
+.RS
+.RE
+.TP
+.B addr
+IP address of PostgreSQL server.
+.RS
+.RE
+.TP
+.B port
+Port of PostgreSQL server.
+.RS
+.RE
+.TP
+.B local_addr
+Connection start address on local machine.
+.RS
+.RE
+.TP
+.B local_port
+Connection start port on local machine.
+.RS
+.RE
+.TP
+.B connect_time
+When the connection was made.
+.RS
+.RE
+.TP
+.B request_time
+When last request was issued.
+.RS
+.RE
+.TP
+.B wait
+Current waiting time in seconds.
+.RS
+.RE
+.TP
+.B wait_us
+Microsecond part of the current waiting time.
+.RS
+.RE
+.TP
+.B close_needed
+1 if the connection will be closed as soon as possible, because a
+configuration file reload or DNS update changed the connection
+information or \f[B]RECONNECT\f[] was issued.
+.RS
+.RE
+.TP
+.B ptr
+Address of internal object for this connection.
+Used as unique ID.
+.RS
+.RE
+.TP
+.B link
+Address of client connection the server is paired with.
+.RS
+.RE
+.TP
+.B remote_pid
+PID of backend server process.
+In case connection is made over Unix socket and OS supports getting
+process ID info, its OS PID.
+Otherwise it\[aq]s extracted from cancel packet the server sent, which
+should be the PID in case the server is PostgreSQL, but it\[aq]s a
+random number in case the server it is another PgBouncer.
+.RS
+.RE
+.TP
+.B tls
+A string with TLS connection information, or empty if not using TLS.
+.RS
+.RE
+.SS SHOW CLIENTS
+.TP
+.B type
+C, for client.
+.RS
+.RE
+.TP
+.B user
+Client connected user.
+.RS
+.RE
+.TP
+.B database
+Database name.
+.RS
+.RE
+.TP
+.B state
+State of the client connection, one of \f[B]active\f[] or
+\f[B]waiting\f[].
+.RS
+.RE
+.TP
+.B addr
+IP address of client.
+.RS
+.RE
+.TP
+.B port
+Source port of client.
+.RS
+.RE
+.TP
+.B local_addr
+Connection end address on local machine.
+.RS
+.RE
+.TP
+.B local_port
+Connection end port on local machine.
+.RS
+.RE
+.TP
+.B connect_time
+Timestamp of connect time.
+.RS
+.RE
+.TP
+.B request_time
+Timestamp of latest client request.
+.RS
+.RE
+.TP
+.B wait
+Current waiting time in seconds.
+.RS
+.RE
+.TP
+.B wait_us
+Microsecond part of the current waiting time.
+.RS
+.RE
+.TP
+.B close_needed
+not used for clients
+.RS
+.RE
+.TP
+.B ptr
+Address of internal object for this connection.
+Used as unique ID.
+.RS
+.RE
+.TP
+.B link
+Address of server connection the client is paired with.
+.RS
+.RE
+.TP
+.B remote_pid
+Process ID, in case client connects over Unix socket and OS supports
+getting it.
+.RS
+.RE
+.TP
+.B tls
+A string with TLS connection information, or empty if not using TLS.
+.RS
+.RE
+.SS SHOW POOLS
+.PP
+A new pool entry is made for each couple of (database, user).
+.TP
+.B database
+Database name.
+.RS
+.RE
+.TP
+.B user
+User name.
+.RS
+.RE
+.TP
+.B cl_active
+Client connections that are linked to server connection and can process
+queries.
+.RS
+.RE
+.TP
+.B cl_waiting
+Client connections that have sent queries but have not yet got a server
+connection.
+.RS
+.RE
+.TP
+.B cl_cancel_req
+Client connections that have not forwarded query cancellations to the
+server yet.
+.RS
+.RE
+.TP
+.B sv_active
+Server connections that are linked to a client.
+.RS
+.RE
+.TP
+.B sv_idle
+Server connections that are unused and immediately usable for client
+queries.
+.RS
+.RE
+.TP
+.B sv_used
+Server connections that have been idle for more than
+\f[C]server_check_delay\f[], so they need \f[C]server_check_query\f[] to
+run on them before they can be used again.
+.RS
+.RE
+.TP
+.B sv_tested
+Server connections that are currently running either
+\f[C]server_reset_query\f[] or \f[C]server_check_query\f[].
+.RS
+.RE
+.TP
+.B sv_login
+Server connections currently in the process of logging in.
+.RS
+.RE
+.TP
+.B maxwait
+How long the first (oldest) client in the queue has waited, in seconds.
+If this starts increasing, then the current pool of servers does not
+handle requests quickly enough.
+The reason may be either an overloaded server or just too small of a
+\f[B]pool_size\f[] setting.
+.RS
+.RE
+.TP
+.B maxwait_us
+Microsecond part of the maximum waiting time.
+.RS
+.RE
+.TP
+.B pool_mode
+The pooling mode in use.
+.RS
+.RE
+.SS SHOW LISTS
+.PP
+Show following internal information, in columns (not rows):
+.TP
+.B databases
+Count of databases.
+.RS
+.RE
+.TP
+.B users
+Count of users.
+.RS
+.RE
+.TP
+.B pools
+Count of pools.
+.RS
+.RE
+.TP
+.B free_clients
+Count of free clients.
+.RS
+.RE
+.TP
+.B used_clients
+Count of used clients.
+.RS
+.RE
+.TP
+.B login_clients
+Count of clients in \f[B]login\f[] state.
+.RS
+.RE
+.TP
+.B free_servers
+Count of free servers.
+.RS
+.RE
+.TP
+.B used_servers
+Count of used servers.
+.RS
+.RE
+.TP
+.B dns_names
+Count of DNS names in the cache.
+.RS
+.RE
+.TP
+.B dns_zones
+Count of DNS zones in the cache.
+.RS
+.RE
+.TP
+.B dns_queries
+Count of in\-flight DNS queries.
+.RS
+.RE
+.TP
+.B dns_pending
+not used
+.RS
+.RE
+.SS SHOW USERS
+.TP
+.B name
+The user name
+.RS
+.RE
+.TP
+.B pool_mode
+The user\[aq]s override pool_mode, or NULL if the default will be used
+instead.
+.RS
+.RE
+.SS SHOW DATABASES
+.TP
+.B name
+Name of configured database entry.
+.RS
+.RE
+.TP
+.B host
+Host pgbouncer connects to.
+.RS
+.RE
+.TP
+.B port
+Port pgbouncer connects to.
+.RS
+.RE
+.TP
+.B database
+Actual database name pgbouncer connects to.
+.RS
+.RE
+.TP
+.B force_user
+When the user is part of the connection string, the connection between
+pgbouncer and PostgreSQL is forced to the given user, whatever the
+client user.
+.RS
+.RE
+.TP
+.B pool_size
+Maximum number of server connections.
+.RS
+.RE
+.TP
+.B min_pool_size
+Minimum number of server connections.
+.RS
+.RE
+.TP
+.B reserve_pool
+Maximum number of additional connections for this database.
+.RS
+.RE
+.TP
+.B pool_mode
+The database\[aq]s override pool_mode, or NULL if the default will be
+used instead.
+.RS
+.RE
+.TP
+.B max_connections
+Maximum number of allowed connections for this database, as set by
+\f[B]max_db_connections\f[], either globally or per database.
+.RS
+.RE
+.TP
+.B current_connections
+Current number of connections for this database.
+.RS
+.RE
+.TP
+.B paused
+1 if this database is currently paused, else 0.
+.RS
+.RE
+.TP
+.B disabled
+1 if this database is currently disabled, else 0.
+.RS
+.RE
+.SS SHOW FDS
+.PP
+Internal command \- shows list of file descriptors in use with internal
+state attached to them.
+.PP
+When the connected user has the user name "pgbouncer", connects through
+the Unix socket and has same the UID as the running process, the actual
+FDs are passed over the connection.
+This mechanism is used to do an online restart.
+Note: This does not work on Windows.
+.PP
+This command also blocks the internal event loop, so it should not be
+used while PgBouncer is in use.
+.TP
+.B fd
+File descriptor numeric value.
+.RS
+.RE
+.TP
+.B task
+One of \f[B]pooler\f[], \f[B]client\f[] or \f[B]server\f[].
+.RS
+.RE
+.TP
+.B user
+User of the connection using the FD.
+.RS
+.RE
+.TP
+.B database
+Database of the connection using the FD.
+.RS
+.RE
+.TP
+.B addr
+IP address of the connection using the FD, \f[B]unix\f[] if a Unix
+socket is used.
+.RS
+.RE
+.TP
+.B port
+Port used by the connection using the FD.
+.RS
+.RE
+.TP
+.B cancel
+Cancel key for this connection.
+.RS
+.RE
+.TP
+.B link
+fd for corresponding server/client.
+NULL if idle.
+.RS
+.RE
+.SS SHOW SOCKETS, SHOW ACTIVE_SOCKETS
+.PP
+Shows low\-level information about sockets or only active sockets.
+This includes the information shown under \f[B]SHOW CLIENTS\f[] and
+\f[B]SHOW SERVERS\f[] as well as other more low\-level information.
+.SS SHOW CONFIG
+.PP
+Show the current configuration settings, one per row, with the following
+columns:
+.TP
+.B key
+Configuration variable name
+.RS
+.RE
+.TP
+.B value
+Configuration value
+.RS
+.RE
+.TP
+.B default
+Configuration default value
+.RS
+.RE
+.TP
+.B changeable
+Either \f[B]yes\f[] or \f[B]no\f[], shows if the variable can be changed
+while running.
+If \f[B]no\f[], the variable can be changed only at boot time.
+Use \f[B]SET\f[] to change a variable at run time.
+.RS
+.RE
+.SS SHOW MEM
+.PP
+Shows low\-level information about the current sizes of various internal
+memory allocations.
+The information presented is subject to change.
+.SS SHOW DNS_HOSTS
+.PP
+Show host names in DNS cache.
+.TP
+.B hostname
+Host name.
+.RS
+.RE
+.TP
+.B ttl
+How many seconds until next lookup.
+.RS
+.RE
+.TP
+.B addrs
+Comma separated list of addresses.
+.RS
+.RE
+.SS SHOW DNS_ZONES
+.PP
+Show DNS zones in cache.
+.TP
+.B zonename
+Zone name.
+.RS
+.RE
+.TP
+.B serial
+Current serial.
+.RS
+.RE
+.TP
+.B count
+Host names belonging to this zone.
+.RS
+.RE
+.SS SHOW VERSION
+.PP
+Show the PgBouncer version string.
+.SS Process controlling commands
+.SS PAUSE [db]
+.PP
+PgBouncer tries to disconnect from all servers, first waiting for all
+queries to complete.
+The command will not return before all queries are finished.
+To be used at the time of database restart.
+.PP
+If database name is given, only that database will be paused.
+.PP
+New client connections to a paused database will wait until
+\f[B]RESUME\f[] is called.
+.SS DISABLE db
+.PP
+Reject all new client connections on the given database.
+.SS ENABLE db
+.PP
+Allow new client connections after a previous \f[B]DISABLE\f[] command.
+.SS RECONNECT [db]
+.PP
+Close each open server connection for the given database, or all
+databases, after it is released (according to the pooling mode), even if
+its lifetime is not up yet.
+New server connections can be made immediately and will connect as
+necessary according to the pool size settings.
+.PP
+This command is useful when the server connection setup has changed, for
+example to perform a gradual switchover to a new server.
+It is \f[I]not\f[] necessary to run this command when the connection
+string in pgbouncer.ini has been changed and reloaded (see
+\f[B]RELOAD\f[]) or when DNS resolution has changed, because then the
+equivalent of this command will be run automatically.
+This command is only necessary if something downstream of PgBouncer
+routes the connections.
+.PP
+After this command is run, there could be an extended period where some
+server connections go to an old destination and some server connections
+go to a new destination.
+This is likely only sensible when switching read\-only traffic between
+read\-only replicas, or when switching between nodes of a multimaster
+replication setup.
+If all connections need to be switched at the same time, \f[B]PAUSE\f[]
+is recommended instead.
+To close server connections without waiting (for example, in emergency
+failover rather than gradual switchover scenarios), also consider
+\f[B]KILL\f[].
+.SS KILL db
+.PP
+Immediately drop all client and server connections on given database.
+.PP
+New client connections to a killed database will wait until
+\f[B]RESUME\f[] is called.
+.SS SUSPEND
+.PP
+All socket buffers are flushed and PgBouncer stops listening for data on
+them.
+The command will not return before all buffers are empty.
+To be used at the time of PgBouncer online reboot.
+.PP
+New client connections to a suspended database will wait until
+\f[B]RESUME\f[] is called.
+.SS RESUME [db]
+.PP
+Resume work from previous \f[B]KILL\f[], \f[B]PAUSE\f[], or
+\f[B]SUSPEND\f[] command.
+.SS SHUTDOWN
+.PP
+The PgBouncer process will exit.
+.SS RELOAD
+.PP
+The PgBouncer process will reload its configuration file and update
+changeable settings.
+.PP
+PgBouncer notices when a configuration file reload changes the
+connection parameters of a database definition.
+An existing server connection to the old destination will be closed when
+the server connection is next released (according to the pooling mode),
+and new server connections will immediately use the updated connection
+parameters.
+.SS WAIT_CLOSE [db]
+.PP
+Wait until all server connections, either of the specified database or
+of all databases, have cleared the "close_needed" state (see \f[B]SHOW
+SERVERS\f[]).
+This can be called after a \f[B]RECONNECT\f[] or \f[B]RELOAD\f[] to wait
+until the respective configuration change has been fully activated, for
+example in switchover scripts.
+.SS Other commands
+.SS SET key = arg
+.PP
+Changes a configuration setting (see also \f[B]SHOW CONFIG\f[]).
+For example:
+.IP
+.nf
+\f[C]
+SET\ log_connections\ =\ 1;
+SET\ server_check_query\ =\ \[aq]select\ 2\[aq];
+\f[]
+.fi
+.PP
+(Note that this command is run on the PgBouncer admin console and sets
+PgBouncer settings.
+A \f[B]SET\f[] command run on another database will be passed to the
+PostgreSQL backend like any other SQL command.)
+.SS Signals
+.TP
+.B SIGHUP
+Reload config.
+Same as issuing the command \f[B]RELOAD\f[] on the console.
+.RS
+.RE
+.TP
+.B SIGINT
+Safe shutdown.
+Same as issuing \f[B]PAUSE\f[] and \f[B]SHUTDOWN\f[] on the console.
+.RS
+.RE
+.TP
+.B SIGTERM
+Immediate shutdown.
+Same as issuing \f[B]SHUTDOWN\f[] on the console.
+.RS
+.RE
+.TP
+.B SIGUSR1
+Same as issuing \f[B]PAUSE\f[] on the console.
+.RS
+.RE
+.TP
+.B SIGUSR2
+Same as issuing \f[B]RESUME\f[] on the console.
+.RS
+.RE
+.SS Libevent settings
+.PP
+From the Libevent documentation:
+.RS
+.PP
+It is possible to disable support for epoll, kqueue, devpoll, poll or
+select by setting the environment variable EVENT_NOEPOLL,
+EVENT_NOKQUEUE, EVENT_NODEVPOLL, EVENT_NOPOLL or EVENT_NOSELECT,
+respectively.
+.PP
+By setting the environment variable EVENT_SHOW_METHOD, libevent displays
+the kernel notification method that it uses.
+.RE
+.SH SEE ALSO
+.PP
+pgbouncer(5) \- man page of configuration settings descriptions
+.PP
+<https://www.pgbouncer.org/>
