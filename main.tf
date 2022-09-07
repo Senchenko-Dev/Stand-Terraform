@@ -131,7 +131,7 @@ module "KAFKA_standalone1" {
 
 # PG
 module "PGSE_standalone1" {
-  count = 0
+//  count = 0
   source = "./modules/spo_pangolin"
   # VM properties
   vm_props = local.vm_props_default
@@ -139,7 +139,7 @@ module "PGSE_standalone1" {
   cpu = 2
   memory = 4*1024
   vm_pg_disk_data = [
-        { size : "20G", mnt_dir : "/pgdata" },
+//        { size : "20G", mnt_dir : "/pgdata" },
   ]
   # Ansible properties
   inventory_group_name = "Pangolin_alone-1"
