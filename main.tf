@@ -110,16 +110,16 @@ module "NginxG1" {
 }
 
 # KAFKA
-module "KAFKA_standalone1" {
-   count = 0
+module "KAFKA1" {
+//   count = 0
    source = "./modules/spo_kafka_se"
    # VM properties
    cpu = 2
-   memory = 1024
+   memory = 1024*3
    vm_count = 1
    vm_props = local.vm_props_default
    vm_disk_data = [
-     { size: "50G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
+//     { size: "50G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
    ]
    # Ansible properties
    inventory_group_name = "Kafka1"
