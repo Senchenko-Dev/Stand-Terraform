@@ -90,7 +90,7 @@ locals {
 
 # NGINX
 module "NginxG1" {
-  count = 0
+//  count = 0
   source = "./modules/spo_nginx"
 # VM properties
   cpu = 1
@@ -98,8 +98,8 @@ module "NginxG1" {
   vm_count = 1
   vm_props = local.vm_props_default
   vm_disk_data = [
-   { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
-   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
+//   { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
+//   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
   ]
 
 # Ansible properties
