@@ -1,4 +1,0 @@
-nexusUser: "{{ secrets.nexus.user }}"
-nexusPass: "{{ secrets.nexus.pass }}"
-nexususer: "{{ secrets.nexus.user }}"
-nexuspass: "{{ secrets.nexus.pass }}"
