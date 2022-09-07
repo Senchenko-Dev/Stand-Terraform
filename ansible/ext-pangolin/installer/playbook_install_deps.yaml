@@ -1,4 +1,5 @@
-- hosts: master:replica:etcd
+- name: "PANGOLIN: install_deps"
+  hosts: master:replica:etcd
 
   become: yes
 # todo перенести в свою роль

@@ -1,6 +1,6 @@
 ### PANGOLIN ###
 is_recovery_test_mode: false
-#pgse_clean_all: true
+pgse_clean_all: true
 #custom_config: inventory/group_vars/Pangolin_alone-1/custom_config.yml
 
 #default_db
