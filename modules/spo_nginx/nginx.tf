@@ -81,7 +81,6 @@ resource "local_file" "nginx-inventory" {
   })
   filename = "ansible/inventory/nginx_${var.inventory_group_name}.ini"
 
-
   connection {
     user = "ansible"
     type = "ssh"
