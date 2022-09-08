@@ -57,6 +57,26 @@ locals {
     scm_url = var.scm_url
     scm_branch = var.scm_branch
   }
+  external_awx_props = {
+    awx_port = 30980
+    pod_nginx_port = 30900
+    awx_login = "admin"
+    awx_password = local.secrets.awx.admin
+    scm_cred_name = "${local.stand_name} SCM Credential"
+    scm_username = var.scm_username
+    scm_password = var.scm_password
+    machine_cred_name = "${local.stand_name} Machine Credential"
+    machine_cred_username = "ansible"
+    machine_cred_ssh_key_data = local.secrets.awx.machine_cred_ssh_key_data
+
+    stand_admin_username = "${local.stand_name}-admin"
+    stand_admin_password = local.secrets.awx.stand_admin_password
+
+    stand_admin_email = "{{ '' | default('email@default.com', true) }}"
+    org_name = local.stand_name
+    scm_url = var.scm_url
+    scm_branch = var.scm_branch
+  }
 }
 
 module "AWX" {
@@ -64,18 +84,19 @@ module "AWX" {
   # TF path to the module
   source = "./modules/awx"
   # VM settings
-  cpu = 6
-  memory = 12288
+  vm_count = 0
+//  cpu = 6
+//  memory = 12288
   # VM properties
   vm_props = local.vm_props_default
   # Ansible properties
   inventory_group_name = "awx-group" // для связи с group_vars/group_name.yml
-  awx_props = local.install_awx_props
+  awx_props = local.external_awx_props
   vault_file = local.vault_file
 }
 
 locals {
-  awx_props = { #  При использовании внешнего AWX прописать хост и урл в явном виде.
+  awx_props = merge(local.external_awx_props,{  #  При использовании внешнего AWX прописать хост и урл в явном виде.
     awx_host = "10.42.4.123"
     awx_url = "http://10.42.4.123:30980/#/organizations"
     awx_k8s_sa_name = local.globals.devopsSaName
