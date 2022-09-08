@@ -173,6 +173,5 @@ resource "null_resource" "awx-config-stand" {
     ansible_ssh_settings {
       insecure_no_strict_host_key_checking = true
     }
-  }
 }
 
