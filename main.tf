@@ -61,6 +61,8 @@ locals {
   external_awx_props = {
     awx_host = "10.42.4.123"
     awx_url = "http://10.42.4.123:30980/#/organizations"
+    pod_nginx_port = 30900
+
 
     awx_login = "admin"
     awx_password = local.secrets.awx.awx_password
