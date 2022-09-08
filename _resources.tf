@@ -166,7 +166,8 @@ module "diOpenshiftgroup1" {
 
 module "config_awx_k8s_templates" {
   depends_on = [module.AWX, module.diOpenshiftgroup1]
-  count = "${length(local.awx_props) != 0 ? 1 : 0}"
+  count = 0
+//  count = "${length(local.awx_props) != 0 ? 1 : 0}"
   meta = fileset(path.root, "ansible/project_vars/*.yml")
   source = "./modules/awx_config_k8s_templates"
   kubeconfig = local.oc_kubeconfig
