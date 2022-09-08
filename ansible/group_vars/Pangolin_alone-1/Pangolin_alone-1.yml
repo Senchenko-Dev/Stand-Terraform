@@ -1,14 +1,20 @@
 ### PANGOLIN ###
-
+is_recovery_test_mode: false
+pgse_clean_all: true
 #custom_config: inventory/group_vars/Pangolin_alone-1/custom_config.yml
 
 #default_db
-tablespace_name: "{{ 'uftm' | default('tbl_t', true) }}"
+tablespace_name: "{{ 'outerspace' | default('tbl_t', true) }}"
 tablespace_location: "{{ '' | default('/pgdata/' + pg_major_version + '/tablespaces', true) }}"
-db_name: "{{ 'dic_dc1' | default('first_db', true) }}"
-schema_name: "{{ 'uftm_dc1' | default('sch1', true) }}"
+db_name: "{{ 'db_iob' | default('first_db', true) }}"
+schema_name: "{{ '' | default('sch1', true) }}"
 sec_officer: "{{ '' | default('17644673', true) }}" #strictly 1 login
 support: "{{ ['sentsovaa'] | default([13289436, 13289437], true) }}" #list of logins
 as_admins: "{{ ['sentsovaa'] | default(['12345678'], true) }}" #list of logins
-as_TUZ: "{{ ['sa-r4c-devops-spo', 'uftm_dc1'] | default(['test_tuz', 'test_tuz_devops'], true) }}" #list of logins
+as_TUZ: "{{ ['sa-r4c-devops-spo', 'stac'] | default(['test_tuz', 'test_tuz_devops'], true) }}" #list of logins
 control_name: "{{ '' | default('RLM', true) }}"
+
+#PGDATA: "{{ '' | default('/pgdata/' + pg_major_version + '/data', true) }}"
+#PGLOGS: /pgerrorlogs/{{ ansible_hostname }}
+#PGUSERHOME: /home/postgres
+#PGHOME: /usr/pgsql-se-{{ pg_major_version }}

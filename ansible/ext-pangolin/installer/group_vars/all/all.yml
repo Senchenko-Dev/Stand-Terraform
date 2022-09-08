@@ -45,6 +45,7 @@ ROLES_EXPIRES_DATE: "Dec 31 2022"
 pg_certs:
   ssl_cert: "{{ PGSSL }}/client.crt"
   ssl_key: "{{ PGSSL }}/client.key"
+  ssl_ca: "{{ PGSSL }}/root.crt"
   ssl_conf: "{% if   ansible_os_family == 'RedHat'   %}/etc/pki/tls/openssl.cnf\
              {% elif ansible_os_family == 'Altlinux' %}/etc/openssl/openssl.cnf\
              {% endif %}"

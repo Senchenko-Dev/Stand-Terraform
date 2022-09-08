@@ -90,7 +90,7 @@ locals {
 
 # NGINX
 module "NginxG1" {
-  count = 0
+//  count = 0
   source = "./modules/spo_nginx"
 # VM properties
   cpu = 1
@@ -98,8 +98,8 @@ module "NginxG1" {
   vm_count = 1
   vm_props = local.vm_props_default
   vm_disk_data = [
-   { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
-   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
+//   { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
+//   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
   ]
 
 # Ansible properties
@@ -110,16 +110,16 @@ module "NginxG1" {
 }
 
 # KAFKA
-module "KAFKA_standalone1" {
-   count = 0
+module "KAFKA1" {
+//   count = 0
    source = "./modules/spo_kafka_se"
    # VM properties
    cpu = 2
-   memory = 1024
+   memory = 1024*3
    vm_count = 1
    vm_props = local.vm_props_default
    vm_disk_data = [
-     { size: "50G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
+//     { size: "50G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
    ]
    # Ansible properties
    inventory_group_name = "Kafka1"
@@ -131,7 +131,7 @@ module "KAFKA_standalone1" {
 
 # PG
 module "PGSE_standalone1" {
-  count = 0
+//  count = 0
   source = "./modules/spo_pangolin"
   # VM properties
   vm_props = local.vm_props_default
@@ -139,7 +139,7 @@ module "PGSE_standalone1" {
   cpu = 2
   memory = 4*1024
   vm_pg_disk_data = [
-        { size : "20G", mnt_dir : "/pgdata" },
+//        { size : "20G", mnt_dir : "/pgdata" },
   ]
   # Ansible properties
   inventory_group_name = "Pangolin_alone-1"
