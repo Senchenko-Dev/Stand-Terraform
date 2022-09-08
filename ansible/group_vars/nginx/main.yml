@@ -1,1 +1,2 @@
 yum_move_old_repos: true
+nginx_os_user_pwd: "{{ secrets.nginx.nginx_os_user_pwd }}"
