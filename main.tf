@@ -101,7 +101,7 @@ locals {
     awx_url = "http://10.42.4.123:30980/#/organizations"
     awx_k8s_sa_name = local.globals.devopsSaName
     awx_k8s_sa_project = local.globals.devopsProject
-  } # если awx не используется
+  }) # если awx не используется
 /*
   awx_props = merge(local.install_awx_props,
     { #  При использовании внешнего AWX прописать хост и урл в явном виде.
