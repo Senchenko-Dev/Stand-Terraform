@@ -75,7 +75,12 @@ module "AWX" {
 }
 
 locals {
-  awx_props = {} # если awx не используется
+  awx_props = { #  При использовании внешнего AWX прописать хост и урл в явном виде.
+    awx_host = "10.42.4.123"
+    awx_url = "http://10.42.4.123:30980/#/organizations"
+    awx_k8s_sa_name = local.globals.devopsSaName
+    awx_k8s_sa_project = local.globals.devopsProject
+  } # если awx не используется
 /*
   awx_props = merge(local.install_awx_props,
     { #  При использовании внешнего AWX прописать хост и урл в явном виде.
@@ -108,7 +113,20 @@ module "NginxG1" {
   awx_props = local.awx_props
   vault_file = local.vault_file
 }
+module "NG-2" {
+  source = "./modules/spo_nginx"
 
+  inventory_group_name = "ng2"
+  vault_file = local.vault_file
+  vm_count = 2
+  vm_disk_data = []
+  vm_props = local.vm_props_default
+
+  awx_props = local.awx_props
+  cpu = 1
+  memory = 1024
+
+}
 # KAFKA
 module "KAFKA1" {
 //   count = 0
