@@ -75,7 +75,7 @@ resource "vcd_vm" "VM-awx" {
 
 // создание инвентори для одной группы (модуля)
 resource "local_file" "awx-inventory" {
-
+  count = "${ var.vm_count != 0 ? 1 : 0 }"
   filename = "ansible/inventory/awx_${var.inventory_group_name}.ini"
   content  = templatefile("tf_templates/awx-inventory.tpl",
     {
@@ -136,6 +136,37 @@ resource "local_file" "awx-inventory" {
           awx_host : vcd_vm.VM-awx[0].network[0].ip
           awx_url : "http://${vcd_vm.VM-awx[0].network[0].ip}:${var.awx_props.awx_port}"
         }
+      )
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
+    }
+    ansible_ssh_settings {
+      insecure_no_strict_host_key_checking = true
+    }
+  }
+}
+
+// или только настройка стороннего AWX
+resource "null_resource" "awx-config-stand" {
+  count = "${ var.vm_count == 0 ? 1 : 0 }"
+  // параметры подключения для ансибла
+  connection {
+    user        = "ansible"
+    type        = "ssh"
+    private_key = var.vm_props.private_key
+    host        = ""
+  }
+    // Подготовка стенда
+    plays {
+      playbook {
+        file_path = "ansible/awx_config_all.yml"
+        tags      = ["stand"]
+      }
+      hosts      = ["localhost"]
+      extra_vars = merge({
+        vault_file : var.vault_file
+        spo_role_name : var.spo_role_name
+      },
+        var.awx_props
       )
       vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
