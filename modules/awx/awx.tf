@@ -156,22 +156,27 @@ resource "null_resource" "awx-config-stand" {
     host        = ""
   }
     // Подготовка стенда
+  provisioner "ansible" {
     plays {
       playbook {
         file_path = "ansible/awx_config_all.yml"
-        tags      = ["stand"]
+        tags = [
+          "stand"]
       }
-      hosts      = ["localhost"]
+      hosts = [
+        "localhost"]
       extra_vars = merge({
         vault_file : var.vault_file
         spo_role_name : var.spo_role_name
       },
-        var.awx_props
+      var.awx_props
       )
-      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
+      vault_id = [
+        "${abspath(path.root)}/ansible/login.sh"]
     }
     ansible_ssh_settings {
       insecure_no_strict_host_key_checking = true
     }
+  }
 }
 
