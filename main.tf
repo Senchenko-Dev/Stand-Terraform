@@ -57,9 +57,11 @@ locals {
     scm_url = var.scm_url
     scm_branch = var.scm_branch
   }
+
   external_awx_props = {
-    awx_port = 30980
-    pod_nginx_port = 30900
+    awx_host = "10.42.4.123"
+    awx_url = "http://10.42.4.123:30980/#/organizations"
+
     awx_login = "admin"
     awx_password = local.secrets.awx.awx_password
     scm_cred_name = "${local.stand_name} SCM Credential"
@@ -80,7 +82,7 @@ locals {
 }
 
 module "AWX" {
-  count = 0
+//  count = 0
   # TF path to the module
   source = "./modules/awx"
   # VM settings
@@ -96,12 +98,7 @@ module "AWX" {
 }
 
 locals {
-  awx_props = merge(local.external_awx_props,{  #  При использовании внешнего AWX прописать хост и урл в явном виде.
-    awx_host = "10.42.4.123"
-    awx_url = "http://10.42.4.123:30980/#/organizations"
-    awx_k8s_sa_name = local.globals.devopsSaName
-    awx_k8s_sa_project = local.globals.devopsProject
-  }) # если awx не используется
+  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
 /*
   awx_props = merge(local.install_awx_props,
     { #  При использовании внешнего AWX прописать хост и урл в явном виде.

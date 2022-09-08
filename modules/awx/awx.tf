@@ -75,7 +75,7 @@ resource "vcd_vm" "VM-awx" {
 
 // создание инвентори для одной группы (модуля)
 resource "local_file" "awx-inventory" {
-
+  count = "${ var.vm_count != 0 ? 1 : 0 }"
   filename = "ansible/inventory/awx_${var.inventory_group_name}.ini"
   content  = templatefile("tf_templates/awx-inventory.tpl",
     {
@@ -99,7 +99,7 @@ resource "local_file" "awx-inventory" {
       playbook {
         file_path = "ansible/prepare_host_playbook.yml"
       }
-      inventory_file = local_file.awx-inventory.filename
+      inventory_file = local_file.awx-inventory[0].filename
       extra_vars     = {
         ssh_keys_list : jsonencode(var.vm_props.ssh_keys_list)
         disks = jsonencode(var.vm_disk_data)
@@ -110,7 +110,7 @@ resource "local_file" "awx-inventory" {
       playbook {
         file_path = "ansible/spo_install_playbook.yml"
       }
-      inventory_file = local_file.awx-inventory.filename
+      inventory_file = local_file.awx-inventory[0].filename
       extra_vars     = {
         spo_role_name : var.spo_role_name
         vault_file : var.vault_file
@@ -138,6 +138,41 @@ resource "local_file" "awx-inventory" {
         }
       )
       vault_id = ["${abspath(path.root)}/ansible/login.sh"]
+    }
+    ansible_ssh_settings {
+      insecure_no_strict_host_key_checking = true
+    }
+  }
+}
+
+// или только настройка стороннего AWX
+resource "null_resource" "awx-config-stand" {
+  count = "${ var.vm_count == 0 ? 1 : 0 }"
+  // параметры подключения для ансибла
+  connection {
+    user        = "ansible"
+    type        = "ssh"
+    private_key = var.vm_props.private_key
+    host        = ""
+  }
+    // Подготовка стенда
+  provisioner "ansible" {
+    plays {
+      playbook {
+        file_path = "ansible/awx_config_all.yml"
+        tags = [
+          "stand"]
+      }
+      hosts = [
+        "localhost"]
+      extra_vars = merge({
+        vault_file : var.vault_file
+        spo_role_name : var.spo_role_name
+      },
+      var.awx_props
+      )
+      vault_id = [
+        "${abspath(path.root)}/ansible/login.sh"]
     }
     ansible_ssh_settings {
       insecure_no_strict_host_key_checking = true
