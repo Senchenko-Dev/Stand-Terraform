@@ -41,7 +41,7 @@ locals {
     awx_port = 30800
     pod_nginx_port = 30900
     awx_login = "admin"
-    awx_password = local.secrets.awx.admin
+    awx_password = local.secrets.awx.awx_password
     scm_cred_name = "${local.stand_name} SCM Credential"
     scm_username = var.scm_username
     scm_password = var.scm_password
@@ -61,7 +61,7 @@ locals {
     awx_port = 30980
     pod_nginx_port = 30900
     awx_login = "admin"
-    awx_password = local.secrets.awx.admin
+    awx_password = local.secrets.awx.awx_password
     scm_cred_name = "${local.stand_name} SCM Credential"
     scm_username = var.scm_username
     scm_password = var.scm_password
