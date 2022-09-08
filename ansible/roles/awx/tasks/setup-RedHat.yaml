@@ -372,10 +372,10 @@
   delay: 10
 
 - name: Create Admin Password
-  shell: "kubectl exec -i deploy/awx -c awx-web -- awx-manage update_password --username admin --password {{ secrets.awx.admin }}"
+  shell: "kubectl exec -i deploy/awx -c awx-web -- awx-manage update_password --username admin --password {{ awx_password }}"
 
 - debug:
-    msg: "Логин: admin   Пароль: {{ secrets.awx.admin }}"
+    msg: "Логин: admin   Пароль: {{ awx_password }}"
 
 - debug:
     msg: "AWX Web UI на сокете http://{{ip}}:{{awx_port}} "
