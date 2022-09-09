@@ -133,20 +133,6 @@ module "NginxG1" {
   awx_props = local.awx_props
   vault_file = local.vault_file
 }
-module "NG-2" {
-  source = "./modules/spo_nginx"
-
-  inventory_group_name = "ng2"
-  vault_file = local.vault_file
-  vm_count = 2
-  vm_disk_data = []
-  vm_props = local.vm_props_default
-
-  awx_props = local.awx_props
-  cpu = 1
-  memory = 1024
-
-}
 # KAFKA
 module "KAFKA1" {
 //   count = 0
