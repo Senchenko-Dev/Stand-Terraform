@@ -256,7 +256,7 @@ resource "local_file" "pangolin-inventory" {
         installation_type = var.installation_type
         tag = var.installation_subtype
         pangolin_version = var.pangolin_url
-        custom_config = "${abspath(path.root)}/ansible/additional/pg_custom_config.yml" # group_vars/custom_dev.yml
+        custom_config = "${abspath(path.root)}/ansible/additional/pg_custom_config.yml"  # group_vars/custom_dev.yml # todo мне думается, лучше задавать в group_vars и сам файл располагать там же.
         manual_run = "yes"
         local_distr_path = "../"
 //        local_distr_path = "${abspath(path.root)}/ext-pangolin/" todo check

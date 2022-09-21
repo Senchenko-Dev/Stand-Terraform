@@ -1,4 +1,6 @@
-variable "vm_props" {}
+variable "vm_props" {
+  description = "Набор параметров образа виртуальной машины. vm_props = local.vm_props_default"
+}
 variable "vm_pg_disk_data" {
   default = []
 }
@@ -44,7 +46,7 @@ variable "nexus_cred" {
 }
 
 variable "inventory_group_name" {
-  description = "inventory_group_name"
+  description = "Имя группы в инвентаре Ansible"
   type = string
 }
 
@@ -71,4 +73,6 @@ variable "pangolin_url" {
   default = ""
 } 
 
-variable "vault_file" {}
+variable "vault_file" {
+  description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
+}

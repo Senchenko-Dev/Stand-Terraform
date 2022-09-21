@@ -3,9 +3,10 @@ variable "vm_count" {
   description = "Количество идентичных машин в кластере"
 }
 variable "vm_props" {
-  description = "vm_props = local.vm_props_default"
+  description = "Набор параметров образа виртуальной машины. vm_props = local.vm_props_default"
 }
 variable "vm_disk_data" {
+  description = "Список монтируемых дисков."
   default = []
 }
 
@@ -49,4 +50,6 @@ variable "kafka_url" {
   default = ""
 }
 
-variable "vault_file" {}
+variable "vault_file" {
+  description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
+}

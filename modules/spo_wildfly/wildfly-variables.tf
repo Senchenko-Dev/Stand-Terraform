@@ -17,7 +17,7 @@ variable "ip_allocation_mode" {
 }
 
 variable "inventory_group_name" {
-  description = "inventory_group_name"
+  description = "Имя группы в инвентаре Ansible"
   type = string
 }
 
@@ -25,7 +25,8 @@ variable "vm_wildfly_list" {
   type = list(string)
 }
 
-variable "vm_disk_data" {}
+variable "vm_disk_data" {
+  description = "Список монтируемых дисков."}
 
 variable "catalog_name" {
   description = "VM OS catalog name"

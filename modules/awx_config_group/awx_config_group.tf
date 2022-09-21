@@ -1,11 +1,18 @@
 variable "inventory_path" {}
-variable "inventory_group_name" {}
-variable "awx_props" {}
-variable "spo_role_name" {}
+variable "inventory_group_name" {
+  description = "Имя группы в инвентаре Ansible"
+}
+variable "awx_props" {
+  description = "Набор параметров для настройки AWX"
+}
+variable "spo_role_name" {
+  description = "Переменная для использования альтернативной роли (например, для тестирования обновленной версии.)"}
 variable "awx_tags" {
   default = ""
 }
-variable "vault_file" {}
+variable "vault_file" {
+  description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
+}
 variable "hosts" {}
 
 resource "null_resource" "awx-setup-group" {
