@@ -1,8 +1,12 @@
 variable "kubeconfig" {}
 
 variable "meta" {}
-variable "awx_props" {}
-variable "vault_file" {}
+variable "awx_props" {
+  description = "Набор параметров для настройки AWX"
+}
+variable "vault_file" {
+  description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
+}
 
 resource "null_resource" "awx-k8s-templates-config" {
   //triggers = {

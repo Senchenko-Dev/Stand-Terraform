@@ -133,17 +133,6 @@ module "NginxG1" {
   awx_props = local.awx_props
   vault_file = local.vault_file
 }
-module "NG2" {
-  source = "./modules/spo_nginx"
-
-  inventory_group_name = "NG2"
-  vault_file = local.vault_file
-  vm_count = 2
-  vm_disk_data = []
-  vm_props = local.vm_props_default
-  awx_props = local.awx_props
-
-}
 # KAFKA
 module "KAFKA1" {
 //   count = 0
@@ -179,6 +168,7 @@ module "PGSE_standalone1" {
   # Ansible properties
   inventory_group_name = "Pangolin_alone-1"
   vault_file = local.vault_file
+  force_ansible_run = "pguser"
 
   # Download
   pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"

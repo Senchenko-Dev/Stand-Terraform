@@ -23,6 +23,7 @@ resource "vcd_independent_disk" "disks" {
   bus_type        = "SCSI"
   bus_sub_type = "VirtualSCSI"
   size_in_mb      = trim(each.value.size, "G") * 1024
+
 }
 
 
