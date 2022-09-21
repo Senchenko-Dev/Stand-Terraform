@@ -168,7 +168,7 @@ module "PGSE_standalone1" {
   # Ansible properties
   inventory_group_name = "Pangolin_alone-1"
   vault_file = local.vault_file
-  force_ansible_run = "pguser"
+  force_ansible_run = "master"
 
   # Download
   pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"
