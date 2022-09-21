@@ -174,9 +174,6 @@ resource "local_file" "pangolin-inventory" {
     pangolin_version: var.pangolin_url
     pangolin_url: var.pangolin_url
 
-    //  nexus
-    //nexususer = var.nexus_cred.nexususer
-    //nexuspass = var.nexus_cred.nexuspass
   })
 
 
@@ -267,6 +264,14 @@ resource "local_file" "pangolin-inventory" {
       verbose = true
       vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
+    plays {
+      playbook {
+        file_path = "ansible/copy_bash_file.yaml"
+      }
+      inventory_file = local_file.pangolin-inventory.filename
+      limit = "master"
+    }
+
     ansible_ssh_settings {
       insecure_no_strict_host_key_checking = true
     }
