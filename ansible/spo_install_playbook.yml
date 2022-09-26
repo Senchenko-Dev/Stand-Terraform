@@ -10,7 +10,6 @@
       include_vars: "{{ vault_file }}"
       when: vault_file is defined
       tags: always
-      delegate_to: localhost
     #      no_log: yes todo !!!!!!
 
     - name: Collect facts
