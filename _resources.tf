@@ -131,10 +131,10 @@ locals {
       vars = {
         sector = "ses"
         values = {
-          sm       = {
+//          sm       = {
 //            cpNamespace = local.globals.stashedControlPlaneNamespace
 //            cpName      = local.globals.controlPlaneName
-          }
+//          }
           bindings = [
             {
               roleType = "ClusterRole"
