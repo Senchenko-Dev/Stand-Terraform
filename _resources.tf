@@ -14,7 +14,6 @@ locals {
     dc = "sbmg"
     stand = local.stand_name
     solution = "FRONTEND-STD"
-  //  stashedControlPlaneNamespace = "control-panel-efs-cdjestnd"
     stashedControlPlaneNamespace = "${local.projectPrefix}-${local.controlPanelName}"
     controlPlaneName = "basic-install"
     values = {
@@ -133,8 +132,8 @@ locals {
         sector = "ses"
         values = {
           sm       = {
-            cpNamespace = local.globals.stashedControlPlaneNamespace
-            cpName      = local.globals.controlPlaneName
+//            cpNamespace = local.globals.stashedControlPlaneNamespace
+//            cpName      = local.globals.controlPlaneName
           }
           bindings = [
             {
