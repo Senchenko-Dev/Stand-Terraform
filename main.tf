@@ -155,7 +155,7 @@ module "KAFKA1" {
 
 # PG
 module "PGSE_standalone01" {
-//  count = 0
+  count = 0
   source = "./modules/spo_pangolin"
   # VM properties
   vm_props = local.vm_props_default
