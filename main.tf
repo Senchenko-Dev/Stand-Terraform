@@ -1,4 +1,4 @@
-#01
+#0123
 locals {
 #12s
   stand_name = "sents2"
@@ -115,7 +115,7 @@ locals {
 
 # NGINX
 module "NginxG1" {
-//  count = 0
+  count = 0
   source = "./modules/spo_nginx"
 # VM properties
   cpu = 1
@@ -135,7 +135,7 @@ module "NginxG1" {
 }
 # KAFKA
 module "KAFKA1" {
-//   count = 0
+   count = 0
    source = "./modules/spo_kafka_se"
    # VM properties
    cpu = 2
@@ -154,7 +154,7 @@ module "KAFKA1" {
  }
 
 # PG
-module "PGSE_standalone1" {
+module "PGSE_standalone01" {
 //  count = 0
   source = "./modules/spo_pangolin"
   # VM properties
@@ -175,5 +175,5 @@ module "PGSE_standalone1" {
 
   # Install
   installation_type = "standalone"
-  installation_subtype = "standalone-postgresql-only"
+  installation_subtype = "standalone-patroni-etcd-pgbouncer"
  }
