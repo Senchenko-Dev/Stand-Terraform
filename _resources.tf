@@ -109,8 +109,8 @@ locals {
           fpi_name = "dyncontent"
           values   = {
             quota    = {
-              cpu = 8
-              mem = 16
+              cpu = 2
+              mem = 4
             }
             labels     = {
               id_fp = "UFTM",
@@ -153,8 +153,8 @@ locals {
 module "diOpenshiftgroup1" {
   source = "./modules/ansible_group_project_init"
   depends_on = [module.diOpenshiftServiceCore]
-  count = 0
-//  for_each = local.group1
+//  count = 0
+  for_each = local.group1
   managment_system_type = var.managment_system_type
 #  awx_props = local.awx_props
   kubeconfig = local.oc_kubeconfig
