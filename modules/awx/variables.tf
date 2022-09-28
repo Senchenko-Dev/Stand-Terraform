@@ -48,7 +48,7 @@ locals {
 //}
 
 variable "awx_props" {
-  description = "Набор параметров для настройки AWX"
+  description = "Набор параметров для настройки AWX. Для новой установки задайте local.install_awx_props. Для внешнего AWX задайте local.external_awx_props"
 }
 
 variable "vault_file" {
