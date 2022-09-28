@@ -1,7 +1,7 @@
 #0123
 locals {
 #12s
-  stand_name = "sents2"
+  stand_name = "demo-sents"
   network_name = "main_VDC02"
   vault_file = "secrets.yml"
   # Для setup_vm. Публичные ключи для входа на хосты.
@@ -88,20 +88,20 @@ module "AWX" {
   # TF path to the module
   source = "./modules/awx"
   # VM settings
-  vm_count = 0
+  vm_count = 1
 //  cpu = 6
 //  memory = 12288
   # VM properties
   vm_props = local.vm_props_default
   # Ansible properties
   inventory_group_name = "awx-group" // для связи с group_vars/group_name.yml
-  awx_props = local.external_awx_props
+  awx_props = local.install_awx_props
   vault_file = local.vault_file
 }
 
 locals {
-  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
-/*
+//  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
+///*
   awx_props = merge(local.install_awx_props,
     { #  При использовании внешнего AWX прописать хост и урл в явном виде.
       awx_host = module.AWX.awx_host_ip
@@ -110,7 +110,7 @@ locals {
       awx_k8s_sa_project = local.globals.devopsProject
     }
   )
-*/
+//*/
 }
 
 # NGINX
