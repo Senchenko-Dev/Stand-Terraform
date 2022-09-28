@@ -47,6 +47,7 @@ locals {
           saProject = local.devopsProject
         }
       ]
+      # ярлыки labels
       labels = {
         id_fp = "globaltag"
       }
