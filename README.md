@@ -16,6 +16,7 @@ git push origin --tags
 ```
 # 4. Настроить WebHooks
 ```
+Repository settings -> Webhoosk -> Create webhooks
 Выбрать в настройках Git:
 а) Opened
 b) Source branch update
