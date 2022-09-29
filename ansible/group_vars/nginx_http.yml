@@ -10,7 +10,7 @@ nginx_log_dir: /var/log/nginx
 nginx_user: nginx
 #nginx_user_pwd: "nginx"
 nginx_group: nginx
-nginx_http_port: 8083
+nginx_http_port: 80
 #nginx_https_port: 8443
 
 nginx_os_user_pwd: "{{ secrets.nginx.nginx_os_user_pwd }}"
