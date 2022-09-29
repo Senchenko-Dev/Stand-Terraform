@@ -10,7 +10,7 @@ git clone https://dzo.sw.sbc.space/bitbucket-ci/scm/insteip/terra_project_prepar
 ```
 mv старое_имя  новое_имя
 cd новое_имя
-git remote set-url origin адрес_своего_проекта
+git remote set-url origin http://ссылка_на_созданный_репозитрой
 git push -u origin --all
 git push origin --tags
 ```
