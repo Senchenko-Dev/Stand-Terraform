@@ -17,7 +17,10 @@ git push origin --tags
 # 4. Настроить WebHooks
 ```
 Repository settings -> Webhoosk -> Create webhooks
-Выбрать в настройках Git:
+Name: pr-hoor
+Url: ссылка_на_ваш_Jenkis
+
+Выбрать в настройках Pull Request :
 а) Opened
 b) Source branch update
 c) Merge
