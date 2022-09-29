@@ -154,17 +154,16 @@ b) Git push
 ```
 Переходим в Web Ui Bitbucet:
 a) Создаем Pull Request
-б) выбираем нешу созданную ветку в
-   разделе Source и выбираем в разделе
-   Destination ветку в котрую надо влить 
-   изменения, в ветку Master
+б) выбираем нешу созданную ветку в разделе Source 
+   и выбираем в разделе Destination ветку в котрую 
+   надо влить изменения, в ветку Master.
 ```
 
 # 10 Merge
 ```
 После нажатия кнопки continue и create.
 срабатывает webhook и запускается job c
-нашим commit'ом
+нашим commit'ом.
 ```
 
 # 11 Plan
@@ -173,7 +172,7 @@ a) Создаем Pull Request
   в Bitbucket мы видим Terrafrom plan
   он показывает каие ресурсы будут создаваться.
 
-б) Жмем кнопку Merge
+б) Жмем кнопку Merge.
 ```
 
 # 12 Console Jenkins
