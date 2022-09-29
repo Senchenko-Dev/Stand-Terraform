@@ -18,7 +18,7 @@ git push origin --tags
 ```
 Repository settings -> Webhoosk -> Create webhooks
 Name: pr-hoor
-Url: ссылка_на_ваш_Jenkis
+Url: ссылка_на_ваш_Jenkins
 
 Выбрать в настройках Pull Request :
 а) Opened
