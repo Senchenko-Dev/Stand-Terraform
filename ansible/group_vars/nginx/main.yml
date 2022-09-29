@@ -1,2 +1,29 @@
 yum_move_old_repos: true
 nginx_os_user_pwd: "{{ secrets.nginx.nginx_os_user_pwd }}"
+
+# vars for tf
+#spo_role_name: nginx
+nginx_version: nginx-1.20.1
+#nginx_version: nginx-1.16.1
+
+
+# vars for ansible
+install_dir: /opt/nginx
+nginx_log_dir: /var/log/nginx
+nginx_user: nginx
+#nginx_user_pwd: "nginx"
+nginx_group: nginx
+nginx_http_port: 80
+#nginx_https_port: 8443
+
+nginx_conf_dir: "/etc/nginx"
+nginx_docroot: "{{ install_dir }}/html"
+
+service_state: started
+
+list_maps_custom_files:
+  - { src : "additional/sites_static/", dest : "{{ nginx_docroot }}/", mode : "0777", owner: "nginx", group: "nginx" }
+  - { src : "additional/sites_conf/", dest : "{{ install_dir }}/sites-available/", mode : "0777", owner: "nginx", group: "nginx" }
+
+list_maps_custom_templates:
+  - { src : "additional/nginx.conf.http", dest : "{{ nginx_conf_dir }}/nginx.conf", mode : "0777", owner: "{{ nginx_user }}", group: "{{ nginx_group }}" }
