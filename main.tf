@@ -115,7 +115,7 @@ locals {
 
 # NGINX
 module "NginxG1" {
-//  count = 0
+  count = 0
   source = "./modules/spo_nginx"
 # VM properties
   cpu = 1
@@ -129,25 +129,6 @@ module "NginxG1" {
 
 # Ansible properties
   inventory_group_name = "nginx_http" // для связи с group_vars/group_name.yml
-  awx_props = local.awx_props
-  vault_file = local.vault_file
-}
-
-module "NginxG2" {
-//  count = 0
-  source = "./modules/spo_nginx"
-# VM properties
-  cpu = 1
-  memory = 512
-  vm_count = 2
-  vm_props = local.vm_props_default
-  vm_disk_data = [
-   { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
-//   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
-  ]
-
-# Ansible properties
-  inventory_group_name = "nginx_2" // для связи с group_vars/group_name.yml
   awx_props = local.awx_props
   vault_file = local.vault_file
 }
