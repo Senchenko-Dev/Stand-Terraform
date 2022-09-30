@@ -77,7 +77,7 @@ locals {
         }
         cp = {
           name: local.globals.controlPlaneName
-          template: "cp-2.0.2.yml"
+          template: "cp-basic.yml"
         }
       }
     }
@@ -86,8 +86,8 @@ locals {
 
 module "diOpenshiftServiceCore"  {
   source = "./modules/ansible_project_init"
-  count = 0
-//  for_each = local.diOpenshiftServiceCore_projects
+//  count = 0
+  for_each = local.diOpenshiftServiceCore_projects
   managment_system_type = var.managment_system_type
   project_name = each.value.oseProjectName
   kubeconfig = local.oc_kubeconfig
@@ -132,10 +132,10 @@ locals {
       vars = {
         sector = "ses"
         values = {
-//          sm       = {
-//            cpNamespace = local.globals.stashedControlPlaneNamespace
-//            cpName      = local.globals.controlPlaneName
-//          }
+          sm       = {
+            cpNamespace = local.globals.stashedControlPlaneNamespace
+            cpName      = local.globals.controlPlaneName
+          }
           bindings = [
             {
               roleType = "ClusterRole"
