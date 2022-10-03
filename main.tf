@@ -3,7 +3,7 @@ locals {
 #12s
   stand_name = "demo-sents"
   network_name = "main_VDC02"
-  vault_file = "secrets.yml"
+  vault_file = "my_secrets.yml"
   # Для setup_vm. Публичные ключи для входа на хосты.
   ssh_keys_list = [
     { username: "user", ssh_key: local.secrets.ssh.user},
