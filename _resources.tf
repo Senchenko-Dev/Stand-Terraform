@@ -19,7 +19,7 @@ locals {
     values = {
       pullCreds = [
         {
-          oseImagePullRegistry = "https://api.stands-vdc03.solution.sbt:6443"
+          oseImagePullRegistry = "dzo.sw.sbc.space" #"https://api.stands-vdc03.solution.sbt:6443"
           oseImagePullUser = local.secrets.os.oseImagePullUserFromSecret
           oseImagePullPassword = local.secrets.os.oseImagePullPasswordFromSecret
           oseImagePullName = "dzo.sw.sbc.space"
