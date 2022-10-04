@@ -31,6 +31,12 @@ locals {
           roleType = "ClusterRole"
           roleName = "admin"
           userKind = "User"
+          userName = "sentsov.a.a"
+        },
+        {
+          roleType = "ClusterRole"
+          roleName = "admin"
+          userKind = "User"
           userName = "aigorebelyaev"
         },
         {
