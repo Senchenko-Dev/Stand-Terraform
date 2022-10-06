@@ -115,7 +115,6 @@ locals {
 
 # NGINX
 module "NginxG1" {
-  count = 0
   source = "./modules/spo_nginx"
 # VM properties
   cpu = 1
