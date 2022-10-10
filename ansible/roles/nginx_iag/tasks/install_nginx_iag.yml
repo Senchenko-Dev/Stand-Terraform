@@ -45,6 +45,12 @@
 
 #- debug:
 #    msg: "{{found.files.0.path}}"
+- yum:
+    name: "{{item}}"
+    state: present
+  loop:
+    - zipinfo
+    - unzip
 
 - name: unarchive
   unarchive:
