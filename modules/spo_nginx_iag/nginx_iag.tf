@@ -128,7 +128,7 @@ resource "local_file" "nginx_iag-inventory" {
       }
       inventory_file = local_file.nginx_iag-inventory.filename
       extra_vars = {
-        rolling_update_serial: "50%"
+        download_url: var.nginx_iag_url
         spo_role_name: var.spo_role_name
       }
     }
