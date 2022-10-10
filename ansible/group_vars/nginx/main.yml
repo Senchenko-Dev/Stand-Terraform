@@ -21,9 +21,9 @@ nginx_docroot: "{{ install_dir }}/html"
 
 service_state: started
 
-list_maps_custom_files:
-  - { src : "additional/sites_static/", dest : "{{ nginx_docroot }}/", mode : "0777", owner: "nginx", group: "nginx" }
-  - { src : "additional/sites_conf/", dest : "{{ install_dir }}/sites-available/", mode : "0777", owner: "nginx", group: "nginx" }
-
-list_maps_custom_templates:
-  - { src : "additional/nginx.conf.http", dest : "{{ nginx_conf_dir }}/nginx.conf", mode : "0777", owner: "{{ nginx_user }}", group: "{{ nginx_group }}" }
+#list_maps_custom_files:
+#  - { src : "additional/sites_static/", dest : "{{ nginx_docroot }}/", mode : "0777", owner: "nginx", group: "nginx" }
+#  - { src : "additional/sites_conf/", dest : "{{ install_dir }}/sites-available/", mode : "0777", owner: "nginx", group: "nginx" }
+#
+#list_maps_custom_templates:
+#  - { src : "additional/nginx.conf.http", dest : "{{ nginx_conf_dir }}/nginx.conf", mode : "0777", owner: "{{ nginx_user }}", group: "{{ nginx_group }}" }

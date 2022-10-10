@@ -132,6 +132,18 @@ module "NginxG1" {
   vault_file = local.vault_file
 }
 
+module "Nginx_iag" {
+  source = "./modules/spo_nginx_iag"
+
+  ## VM properties
+  vm_props = local.vm_props_default
+
+  # Ansible properties
+  nginx_iag_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI01536898_APIGATE/D-02.020.00-1390_iag_release_19_4_rhel7.x86_64/CI01536898_APIGATE-D-02.020.00-1390_iag_release_19_4_rhel7.x86_64-distrib.zip"
+  inventory_group_name = "nginx_iag" // для связи с group_vars/group_name.yml
+}
+
+
 /*
 # KAFKA
 module "KAFKA1" {

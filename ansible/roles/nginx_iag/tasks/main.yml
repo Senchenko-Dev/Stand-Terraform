@@ -1,0 +1,12 @@
+---
+- debug:
+    msg: "================ NGINX ================"
+  tags:
+    - always
+
+- name: import download_nginx_iag
+  import_tasks: install_nginx_iag.yaml
+  tags:
+    - install
+
+
