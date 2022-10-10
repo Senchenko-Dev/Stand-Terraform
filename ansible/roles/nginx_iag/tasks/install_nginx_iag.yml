@@ -45,11 +45,11 @@
 
 #- debug:
 #    msg: "{{found.files.0.path}}"
-- yum:
+- yum:   # todo убрать в install deps
     name: "{{item}}"
     state: present
   loop:
-    - zipinfo
+#    - zipinfo
     - unzip
 
 - name: unarchive
