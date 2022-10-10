@@ -112,7 +112,7 @@ resource "local_file" "nginx_iag-inventory" {
       verbose = true
       extra_vars = {
         download_url: var.nginx_iag_url
-        download_dest: "${abspath(path.root)}/ansible/roles/nginx-iag/files/" # localhost!
+        download_dest: "${abspath(path.root)}/ansible/roles/${var.spo_role_name}/files/" # localhost!
         vault_file: var.vault_file #"vault_secret.yml"
         //       nexusUser: var.nexus_cred.nexususer
         //       nexusPass: var.nexus_cred.nexuspass
