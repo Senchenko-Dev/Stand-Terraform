@@ -117,7 +117,7 @@ resource "local_file" "nginx_iag-inventory" {
         //       nexusUser: var.nexus_cred.nexususer
         //       nexusPass: var.nexus_cred.nexuspass
       }
-      #vault_id = ["${abspath(path.root)}/ansible/login.sh"]
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
       inventory_file = local_file.nginx_iag-inventory.filename
     }
 
