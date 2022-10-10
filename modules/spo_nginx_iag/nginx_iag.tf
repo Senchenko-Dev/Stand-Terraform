@@ -82,7 +82,7 @@ resource "local_file" "nginx_iag-inventory" {
     group_name = var.inventory_group_name
     force_ansible_run = var.force_ansible_run
   })
-  filename = "ansible/inventory/nginx_${var.inventory_group_name}.ini"
+  filename = "ansible/inventory/${var.inventory_group_name}.ini"
 
   connection {
     user = "ansible"
@@ -90,8 +90,6 @@ resource "local_file" "nginx_iag-inventory" {
     private_key = var.vm_props.private_key
     host = ""
   }
-
-
 
   //подготовка стэнда
   provisioner "ansible" {
@@ -106,7 +104,6 @@ resource "local_file" "nginx_iag-inventory" {
       inventory_file = local_file.nginx_iag-inventory.filename
     }
 
-
     // Скачивание дистрибутива СПО
     plays {
       playbook {
@@ -116,15 +113,13 @@ resource "local_file" "nginx_iag-inventory" {
       extra_vars = {
         download_url: var.nginx_iag_url
         download_dest: "${abspath(path.root)}/ansible/roles/nginx-iag/files/" # localhost!
-        # vault_file: "vault_secret.yml"
+        vault_file: var.vault_file #"vault_secret.yml"
         //       nexusUser: var.nexus_cred.nexususer
         //       nexusPass: var.nexus_cred.nexuspass
       }
       #vault_id = ["${abspath(path.root)}/ansible/login.sh"]
       inventory_file = local_file.nginx_iag-inventory.filename
     }
-
-
 
     //Запуск роли СПО
     plays {
