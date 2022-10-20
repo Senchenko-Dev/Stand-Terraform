@@ -1,17 +1,25 @@
 variable "inventory_path" {}
-variable "inventory_group_name" {}
-variable "awx_props" {}
-variable "spo_role_name" {}
+variable "inventory_group_name" {
+  description = "Имя группы в инвентаре Ansible"
+}
+variable "awx_props" {
+  description = "Набор параметров для настройки AWX"
+}
+variable "spo_role_name" {
+  description = "Переменная для использования альтернативной роли (например, для тестирования обновленной версии.)"
+}
 variable "awx_tags" {
   default = ""
 }
-variable "ans_props" {}
+variable "vault_file" {
+  description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
+}
 variable "hosts" {}
 
 resource "null_resource" "awx-setup-group" {
   triggers = {
   //  iinventory_sum = sha1(file("ansible/inventory/nginx_${var.inventory_group_name}.ini"))
-  //  timestamp = timestamp()
+    timestamp = timestamp()
     hosts = "${jsonencode(var.hosts)}",
     group =  var.inventory_group_name
   }
@@ -30,13 +38,13 @@ resource "null_resource" "awx-setup-group" {
       verbose = true
       extra_vars = merge({
         group_name = var.inventory_group_name,
-        vault_file = var.ans_props.vault_file,
+        vault_file = var.vault_file,
         inventory_path = var.inventory_path,
         spo_role_name = var.spo_role_name,
        },
       var.awx_props
       )
-      vault_id = ["./ansible/login.sh"]
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
 
     ansible_ssh_settings {

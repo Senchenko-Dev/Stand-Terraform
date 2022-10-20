@@ -34,6 +34,6 @@ nexus_url_username: "{{ nexusUser }}"
 nexus_url_password: "{{ nexusPass }}"
 validate_ssl: no
 
-kafka_default_password: #"{{ secrets.kafka.kafka_default_password }}" # qwe123
+#kafka_default_password: qwe123
 kafka_tool_path: "{{ WORKSPACE }}/bin/roles/sbt-wildfly-cfg/kafka-ansible-deploy-3.0.3"
 #tool_path: "{{ WORKSPACE }}/bin/roles/sbt-wildfly-cfg/kafka-se-deploy-tool-ansible-1.0.0-mod"

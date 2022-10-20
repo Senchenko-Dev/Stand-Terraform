@@ -1,0 +1,11 @@
+---
+- name: Create Empty List of Zookeeper Ports
+  set_fact:
+    zk_client_ports: []
+    zk_client_ports_from_inventory: []
+
+- name: Get Zookeeper Client Ports From Inventory
+  include_tasks: roles/get_generate_and_check_ports/tasks/get_zk_client_ports_from_inventory.yaml
+
+- name: Generate Zookeeper Client Ports If ZkStartZPort is Defined
+  include_tasks: roles/get_generate_and_check_ports/tasks/generate_zk_client_ports.yaml

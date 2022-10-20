@@ -1,0 +1,12 @@
+- block:
+   - name: Check That the Entered BrokerIds is Valid
+     fail: msg="Attention!!! An error was detected! The entered BrokerIds values is invalid (format BrokerIds=id,id,id ..)! Check the correctness of the entered data."
+     when: not BrokerIds is search('\s*[0-9]+(,\s*[0-9])*$')
+
+   - name: Checking That the Entered BrokerIds Values ​​are in the KBrokerIds List
+     fail: msg="Attention!!! An error was detected! The entered BrokerIds '{{ item }}' is not present in KBrokerIds! Check the correctness of the entered data."
+     when: not item in list_of_kafka_broker_ids
+     with_items: "{{ BrokerIds.split(',') }}"
+
+  when: BrokerIds is defined
+  any_errors_fatal: true

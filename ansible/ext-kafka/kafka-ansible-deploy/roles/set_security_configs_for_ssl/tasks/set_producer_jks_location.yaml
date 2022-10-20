@@ -1,0 +1,16 @@
+---
+- name: Set for Producer Keystore JKS Files Locations
+  lineinfile:
+    path: "{{ item }}/{{ config_sub_dir }}/producer.properties"
+    backrefs: yes
+    regexp: '^(ssl\.keystore\.location.*=.*ssl\/)'
+    line: '\g<1>client.keystore.jks'
+  with_items: "{{ DistroDirs }}"
+
+- name: Set for Producer Truststore JKS Files Locations
+  lineinfile:
+    path: "{{ item }}/{{ config_sub_dir }}/producer.properties"
+    backrefs: yes
+    regexp: '^(ssl\.truststore\.location.*=.*ssl\/)'
+    line: '\g<1>kafka.truststore.jks'
+  with_items: "{{ DistroDirs }}"

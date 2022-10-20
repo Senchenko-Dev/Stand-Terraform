@@ -1,0 +1,140 @@
+
+apiVersion: maistra.io/v2
+kind: ServiceMeshControlPlane
+metadata:
+  name: {{ cp.name }}
+  namespace: {{ project }}
+  labels:
+{% for key, value in labels.items() %}
+    {{ key }}: {{ value }}
+{% endfor %}
+  finalizers:
+    - maistra.io/istio-operator
+spec:
+  addons:
+    grafana:
+      enabled: true
+    jaeger:
+      install:
+        ingress:
+          enabled: true
+        storage:
+          type: Memory
+    kiali:
+      enabled: true
+    prometheus:
+      enabled: true
+  gateways:
+    enabled: false
+  profiles:
+    - default
+  proxy:
+    accessLogging:
+      file:
+        name: /dev/stdout
+    networking:
+      initialization:
+        initContainer:
+          runtime:
+            imageName: >-
+              dzo.sw.sbc.space/registry_redhat_io/openshift-service-mesh/proxy-init-rhel7@sha256:0d3f18d764241c1aa95d028b4d28acd163407b5a8781ad2b39c63a925f30e137
+      trafficControl:
+        inbound: {}
+        outbound:
+          policy: REGISTRY_ONLY
+    runtime:
+      container:
+        imageName: >-
+          dzo.sw.sbc.space/registry_redhat_io/openshift-service-mesh/proxyv2-rhel8@sha256:dbb1f724333f6892d53f13c9619dcf3eff572b06c944c28fe6ad12fa18a7dc7b
+        resources:
+          limits:
+            cpu: 200m
+            memory: 512Mi
+          requests:
+            cpu: 200m
+            memory: 256Mi
+  runtime:
+    components:
+      global.oauthproxy:
+        container:
+          imageName: ose-oauth-proxy
+          imagePullPolicy: IfNotPresent
+          imageRegistry: dzo.sw.sbc.space/registry_redhat_io/openshift4
+          imageTag: v4.4
+      grafana:
+        container:
+          resources:
+            limits:
+              cpu: 600m
+              memory: 1000Mi
+            requests:
+              cpu: 400m
+              memory: 750Mi
+      jaeger:
+        container:
+          imageRegistry: dzo.sw.sbc.space/registry_redhat_io/distributed-tracing
+      kiali:
+        container:
+          imageRegistry: dzo.sw.sbc.space/registry_redhat_io/openshift-service-mesh
+          resources:
+            limits:
+              cpu: 1100m
+              memory: 1500Mi
+            requests:
+              cpu: 400m
+              memory: 750Mi
+      pilot:
+        container:
+          resources:
+            limits:
+              cpu: 1400m
+              memory: 3Gi
+            requests:
+              cpu: 1400m
+              memory: 3Gi
+        deployment:
+          replicas: 1
+      prometheus:
+        container:
+          resources:
+            limits:
+              cpu: 1100m
+              ephemeral-storage: 2000Mi
+              memory: 1800Mi
+            requests:
+              cpu: 400m
+              ephemeral-storage: 2000Mi
+              memory: 1000Mi
+    defaults:
+      container:
+        imagePullSecrets:
+          - name: dzo.sw.sbc.space
+        imageRegistry: dzo.sw.sbc.space/registry_redhat_io/openshift-service-mesh
+        resources:
+          limits:
+            cpu: 300m
+            memory: 400Mi
+          requests:
+            cpu: 200m
+            memory: 200Mi
+  techPreview:
+    global:
+      defaultConfigVisibilitySettings:
+        - .
+    tracing:
+      jaeger:
+        install: true
+  tracing:
+    sampling: 10000
+    type: Jaeger
+  security:
+    controlPlane:
+      mtls: false
+    dataPlane:
+      mtls: false
+  policy:
+    type: Istiod
+  telemetry:
+    type: Istiod
+  cluster: {}
+  version: v2.0

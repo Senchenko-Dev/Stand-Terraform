@@ -21,7 +21,7 @@
 
 - name: Install RedHat Nginx
   yum:
-    name: "{{ nginx_version }}"
+    name: "{{ nginx_version | default('nginx') }}"
     state: installed
     update_cache: yes
     allow_downgrade: yes

@@ -1,8 +1,12 @@
 variable "kubeconfig" {}
 
 variable "meta" {}
-variable "awx_props" {}
-variable "ans_props" {}
+variable "awx_props" {
+  description = "Набор параметров для настройки AWX"
+}
+variable "vault_file" {
+  description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
+}
 
 resource "null_resource" "awx-k8s-templates-config" {
   //triggers = {
@@ -22,13 +26,12 @@ resource "null_resource" "awx-k8s-templates-config" {
       hosts = ["localhost"]
       verbose = true
       extra_vars = merge({
-        vault_file: var.ans_props.vault_file #"vault_secret.yml"
+        vault_file: var.vault_file #"vault_secret.yml"
         kubeconfig: var.kubeconfig
       },
-      var.awx_props,
-      var.ans_props
+      var.awx_props
       )
-      vault_id = ["./ansible/login.sh"]
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
 
     ansible_ssh_settings {

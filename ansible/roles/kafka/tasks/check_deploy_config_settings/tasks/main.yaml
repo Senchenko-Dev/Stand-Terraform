@@ -1,0 +1,37 @@
+---
+# Set default UseServerJDK to True if SourceJDK is not specified
+- set_fact:
+    UseServerJDK: True
+  when: SourceJDK is undefined
+  
+- name: Check Entered BrokerIds Parameter
+  include_tasks: check_brokerid_param.yaml
+
+- name: Check Zookeeper Required Settings
+  include_tasks: check_zk_required_settings.yaml
+
+- name: Check Zookeeper Ports Settings
+  include_tasks: check_zk_ports.yaml
+
+- name: Check Kafka Required Settings
+  include_tasks: check_kafka_required_settings.yaml
+
+- name: Check Kafka Ports Settings
+  include_tasks: check_kafka_ports.yaml
+
+- name: Check Kafka and Zookeeper Paths Settings
+  include_tasks: check_kafka_zk_paths.yaml
+
+- block:
+  - fail: msg="Attention!!! An error was detected! KDeployConf is undefined in inventory file or the value is incorrect. Check the correctness of the entered data."
+    when: KDeployConf is undefined or KDeployConf | string | length < 1
+
+  - fail: msg="Attention!!! An error was detected! Both parameters UseServerJDK and SourceJDK is specified, only one of the parameters should be specified."
+    when: UseServerJDK is defined and SourceJDK is defined
+
+  - fail: msg="Attention!!! An error was detected! SourceJDK is empty, must be specified."
+    when: SourceJDK is defined and SourceJDK | length == 0
+
+  any_errors_fatal: true
+
+- debug: msg="All checks completed successfully!"

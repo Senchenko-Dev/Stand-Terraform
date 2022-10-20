@@ -1,0 +1,101 @@
+---
+- name: Get List of zookeeper.properties Files
+  set_fact:
+    flist: "{{ flist | default([]) + [ item + \"/\" + config_sub_dir + \"/zookeeper.properties\" ] }}"
+  with_items: "{{ DistroDirs }}"
+
+- name: Create Zookeeper Data Dirs
+  file:
+    path: "{{ item }}"
+    state: directory
+    recurse: yes
+    owner: "{{ ansible_user }}"
+  with_items: "{{ ZDataDirs }}"
+  when: item is defined
+
+- name: Create myid Files
+  copy:
+    content: "{{ item.0 }}"
+    dest: "{{ item.1 }}/myid"
+    owner: "{{ ansible_user }}"
+  with_together:
+    - "{{ ZIds }}"
+    - "{{ ZDataDirs }}"
+  when: item.0 is defined and item.1 is defined
+
+- name: Add Zookeeper 'dataDir' to zookeeper.properties File
+  replace:
+    path: "{{ item.0 }}/{{ config_sub_dir }}/zookeeper.properties"
+    regexp: 'dataDir=.*'
+    replace: 'dataDir={{ item.1 }}'
+  with_together:
+    - "{{ DistroDirs }}"
+    - "{{ ZDataDirs }}"
+  when: item.1 is defined
+
+- name: Add Zookeeper 'clientPort' to zookeeper.properties File from Inventory for Multiple Host Deploy
+  replace:
+    path: "{{ item.0 }}/{{ config_sub_dir }}/zookeeper.properties"
+    regexp: 'clientPort=.*'
+    replace: 'clientPort={{ item.1 }}'
+  with_together:
+    - "{{ DistroDirs }}"
+    - "{{ zk_client_ports[0] }}"
+  when: zk_client_ports | length > DistroDirs | length
+
+- name: Add Zookeeper 'clientPort' to zookeeper.properties File from Inventory for Single Host Deploy
+  replace:
+    path: "{{ item.0 }}/{{ config_sub_dir }}/zookeeper.properties"
+    regexp: 'clientPort=.*'
+    replace: 'clientPort={{ item.1 }}'
+  with_together:
+    - "{{ DistroDirs }}"
+    - "{{ zk_client_ports }}"
+  when: zk_client_ports | length == DistroDirs | length
+
+
+- name: Remove Default Cluster Mode 'server.X' Properties from zookeeper.properties
+  lineinfile:
+    path: "{{ item }}"
+    state: absent
+    regexp: '^#server\.[0-9]=.*'
+  with_items: "{{ flist }}"
+  when: ZIds is defined
+
+- name: Remove 'ZK Ensemble demo' Comment from zookeeper.properties
+  lineinfile:
+    path: "{{ item }}"
+    state: absent
+    regexp: 'ZK Ensemble demo'
+  with_items: "{{ flist }}"
+  when: ZIds is defined
+
+- name: Add Setting for Cluster Mode to zookeeper.properties Files
+  include_tasks: set_server_lines_for_cluster_mode.yaml
+  when: ZIds is defined
+
+- name: Get Zookeeper Properties Keys
+  set_fact:
+    zk_props_key: "{{ zk_props_key  | default([]) + [ item | regex_replace('^(Zk_)(.*)','\\2') ] }}"
+  with_items: "{{ hostvars[inventory_hostname] | select('match','^Zk_.*') | list }}"
+  when: lookup('vars', item) | string | length > 0
+
+- name: Get Zookeeper Properties Values
+  set_fact:
+    zk_props_values: "{{ zk_props_values | default([]) + [ lookup('vars', item) ] }}"
+  with_items: "{{ hostvars[inventory_hostname] | select('match','^Zk_.*') | list }}"
+  when: lookup('vars', item) | string | length > 0
+
+- name: Get Zk Properties to Comment Out
+  set_fact:
+    zk_props_key_commented_out: "{{ zk_props_key_commented_out  | default([]) + [ item | regex_replace('^(Zk_)(.*)','\\2') ] }}"
+  with_items: "{{ hostvars[inventory_hostname] | select('match','^Zk_.*') | list }}"
+  when: lookup('vars', item) | string | length == 0
+
+- name: Set Zookeeper Properties from Inventory
+  include_tasks: set_zk_properties.yaml
+  with_items:
+    - "{{ flist }}"
+  loop_control:
+    loop_var: path_item
+  when: ZIds is defined

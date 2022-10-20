@@ -1,14 +1,12 @@
 locals {
   devopsSaName = "devops-pipeline-sa"
   controlPanelName = "control-panel"
-  projectPrefix = "silimtest1"
+  projectPrefix = local.stand_name
 
   devopsProject = "${local.projectPrefix}-${local.devopsSaName}"
   devopsSaRole = "admin"
   globals = {
-  //  projectPrefix = "efs-std"
     projectPrefix = local.projectPrefix
-    projectPostfix = ""
     devopsSaName = local.devopsSaName
     devopsProject = "${local.projectPrefix}-${local.devopsSaName}"
     devopsSaRole = "admin"
@@ -16,8 +14,8 @@ locals {
     dc = "sbmg"
     stand = local.stand_name
     solution = "FRONTEND-STD"
-  //  stashedControlPlaneNamespace = "control-panel-efs-cdjestnd"
     stashedControlPlaneNamespace = "${local.projectPrefix}-${local.controlPanelName}"
+    controlPlaneName = "basic-install"
     values = {
       pullCreds = [
         {
@@ -33,13 +31,13 @@ locals {
           roleType = "ClusterRole"
           roleName = "admin"
           userKind = "User"
-          userName = "busygin.a.v"
+          userName = "sentsov.a.a"
         },
         {
           roleType = "ClusterRole"
           roleName = "admin"
           userKind = "User"
-          userName = "vapolitov.sbt"
+          userName = "aigorebelyaev"
         },
         {
           roleType  = "ClusterRole"
@@ -49,6 +47,7 @@ locals {
           saProject = local.devopsProject
         }
       ]
+      # ярлыки labels
       labels = {
         id_fp = "globaltag"
       }
@@ -60,7 +59,6 @@ locals {
 locals {
   diOpenshiftServiceCore_projects = {
     devops-master-test = {
-//      oseProjectName = "devops-pipeline-sa-cdjestnd"
       oseProjectName = "${local.projectPrefix}-${local.devopsSaName}"
       values = {
         quota = {
@@ -71,7 +69,6 @@ locals {
       }
     },
     control-panel-test = {
-//      oseProjectName = "control-panel-efs-cdjestnd"
       oseProjectName = "${local.projectPrefix}-${local.controlPanelName}"
       values = {
         quota = {
@@ -79,7 +76,7 @@ locals {
           mem: 40
         }
         cp = {
-          name: "basic-install" # todo parametrize
+          name: local.globals.controlPlaneName
           template: "cp-2.0.2.yml"
         }
       }
@@ -87,22 +84,10 @@ locals {
   }
 }
 
-module "diOpenshiftServiceCore"  {
-  source = "./modules/ansible_project_init"
-//  count = 0
-  for_each = local.diOpenshiftServiceCore_projects
-  managment_system_type = var.managment_system_type
-  project_name = each.value.oseProjectName
-  kubeconfig = local.oc_kubeconfig
-#  awx_props = local.awx_props
-  values = merge(
-    local.globals.values,
-    each.value.values
-  )
-  vault_password = var.vault_password
-}
 
+# Рабочие проекты
 locals {
+  empty = {}
   group1 = {
     diOpenshiftSessionSector = {
       projects = {
@@ -110,8 +95,8 @@ locals {
           fpi_name = "dyncontent"
           values   = {
             quota    = {
-              cpu = 8
-              mem = 16
+              cpu = 2
+              mem = 4
             }
             labels     = {
               id_fp = "UFTM",
@@ -135,7 +120,7 @@ locals {
         values = {
           sm       = {
             cpNamespace = local.globals.stashedControlPlaneNamespace
-            cpName      = "basic-install" #todo parametrize
+            cpName      = local.globals.controlPlaneName
           }
           bindings = [
             {
@@ -149,6 +134,21 @@ locals {
       }
     }
   }
+}
+
+module "diOpenshiftServiceCore"  {
+  source = "./modules/ansible_project_init"
+  //  count = 0
+  for_each = local.diOpenshiftServiceCore_projects
+  managment_system_type = var.managment_system_type
+  project_name = each.value.oseProjectName
+  kubeconfig = local.oc_kubeconfig
+  #  awx_props = local.awx_props
+  values = merge(
+    local.globals.values,
+    each.value.values
+  )
+  vault_password = var.vault_password
 }
 
 module "diOpenshiftgroup1" {
@@ -173,6 +173,7 @@ module "config_awx_k8s_templates" {
   source = "./modules/awx_config_k8s_templates"
   kubeconfig = local.oc_kubeconfig
   awx_props = local.awx_props
-  ans_props = local.ans_props
+  vault_file = local.vault_file
 }
+
 

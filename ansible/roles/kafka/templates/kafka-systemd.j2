@@ -1,0 +1,16 @@
+[Unit]
+Description=Kafka
+Requires={% if ZIds is defined %}zookeeper.service {% endif %}network.target remote-fs.target
+After={% if ZIds is defined %}zookeeper.service {% endif %}network.target remote-fs.target
+
+[Service]
+Type=forking
+User={{ systemd_user }}
+Group={{ systemd_user }}
+ExecStart={{ DistroDirs[0] }}/bin/kafka-server-start.sh -daemon {{ DistroDirs[0] }}/config/server.properties
+ExecStop={{ DistroDirs[0] }}/bin/kafka-server-stop.sh
+Restart=on-failure
+SyslogIdentifier=kafka
+
+[Install]
+WantedBy=multi-user.target

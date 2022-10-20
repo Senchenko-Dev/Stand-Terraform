@@ -4,7 +4,7 @@
 KDeployConf: "deploy-plaintext__zk_plain_no_auth__kafka_plaintext_no_auth.sh"
 
 list_maps_custom_files:
-  - { src:  "additional/kafka/topic.sh", dest : "/root/topic.sh", mode : "0777", owner: "kafka", group: "kafka", execute: "true" }
+  - { src : "additional/kafka/ssl", dest : "/KAFKA/ssl", mode : "0644", owner: "{{kafka_user}}", group: "{{kafka_user}}" }
+  - { src:  "additional/kafka/topic.sh", dest : "{{ DistroDirs[0] }}/topic.sh", mode : "0755", owner: "{{kafka_user}}", group: "{{kafka_user}}", execute: "true" }
 
-list_maps_custom_templates:
-  - { src : "additional/kafka/topic_template.sh", dest : "/root/topic_template.sh", mode : "0777", owner: "kafka", group: "kafka" }
+#kafka_path_to_keys_to_copy: "{{ WORKSPACE }}/config/{{ Stand }}/{{ Subsystem }}"

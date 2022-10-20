@@ -17,25 +17,26 @@
   tags:
    - install
 
-#- name: import control
-#  import_tasks: control.yaml
-#  tags:
-#   - control
+- name: import control
+  import_tasks: control.yaml
+  tags:
+   - control
+   - never
 
-#- name: import logs
-#  import_tasks: logs.yaml
-#  tags:
-#    - logs
+- name: import logs
+  import_tasks: logs.yaml
+  tags:
+    - logs
+    - never
 
-#- name: import backup
-#  import_tasks: backup.yaml
-#  tags:
-#    - backup
+- name: import backup
+  import_tasks: backup.yaml
+  tags:
+    - backup
+    - never
 
-#- name: import uninstall
-#  import_tasks: uninstall.yaml
-#  tags:
-#    - uninstall
-
-
-
+- name: import uninstall
+  import_tasks: uninstall.yaml
+  tags:
+    - uninstall
+    - never

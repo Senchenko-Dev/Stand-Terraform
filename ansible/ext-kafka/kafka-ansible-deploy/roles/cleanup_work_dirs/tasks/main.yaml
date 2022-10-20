@@ -1,0 +1,15 @@
+---
+- name: Get All Paths to Cleanup
+  set_fact:
+    paths_to_delete: "{{ paths_to_delete | default([]) + [ item ] }}"
+  loop:
+    - "{{ DistroDirs | default([]) }}"
+    - "{{ ZDataDirs | default([]) }}"
+    - "{{ KDataDirs | default([]) }}"
+    - "{{ KLogDirs | default([]) }}"
+    - "{{ ZLogDirs | default([]) }}"
+- name: Cleanup Kafka and Zookeeper Dirs
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items: "{{ paths_to_delete }}"

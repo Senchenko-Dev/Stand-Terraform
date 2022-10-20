@@ -98,7 +98,7 @@
   lineinfile:
     dest: /etc/docker/daemon.json
     state: absent
-    regexp: "{}"
+    regexp: '{}'
 
 - name: settings docker
   blockinfile:
@@ -360,6 +360,7 @@
       selector:
         name: nginx
     EOF
+  ignore_errors: yes
 
 - name: Wait for WEB UI come up ~700 seconds left....
   uri:
@@ -372,10 +373,10 @@
   delay: 10
 
 - name: Create Admin Password
-  shell: "kubectl exec -i deploy/awx -c awx-web -- awx-manage update_password --username admin --password {{ secrets.awx.admin }}"
+  shell: "kubectl exec -i deploy/awx -c awx-web -- awx-manage update_password --username admin --password {{ awx_password }}"
 
 - debug:
-    msg: "Логин: admin   Пароль: {{ secrets.awx.admin }}"
+    msg: "Логин: admin   Пароль: {{ awx_password }}"
 
 - debug:
     msg: "AWX Web UI на сокете http://{{ip}}:{{awx_port}} "

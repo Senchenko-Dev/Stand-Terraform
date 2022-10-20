@@ -1,0 +1,15 @@
+- name: List of Busy Ports
+  debug:
+    msg: TCP port {{ item.port }} busy by pid {{ item.pid }} with process name {{ item.name }}
+  vars:
+    tcp_listen_violations: "{{ ansible_facts.tcp_listen | selectattr('port', 'in', zk_jmx_ports + kafka_jmx_ports + kafka_brokers_ports + zk_quorum_ports_list + zk_client_ports) | list }}"
+  loop: "{{ tcp_listen_violations }}"
+  register: killed_process_result
+  no_log: True
+
+- name: Kill The Processes That Occupy Ports
+  shell: "kill -9 {{ item.pid }}"
+  vars:
+    tcp_listen_violations: "{{ ansible_facts.tcp_listen | selectattr('port', 'in', zk_jmx_ports + kafka_jmx_ports + kafka_brokers_ports + zk_quorum_ports_list + zk_client_ports) | list }}"
+  loop: "{{ tcp_listen_violations }}"
+  ignore_errors: yes # "Suppress less informative ansible error output in favour of our own error output. E.g.: kill -9 item.pid will return "No such process" instead of ansible error message like "non-zero return code""

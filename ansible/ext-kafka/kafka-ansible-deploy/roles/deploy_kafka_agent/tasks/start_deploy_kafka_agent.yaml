@@ -1,0 +1,29 @@
+---
+- block:
+
+  - name: Unpacking Distributive SberKafka Agent
+    unarchive:
+      src: "{{ item }}/util/kafka-agent.zip"
+      dest: "{{ item }}/util"
+      owner: "{{ ansible_user }}"
+      remote_src: yes
+    with_items: "{{ DistroDirs }}"
+
+  - name: Create and Set Config for SberKafka Agent
+    lineinfile:
+      path: "{{ item.0 }}/util/agent-server/config/application.properties"
+      line: "kafka.log.dir={{ item.1 }}"
+      create: yes
+    with_together:
+      - "{{ DistroDirs }}"
+      - "{{ KLogDirs }}"
+
+  - name: Set Agent Port
+    lineinfile:
+      path: "{{ item.0 }}/util/agent-server/config/application.properties"
+      line: "application.port={{ item.1 }}"
+    with_together:
+      - "{{ DistroDirs }}"
+      - "{{ KAgentPort }}"
+
+  when: inventory_hostname in groups['KafkaNodes']

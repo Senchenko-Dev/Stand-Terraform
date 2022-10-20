@@ -1,8 +1,0 @@
-wf_user: "fly"
-wfadminpass: "fly"
-wf_os_user: "wildfly"
-wf_os_user_pwd: "wildfly"
-wf_os_group: "wfgroup"
-wf_install_dir: "/usr/WF/WF_PPRB"
-executed_by_terraform : "True"
-

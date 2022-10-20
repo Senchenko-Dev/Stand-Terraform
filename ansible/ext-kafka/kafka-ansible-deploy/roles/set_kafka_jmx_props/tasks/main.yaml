@@ -1,0 +1,3 @@
+---
+  - name: Change Kafka JMX Ports If Multiple Broker Startup Mode Is Enabled
+    include_tasks: set_jmx_props.yaml

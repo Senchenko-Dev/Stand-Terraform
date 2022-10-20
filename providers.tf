@@ -22,18 +22,17 @@ terraform {
   required_version = ">= 0.13"
 }
 
-
-# provider "ansiblevault" {
-#   root_folder = "."
-#   vault_pass  = var.vault_password
-# //  vault_file = "ansible/login.sh"
-# }
-
-# data "ansiblevault_path" "path" {
-#   path = "./ansible/vault_secret.yml"
-# }
+ provider "ansiblevault" {
+   root_folder = "."
+   vault_pass  = var.vault_password
+ }
+data "ansiblevault_path" "path" {
+  path = "ansible/${local.vault_file}"
+}
 
 locals {
+  s = yamldecode(data.ansiblevault_path.path.value)
+  secrets = local.s.secrets
 # //  password = chomp(rsadecrypt(filebase64("encrypted.txt"), file("private.key")))
 # //  secrets = yamldecode(rsadecrypt(filebase64(var.secret_file), file(var.private_key_file)))
   # secrets = sensitive(yamldecode(data.ansiblevault_path.path.value))

@@ -8,12 +8,12 @@ nginx_version: nginx-1.20.1
 install_dir: /opt/nginx
 nginx_log_dir: /var/log/nginx
 nginx_user: nginx
-#nginx_user_pwd: "nginx"
+nginx_user_pwd: "nginx"
 nginx_group: nginx
 nginx_http_port: 8080
 nginx_https_port: 443
 
-#nginx_os_user_pwd: "nginx"
+nginx_os_user_pwd: "nginx"
 nginx_conf_dir: "/etc/nginx"
 nginx_docroot: "{{ install_dir }}/html"
 

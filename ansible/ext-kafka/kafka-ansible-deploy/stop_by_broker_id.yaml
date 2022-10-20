@@ -1,0 +1,11 @@
+---
+- hosts: all
+  gather_facts: no
+  become: yes
+  become_user: "{{ ansible_user }}"
+  roles:
+     - select_deploy_mode
+     - check_distro_apache_or_confluent
+     - check_deploy_config_settings
+     - stop_kafka
+     - summary_information

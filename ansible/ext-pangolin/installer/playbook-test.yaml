@@ -1,18 +1,20 @@
-- name: Vault secrets
-  hosts: all
-  tasks:
-    - name: Import secrets
-      include_vars: "../../{{ vault_file }}"
-      when: vault_file is defined
-      tags: always
-      delegate_to: localhost
-
 - name: Get ping response and gather packages info
   hosts: localhost:all
   tasks:
     - action: ping
       no_log: "{{ nolog }}"
   tags: "{{ tag }}"
+
+- name: Clean hosts if requested
+  hosts: all
+  tasks:
+    - include_role:
+        name: pgse
+        tasks_from: pgse_clean_all
+      when: pgse_clean_all | bool
+  tags: "{{ tag }}"
+
+
 
 # standalone-postgresql-only
 

@@ -1,0 +1,4 @@
+---
+- debug: msg="Killed process during execution - name {{ item.item.name }}, PID {{ item.item.pid }}, port {{ item.item.port }}"
+  with_items: "{{ killed_process_result.results }}"
+  when: killed_process_result.results is defined

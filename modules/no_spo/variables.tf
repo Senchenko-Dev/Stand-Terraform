@@ -10,7 +10,7 @@ variable "network_name" {
 }
 
 variable "inventory_group_name" {
-  description = "inventory_group_name"
+  description = "Имя группы в инвентаре Ansible"
   type = string
 }
 
@@ -20,6 +20,7 @@ variable "vm_vm_list" {
 }
 
 variable "vm_disk_data" {
+  description = "Список монтируемых дисков."
   default = []
 }
 

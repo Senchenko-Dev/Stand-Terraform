@@ -1,0 +1,16 @@
+---
+- hosts: all
+  gather_facts: no
+  become: yes
+  become_user: "{{ ansible_user }}"
+  roles:
+     - select_deploy_mode
+     - check_distro_apache_or_confluent
+     - check_deploy_config_settings
+     - stop_kafka
+     - stop_zookeeper
+     - delete_broker_data
+     - delete_zk_data
+     - start_zookeeper
+     - start_kafka
+     - summary_information

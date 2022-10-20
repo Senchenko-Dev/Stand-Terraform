@@ -133,11 +133,11 @@
       stat: path="{{ PGHOME }}"
       register: pghome_exists
 
-#    - name: check that PGHOME doesn't exists
-#      assert:
-#        that: not pghome_exists.stat.exists
-#        fail_msg: "PGHOME exists, please remove it manually"
-#        success_msg: "PGHOME doesn't exists, continue..."
+    - name: check that PGHOME doesn't exists
+      assert:
+        that: not pghome_exists.stat.exists
+        fail_msg: "PGHOME exists, please remove it manually"
+        success_msg: "PGHOME doesn't exists, continue..."
 
   when: action_type == 'install'
 

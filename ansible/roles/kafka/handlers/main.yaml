@@ -1,0 +1,4 @@
+---
+- name: restart_service
+  include_tasks: control/restart.yaml
+  tags: always

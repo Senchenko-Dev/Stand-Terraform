@@ -5,13 +5,15 @@
   gather_facts: no
 
   tasks:
-  
+
+    - debug:
+        var: "{{ vault_file }}"
+
     - name: Import secrets
       include_vars: "{{ vault_file }}"
-      when: vault_file is defined
       tags: always
-      delegate_to: localhost
     #      no_log: yes todo !!!!!!
+      when: vault_file is defined
 
     - name: Collect facts
       setup:

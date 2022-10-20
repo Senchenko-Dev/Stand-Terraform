@@ -53,14 +53,11 @@
 #      when: hostvars[item].ansible_host is defined
 #      with_items: "{{play_hosts}}"
 
-    - name: Import vault secrets
-      include_vars: "../../{{ vault_file }}"
-#      when: vault_file is defined
-#      tags: always
-      delegate_to: localhost
+    - debug:
+        var: kafka_default_password
 
     - include_role:
         name: kafka_sber
         tasks_from: create_user.yml
-      vars:
-        kafka_default_password: "{{ secrets.kafka.kafka_default_password }}"
+#      vars:
+#        kafka_default_password: "{{ kafka_default_password }}"

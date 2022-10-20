@@ -1,0 +1,32 @@
+- hosts: all
+  gather_facts: no
+  become: yes
+  become_user: "{{ ansible_user }}"
+  roles:
+     - select_deploy_mode
+     - check_deploy_config_settings
+     - custom_jdk
+     - get_generate_and_check_ports
+     - cleanup_work_dirs
+     - copy_distro_to_server
+     - deploy_config
+     - check_distro_apache_or_confluent
+     - set_zookeeper_props
+     - set_zookeeper_jmx_props
+     - start_zookeeper
+     - set_kafka_props
+     - set_kafka_jmx_props
+- hosts: localhost
+  connection: local
+  roles:
+     - generate_keys_for_ssl_configs
+- hosts: all
+  gather_facts: no
+  become: yes
+  become_user: "{{ ansible_user }}"
+  roles:
+     - set_security_configs_for_ssl
+     - start_kafka
+     - deploy_kafka_agent
+     - start_kafka_agent
+     - summary_information

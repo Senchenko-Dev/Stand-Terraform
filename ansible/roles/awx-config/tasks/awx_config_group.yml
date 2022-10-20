@@ -50,7 +50,7 @@
     ask_inventory_on_launch: yes
     #        inventory: "{{ org_name }}-{{ group_name }}"
     project: "{{ org_name }}-project"
-    playbook: "ansible/spo_install_playbook.yml" # теперь в той же папке, что и setup vm
+    playbook: "ansible/spo_install_playbook.yml"
     job_tags: "{{ item }}"
     credentials:
       - "{{ machine_cred_name }}"
@@ -64,5 +64,5 @@
   loop: "{{ awx_tags }}"
   register: result
   until: result is not failed
-  retries: 10
+  retries: 20
   delay: 5

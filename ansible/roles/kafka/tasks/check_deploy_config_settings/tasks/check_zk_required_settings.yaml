@@ -1,0 +1,60 @@
+# #### KAFKA-855
+#Сhecking Zookeeper required settings
+---
+- block:
+  - name: Check Zookeeper Deploy Config Properties For Cluster Mode (Zk_initLimit)
+    fail: msg="Error!!! Parameter settings are indicated as for Zookeeper cluster mode, but the required parameter Zk_initLimit is not defined or empty"
+    when: "num_zk_ids | int > 1 and ZIds is defined and (Zk_initLimit is not defined or (Zk_initLimit | string | length == 0))"
+
+  - name: Check Zookeeper Deploy Config Properties For Cluster Mode (Zk_syncLimit)
+    fail: msg="Error!!! Parameter settings are indicated as for Zookeeper cluster mode, but the required parameter Zk_syncLimit is not defined or empty"
+    when: "num_zk_ids | int > 1 and ZIds is defined and (Zk_syncLimit is not defined or (Zk_syncLimit | string | length == 0))"
+
+  - name: Check Zookeeper Deploy Config Properties For Cluster Mode (Zk_tickTime)
+    fail: msg="Error!!! Parameter settings are indicated as for Zookeeper cluster mode, but the required parameter Zk_tickTime is not defined or empty"
+    when: "num_zk_ids | int > 1 and ZIds is defined and (Zk_tickTime is not defined or (Zk_tickTime | string | length == 0))"
+
+  - name: Check Zookeeper Deploy Config Properties For Standalone Mode (Zk_initLimit)
+    fail: msg="Error!!! Parameter settings are indicated as for Zookeeper Standalone mode, but the parameter Zk_initLimit is defined"
+    when: "num_zk_ids | int == 1 and ZIds is defined and  (Zk_initLimit is defined or (Zk_initLimit | string | length > 0))"
+
+  - name: Check Zookeeper Deploy Config Properties For Standalone Mode (Zk_syncLimit)
+    fail: msg="Error!!! Parameter settings are indicated as for Zookeeper Standalone mode, but the parameter Zk_syncLimit is defined"
+    when: "num_zk_ids | int == 1 and ZIds is defined and  (Zk_syncLimit is defined or (Zk_syncLimit | string | length > 0))"
+
+  - name: Check Zookeeper Deploy Config Properties For Standalone Mode (Zk_tickTime)
+    fail: msg="Error!!! Parameter settings are indicated as for Zookeeper Standalone mode, but the parameter Zk_tickTime is defined"
+    when: "num_zk_ids | int == 1 and ZIds is defined and  (Zk_tickTime is defined or (Zk_tickTime | string | length > 0))"
+  when: inventory_hostname in groups['ZookeeperNodes']
+  any_errors_fatal: true
+
+- block:
+  - fail: msg="Attention!!! An error was detected! ZQuorumPorts is undefined in inventory file or the value is incorrect. Check the correctness of the entered data."
+    when: (ZQuorumPorts is undefined or ZQuorumPorts | length < 1) and ZkStartQPort is undefined and num_zk_ids | int > 1
+
+  - fail: msg="Attention!!! An error was detected! ZPorts is undefined in inventory file or the value is incorrect. Check the correctness of the entered data."
+    when: (ZPorts is undefined or ZPorts | length < 1) and ZkStartZPort is undefined
+
+  - fail: msg="Attention!!! An error was detected! ZJMXPorts is undefined in inventory file or the value is incorrect. Check the correctness of the entered data."
+    when: (ZJMXPorts is undefined or ZJMXPorts | length < 1) and ZkStartJMXPort is undefined
+
+  - fail: msg="Attention!!! An error was detected! DistroDirs is undefined in inventory file or the value is incorrect. Check the correctness of the entered data."
+    when: DistroDirs is undefined or DistroDirs | length < 1
+
+  - fail: msg="Attention!!! An error was detected! ZDataDirs is undefined in inventory file or the value is incorrect. Check the correctness of the entered data."
+    when: ZDataDirs is undefined or ZDataDirs | length < 1
+
+  - fail: msg="Attention!!! An error was detected! ZLogDirs is undefined in inventory file or the value is incorrect. Check the correctness of the entered data."
+    when: ZLogDirs is undefined or ZLogDirs | length < 1
+
+  when: inventory_hostname in groups['ZookeeperNodes']
+  any_errors_fatal: true
+
+#### KAFKA-854
+#Сhecking the conformity of the dimensions of the given parameters
+
+- block:
+  - fail: msg="{{ 'Attention!!! An error was detected! The dimensions of ZIds, ZQuorumPorts, ZPorts, ZJMXPorts, ZDataDirs, ZLogDirs parameters do not match. Check the correctness of the entered data.' }}"
+    when: (ZIds | length != ZPorts | length) or (ZIds | length != ZQuorumPorts | length ) or (ZIds | length != ZJMXPorts | length) or (ZIds | length != ZDataDirs | length) or (ZIds | length != ZLogDirs | length )
+  when: inventory_hostname in groups['ZookeeperNodes'] and ZkStartQPort is undefined and ZkStartZPort is undefined and ZkStartJMXPort is undefined
+  any_errors_fatal: true

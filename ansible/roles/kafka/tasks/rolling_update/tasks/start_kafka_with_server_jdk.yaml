@@ -1,0 +1,11 @@
+---
+- name: Start Kafka Broker
+  command: "{{ broker_id_path_port_logdir.1 }}/bin/kafka-server-start{{ script_extension }} -daemon {{ broker_id_path_port_logdir.1 }}/{{ config_sub_dir }}/server.properties"
+  args:
+    chdir: "{{ broker_id_path_port_logdir.1 }}"
+  environment:
+    LOG_DIR: "{{ broker_id_path_port_logdir.3 }}"
+  register: start_kafka
+  until: start_kafka is not failed
+  retries: 3
+  delay: 5

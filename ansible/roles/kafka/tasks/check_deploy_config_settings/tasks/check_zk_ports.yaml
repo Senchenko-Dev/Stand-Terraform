@@ -1,0 +1,41 @@
+---
+#### KAFKA-856
+- block:
+  #Zookeeper quorum ports check to format XXXXX:YYYYY
+  - fail: msg="{{ 'Attention!!! An error was detected! Zookeeper quorum ports you specified are not correct (format XXXXX:YYYYY):' + item + '. Check the correctness of the entered data.' }}"
+    with_items: "{{ ZQuorumPorts }}"
+    when: not item is search('^[0-9]{1,5}:[0-9]{1,5}$')
+
+  - name: Create Empty List of Zookeeper Quorum Ports List
+    set_fact:
+      zk_quorum_ports_list: []
+  - name: Get Zookeeper Quorum Ports List
+    set_fact:
+      zk_quorum_ports_list: "{{ zk_quorum_ports_list  + [ item | regex_replace('(\\d.*):(\\d.*)','\\1') ] + [ item | regex_replace('(\\d.*):(\\d.*)','\\2') ] }}"
+    with_items: "{{ ZQuorumPorts }}"
+    when: num_zk_ids | int > 1
+
+  #Zookeeper ports check. Must be in the range from 1024 to 49151, and consist of only numbers, and different value if single host deploy
+  - fail: msg="{{ 'Attention!!! An error was detected! ZPorts you specified are not correct (Only numbers should be used, ranging from 1024 to 49151):' + item + '. Check the correctness of the entered data.' }}"
+    with_items: "{{ ZPorts }}"
+    when: not item is search('^[0-9]{1,5}$') or (item | int < 1024 or item | int > 49151)
+
+  - fail: msg="{{ 'Attention!!! An error was detected! The ZPorts has the same values, must be different. Check the correctness of the entered data.' }}"
+    when: ZPorts | length != ZPorts | unique | length
+
+  - fail: msg="{{ 'Attention!!! An error was detected! ZQuorumPorts you specified are not correct (Only numbers should be used, ranging from 1024 to 49151):' + item + '. Check the correctness of the entered data.' }}"
+    with_items: "{{ zk_quorum_ports_list }}"
+    when: not item is search('^[0-9]{1,5}$') or (item | int < 1024 or item | int > 49151)
+
+  - fail: msg="{{ 'Attention!!! An error was detected! The ZQuorumPorts has the same values, must be different. Check the correctness of the entered data.' }}"
+    when: zk_quorum_ports_list | length != zk_quorum_ports_list | unique | length
+
+  - fail: msg="{{ 'Attention!!! An error was detected! ZJMXPorts you specified are not correct (Only numbers should be used, ranging from 1024 to 49151):' + item + '. Check the correctness of the entered data.' }}"
+    with_items: "{{ ZJMXPorts }}"
+    when: not item is search('^[0-9]{1,5}$') or (item | int < 1024 or item | int > 49151)
+
+  - fail: msg="{{ 'Attention!!! An error was detected! The ZJMXPorts has the same values, must be different. Check the correctness of the entered data.' }}"
+    when: ZJMXPorts | length != ZJMXPorts | unique | length
+
+  when: inventory_hostname in groups['ZookeeperNodes'] and ZkStartQPort is undefined and ZkStartZPort is undefined and ZkStartJMXPort is undefined
+  any_errors_fatal: true

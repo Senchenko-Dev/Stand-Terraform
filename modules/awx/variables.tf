@@ -1,19 +1,21 @@
 # Input variable definitions
 variable "inventory_group_name" {
-  description = "inventory_group_name"
+  description = "Имя группы в инвентаре Ansible"
   type = string
 }
 variable "vm_count" {
   default = 1
+  description = "Установить '0' при использовании внешнего AWX, для его настройки на стенд. Иначе установить '1' или не указывать."
 }
-variable "vm_props" {}
+variable "vm_props" {
+  description = "Набор параметров образа виртуальной машины. vm_props = local.vm_props_default"
+}
 variable "vm_disk_data" {
+  description = "Список монтируемых дисков."
   default = []
 }
-variable "ansible_extra_vars" {
-  default = {}
-}
 variable "spo_role_name" {
+  description = "Переменная для использования альтернативной роли (например, для тестирования обновленной версии.)"
   default = "awx"
 }
 
@@ -45,6 +47,10 @@ locals {
 //  default = "password"
 //}
 
-variable "awx_props" {}
+variable "awx_props" {
+  description = "Набор параметров для настройки AWX. Для новой установки задайте local.install_awx_props. Для внешнего AWX задайте local.external_awx_props"
+}
 
-variable "ans_props" {}
+variable "vault_file" {
+  description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
+}

@@ -1,0 +1,35 @@
+#Пример конфигурации для развертывания кластера из 3-х брокеров, каждый из которых расположен на отдельном сервере и 1-ом Зукипере на одном из серверов с брокером
+[KafkaNodes]
+tkles-pprb00225.vm.esrt.cloud.sbrf.ru KBrokerIds='["1"]'
+tkles-pprb00226.vm.esrt.cloud.sbrf.ru KBrokerIds='["2"]'
+tkles-pprb00227.vm.esrt.cloud.sbrf.ru KBrokerIds='["3"]'
+
+[ZookeeperNodes]
+tkles-pprb00225.vm.esrt.cloud.sbrf.ru
+
+[all:vars]
+KDeployConf=deploy-plaintext__zk_plain_no_auth__kafka_plaintext_no_auth.sh
+
+[KafkaNodes:vars]
+ansible_user=pprb_dev
+ansible_ssh_pass=
+KPorts=['9092']
+KJMXPorts=['7011']
+DistroDirs=['/KAFKA/fadeevds/deploy/kafka']
+KDataDirs=['/KAFKA/fadeevds/deploy/kafka-logs']
+KLogDirs=['/KAFKA/fadeevds/deploy/logs/kafka1']
+
+[ZookeeperNodes:vars]
+ansible_user=pprb_dev
+ansible_ssh_pass=
+ZIds=['1']
+ZQuorumPorts=['2888:3888']
+ZPorts=['2181']
+ZJMXPorts=['7001']
+ZDataDirs=['/KAFKA/fadeevds/deploy/zookeeper']
+ZLogDirs=['/KAFKA/fadeevds/deploy/logs/zookeeper']
+#### Properties for Zookeeper ####
+Zk_maxClientCnxns=60
+Zk_4lw.commands.whitelist=*
+Zk_admin.enableServer=true
+Zk_admin.serverPort=8080

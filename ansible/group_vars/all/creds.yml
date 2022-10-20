@@ -1,2 +1,14 @@
-#nexusUser:
-#nexusPass:
+nexusUser: "{{ secrets.nexus.user }}"
+nexusPass: "{{ secrets.nexus.pass }}"
+nexususer: "{{ secrets.nexus.user }}"
+nexuspass: "{{ secrets.nexus.pass }}"
+
+awx_login: "{{ secrets.awx.awx_login }}"
+awx_password: "{{ secrets.awx.awx_password }}"
+stand_admin_password: "{{ secrets.awx.stand_admin_password }}"
+machine_cred_ssh_key_data: "{{ secrets.awx.machine_cred_ssh_key_data }}"
+machine_cred_username: "{{ secrets.awx.machine_cred_username }}"
+email_notify_username: "{{ secrets.awx.email_notify_username }}"
+email_notify_password: "{{ secrets.awx.email_notify_password }}"
+
+

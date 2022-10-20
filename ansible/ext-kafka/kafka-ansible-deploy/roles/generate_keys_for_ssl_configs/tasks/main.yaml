@@ -1,0 +1,6 @@
+---
+### Generate on ansible controller CA keys, truststore and server/client keystore for subsequent copying to target servers
+- block:
+  - name: "Generate Keys for Security Configuration {{ KDeployConf }}"
+    include_tasks: generate_keys_on_localhost.yaml
+  when: KDeployConf == 'deploy-ssl__zk_plain_no_auth__kafka_ssl_no_auth.sh' or KDeployConf == 'deploy-ssl__zk_plain_no_auth__kafka_ssl_with_auth.sh'

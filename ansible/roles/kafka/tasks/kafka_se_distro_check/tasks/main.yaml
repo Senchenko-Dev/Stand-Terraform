@@ -1,0 +1,21 @@
+---
+### Since version 3.0.0 of KafkaSE no more need checking (but older version is not supported))
+###
+- name: Kafka SE Distribution Deployment Verification
+  block:
+    - stat:
+        path: "{{ DistroDirs[0] }}/config"
+      register: kafka_se_config_path
+
+- name: Get Paths Prefix for Kafka SE
+  set_fact:
+    config_sub_dir: 'config'
+  when: kafka_se_config_path.stat.exists and kafka_se_config_path.stat.isdir
+
+- name: Gets the extension for script files depending on the type of distribution
+  set_fact:
+    script_extension: '.sh'
+
+- fail: msg="Attention!!! An error was detected! Distribution type detection failed! The correct path to the distribution was not found on this host."
+  when: config_sub_dir is undefined or script_extension is undefined
+  any_errors_fatal: true
