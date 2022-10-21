@@ -3,11 +3,6 @@ node(env.NODE) {
     def gitUrl = scm.userRemoteConfigs[0].url
 //    def ocHome = tool(name: 'oc-4.5.0', type: 'oc')
 
-    removeSecrets = false
-    hashicorp = true
-    HASHICORP_URL = 'http://10.33.8.239:8200'
-    HASICORP_PATH = '/v1/DEV/PILP/R4/KV'
-
     cleanWs()
     ansiColor('xterm') {
 //        withEnv(["PATH+OC_HOME=${ocHome}", "OC_HOME=${ocHome}"]) {
@@ -15,9 +10,6 @@ node(env.NODE) {
             sh('echo $PATH')
             sh('oc version --client')
             sh('kubectl version --client')
-//            sh('./terraform version')
-
-
 
             withCredentials([
                     [$class: 'UsernamePasswordMultiBinding', credentialsId: 'auto_test', usernameVariable: 'GIT_NAME', passwordVariable: 'GIT_PASSWORD'],
@@ -39,7 +31,7 @@ node(env.NODE) {
                               "TF_VAR_vault_password=${ANSIBLE_VAULT_PASSWORD}"]) {
                             //gitClone('auto_test', gitUrl, branch)
                             gitClone('auto_test', gitUrl, 'master')
-                            getCred()
+                            createSecretsYaml()
                             echo "Запуск по событию. PR - ${jobMode}"
 
                             comment = ["text": "Применение конфигурации, ссылка на билд: ${env.BUILD_URL}"]
@@ -75,12 +67,9 @@ node(env.NODE) {
                               "TF_VAR_scm_branch=${branch}",
                               "TF_VAR_vault_password=${ANSIBLE_VAULT_PASSWORD}"]) {
                             gitClone('auto_test', gitUrl, branch)
-                            getCred()
+                            createSecretsYaml()
                             echo "Запуск по событию. PR - ${jobMode}"
-                            if (hashicorp) {
-                                sh("rm -rf ansible/secrets.yml")
-                            }
-                            sh("git merge origin/master --no-edit")
+                            sh("git merge -s ours origin/master --no-edit")
                             try {
                                 sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
                                 sh("set +x; ./terraform workspace new ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
@@ -126,7 +115,7 @@ node(env.NODE) {
                                   "TF_VAR_scm_branch=master",
                                   "TF_VAR_vault_password=${ANSIBLE_VAULT_PASSWORD}"]) {
                         gitClone('auto_test', gitUrl, 'master')
-                        getCred()
+                        createSecretsYaml()
                         echo "Применение конфигурации без события"
                         try {
                             sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
@@ -135,7 +124,7 @@ node(env.NODE) {
                             sh("set +x; ./terraform destroy -no-color -var-file=ansible/values.tfvars -var=\"vault_password=${ANSIBLE_VAULT_PASSWORD}\" -auto-approve")
                             sh("set +x; rm -rf .terraform* ansible/*_kubeconfig")
                             sh("set +x; find . -name '*.pyc' -delete")
-                            gitCommit('auto_test', gitUrl, 'master')
+                                gitCommit('auto_test', gitUrl, 'master',"Удаление всех ресурсов прошло успешно")
                         } catch (e) {
                             sh("set +x; rm -rf .terraform* comment.json ansible/*_kubeconfig")
                             sh("set +x; find . -name '*.pyc' -delete")
@@ -157,14 +146,16 @@ def gitClone(creds, url, branch) {
 
 def gitCommit(creds, url, repoBranch, commitMessage = "Jenkins apply job commit") {
     withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: creds, usernameVariable: 'GIT_NAME', passwordVariable: 'GIT_PASSWORD']]) {
-        if (removeSecrets){
-            sh('rm -rf ansible/secrets.yml')
-        }
-        sh('rm -rf ansible/ext-kafka/kafka-ansible-deploy-3.0.3/roles/copy_distro_to_server/files/kafka.zip')
         sh('rm -rf vpass.txt')
         sh('set +x; git config --global user.email "dummy@dummy.com"')
         sh('set +x; git config --global user.name "Jenkins"')
         sh("set +x; git add -A .")
+        if (env.HASHICORP.toBoolean()){
+            sh("set +x; git rm -f ansible/secrets.yml")
+        }
+        sh("set +x; git reset HEAD ansible/ext-kafka")
+        sh("set +x; git reset HEAD ansible/ext-pangolin")
+        sh("set +x; git reset HEAD ansible/roles/nginx_iag/files")
         sh("set +x; git commit -m \"${commitMessage}\" || echo 'Nothing to commit'")
         sh("set +x; git checkout .")
         sh("set +x; git pull --rebase " + url.replaceAll('https://', "https://${GIT_NAME}:${GIT_PASSWORD}@") + " HEAD:$repoBranch")
@@ -172,18 +163,19 @@ def gitCommit(creds, url, repoBranch, commitMessage = "Jenkins apply job commit"
     }
 }
 
-def getCred() {
+def createSecretsYaml() {
     withCredentials([
-            [$class: 'StringBinding', credentialsId: ' cloudDevOpsEFSAnsibleVaultPassword', variable: 'ANSIBLE_VAULT_PASSWORD'],
             [$class: 'StringBinding', credentialsId: 'HashicorpVaultToken', variable: 'HASHICORP_VAULT_TOKEN']
     ]) {
-        if (HASHICORP_VAULT_TOKEN.startsWith("s.") && hashicorp == true) {
-            HASHICORP_VAULT_TOKEN = HASHICORP_VAULT_TOKEN
-            ANSIBLE_VAULT_PASSWORD = ANSIBLE_VAULT_PASSWORD
-            sh "python secman_yaml.py --url ${HASHICORP_URL} --path ${HASICORP_PATH} --token ${HASHICORP_VAULT_TOKEN} --output_file ansible/secrets.yml"
-            sh "echo ${ANSIBLE_VAULT_PASSWORD} > vpass.txt && ansible-vault encrypt --vault-id @vpass.txt ansible/secrets.yml"
-        } else {
-            ANSIBLE_VAULT_PASSWORD = ANSIBLE_VAULT_PASSWORD
+        def secrets = new File("ansible/secrets.yml")
+        if (env.HASHICORP.toBoolean() == true || !secrets.exists()) {
+            if (env.HASHICORP_URL && env.HASHICORP_PATH && HASHICORP_VAULT_TOKEN) {
+                sh "echo Run with Hashicorp Vault"
+                sh "python secman_yaml.py --url ${env.HASHICORP_URL} --path ${env.HASHICORP_PATH} --token ${HASHICORP_VAULT_TOKEN} --output_file ansible/secrets.yml"
+                sh "echo ${ANSIBLE_VAULT_PASSWORD} > vpass.txt && ansible-vault encrypt --vault-id @vpass.txt ansible/secrets.yml"
+            } else {
+                sh("Error")
+            }
         }
     }
 }
