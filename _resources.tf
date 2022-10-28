@@ -105,16 +105,16 @@ locals {
   group1 = {
     diOpenshiftSessionSector = {
       projects = {
-        dyncontent  = {
-          fpi_name = "dyncontent"
+        dyncontent2  = {
+          fpi_name = "dyncontent2"
           values   = {
             quota    = {
               cpu = 2
               mem = 4
             }
             labels     = {
-              id_fp = "UFTM",
-              fpname = "dyncontent",
+              id_fp = "UFTM2",
+              fpname = "dyncontent2",
               segment = "${local.globals.solution}",
               stand = "${local.globals.stand}"
             }
