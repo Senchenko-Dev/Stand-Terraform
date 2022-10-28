@@ -132,10 +132,10 @@ locals {
       vars = {
         sector = "ses"
         values = {
-          sm       = {
-            cpNamespace = local.globals.stashedControlPlaneNamespace
-            cpName      = local.globals.controlPlaneName
-          }
+//          sm       = {
+//            cpNamespace = local.globals.stashedControlPlaneNamespace
+//            cpName      = local.globals.controlPlaneName
+//          }
           bindings = [
             {
               roleType = "ClusterRole"
@@ -154,7 +154,7 @@ module "diOpenshiftgroup1" {
   source = "./modules/ansible_group_project_init"
   depends_on = [module.diOpenshiftServiceCore]
 //  count = 0
-  for_each = local.empty
+  for_each = local.group1
   managment_system_type = var.managment_system_type
 #  awx_props = local.awx_props
   kubeconfig = local.oc_kubeconfig
