@@ -84,7 +84,7 @@ locals {
 }
 
 module "AWX" {
-//  count = 0
+  count = 0
   # TF path to the module
   source = "./modules/awx"
   # VM settings
@@ -102,7 +102,8 @@ module "AWX" {
 locals {
 //  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
 ///*
-  awx_props = merge(local.install_awx_props,
+  awx_props = {}
+/*  merge(local.install_awx_props,
     { #  При использовании внешнего AWX прописать хост и урл в явном виде.
       awx_host = module.AWX.awx_host_ip
       awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
@@ -112,7 +113,7 @@ locals {
   )
 //*/
 }
-
+/*
 # NGINX
 module "NginxG1" {
   source = "./modules/spo_nginx"
