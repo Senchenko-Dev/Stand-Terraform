@@ -21,9 +21,10 @@ Name: pr-hoor
 Url: ссылка_на_ваш_Jenkins
 
 Выбрать в настройках Pull Request:
-а) Opened
-b) Source branch update
-c) Merge
+a) Push
+b) Opened
+c) Source branch update
+d) Merge
 ```
 # 5. Create Branch
 ```
