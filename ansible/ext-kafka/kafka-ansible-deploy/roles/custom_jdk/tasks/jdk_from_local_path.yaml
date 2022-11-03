@@ -1,4 +1,0 @@
----
-- name: Get JDK File from Local Path
-  set_fact: jdk_file_source_path="{{ lookup('fileglob', SourceJDK + '/jdk*.tar.gz',wantlist=True) }}"
-  delegate_to: localhost

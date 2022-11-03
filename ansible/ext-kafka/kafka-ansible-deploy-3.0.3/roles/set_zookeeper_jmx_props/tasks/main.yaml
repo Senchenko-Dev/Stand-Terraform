@@ -1,3 +1,0 @@
----
-- name: Change Zookeeper JMX Ports Only If Cluster Mode is Enabled
-  include_tasks: set_jmx_props.yaml

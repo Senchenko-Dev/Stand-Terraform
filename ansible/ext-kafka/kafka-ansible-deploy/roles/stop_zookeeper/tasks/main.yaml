@@ -1,6 +1,0 @@
----
-- name: Stop Zookeepers
-  command: "{{ item }}/bin/zookeeper-server-stop{{ script_extension }}"
-  with_items: "{{ DistroDirs }}"
-  when: ZIds is defined and item is defined
-  ignore_errors: yes # "Suppress less informative ansible error output in favour of our own error output. E.g.: bin/kafka-server-stop will return "No Kafka server to stop" instead of ansible error message like "process ended with exit code 0""

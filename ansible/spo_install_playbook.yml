@@ -12,7 +12,6 @@
     - name: Import secrets
       include_vars: "{{ vault_file }}"
       tags: always
-    #      no_log: yes todo !!!!!!
       when: vault_file is defined
 
     - name: Collect facts

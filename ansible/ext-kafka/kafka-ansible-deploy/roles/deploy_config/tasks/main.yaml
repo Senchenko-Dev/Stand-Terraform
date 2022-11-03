@@ -1,8 +1,0 @@
----
-- name: "Deploy Selected Config of Kafka SberEdition {{ KDeployConf }}"
-  command: "{{ item }}/{{ KDeployConf }}"
-  become: yes
-  become_user: "{{ ansible_user }}"
-  args:
-    chdir: "{{ item }}"
-  with_items: "{{ DistroDirs }}"
