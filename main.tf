@@ -2,12 +2,17 @@
 locals {
 
 
-  stand_name = "" # TODO Имя стенда
+  stand_name = "inner-bf1" # TODO Имя стенда
   network_name = "main_VDC02"
-
-  vault_file = "secrets.yml"
-
-# передается в модуль (затем в провайдер VCD_VM)
+  vault_file = "secrets.yml" # todo внимание, хардкод в Jenkinsfile!
+  # Для setup_vm. Публичные ключи для входа на хосты.
+  ssh_keys_list = [
+    { username: "user", ssh_key: local.secrets.ssh.user},
+    { username: "provuser", ssh_key: local.secrets.ssh.provuser, sudo: true},
+    { username: "sentsov", ssh_key: local.secrets.ssh.sentsov, sudo: true},
+    { username: "root", ssh_key: local.secrets.ssh.root},
+  ]
+  # параметры для VCD_VM
   vm_props_default = {
     template_name = "CentOS7_64-bit_custom2"
     catalog_name = "Custom"
@@ -29,14 +34,6 @@ locals {
     "dnsserver" : "10.255.1.3",
     "ansible_auth_pub_key" : local.secrets.ssh.key_pub # ключ пользователя ansible
   }
-
-# Для setup_vm
-  ssh_keys_list = [
-    { username: "user", ssh_key: local.secrets.ssh.user},
-    { username: "provuser", ssh_key: local.secrets.ssh.provuser, sudo: true},
-    { username: "sentsov", ssh_key: local.secrets.ssh.sentsov, sudo: true},
-    { username: "root", ssh_key: local.secrets.ssh.root},
-  ]
 }
 
 # AWX
@@ -59,28 +56,24 @@ locals {
 }
 
 module "AWX" {
-//  count = 0
+  count = 0
   # TF path to the module
   source = "./modules/awx"
-
   # VM settings
   vm_count = 1
 //  cpu = 6
 //  memory = 12288
   # VM properties
   vm_props = local.vm_props_default
-
   # Ansible properties
   inventory_group_name = "awx-group" // для связи с group_vars/group_name.yml
-  force_ansible_run = "000"
-
   awx_props = local.install_awx_props
   vault_file = local.vault_file
 }
 
 locals {
-//  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
-///*
+  awx_props = {}  #  При использовании внешнего AWX прописать хост и урл в явном виде.
+/*
   awx_props = merge(local.install_awx_props,
     { #  При использовании внешнего AWX прописать хост и урл в явном виде.
       awx_host = module.AWX.awx_host_ip
@@ -89,112 +82,16 @@ locals {
       awx_k8s_sa_project = local.globals.devopsProject
     }
   )
+  */
 }
-
-
-# NGINX
-module "NginxG1" {
-  source = "./modules/spo_nginx"
-# VM properties
-  vm_count = 1
-  memory = 512
-  cpu = 1
-  vm_disk_data = [
-//   { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
-//   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
-  ]
-  vm_props = local.vm_props_default
-  awx_props = local.awx_props
-
-# Ansible properties
-  force_ansible_run = "0"
-  inventory_group_name = "nginx_ssl" // для связи с group_vars/group_name.yml
-  spo_role_name = "nginx"
-  vault_file = local.vault_file
-}
-
-module "Nginx_iag" {
-  source = "./modules/spo_nginx_iag"
-  count = 0
-  ## VM properties
-  vm_props = local.vm_props_default
-
-  # Ansible properties
-  nginx_iag_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI01536898_APIGATE/D-02.020.00-1390_iag_release_19_4_rhel7.x86_64/CI01536898_APIGATE-D-02.020.00-1390_iag_release_19_4_rhel7.x86_64-distrib.zip"
-  inventory_group_name = "nginx_iag" // для связи с group_vars/group_name.yml
-  vault_file = local.vault_file
-}
-
-
- module "KAFKA_standalone1" {
-#   depends_on = [module.AWX]
-   count = 1
-   # TF module properties
-   source = "./modules/spo_kafka_se"
-
-   # Ansible properties
-   inventory_group_name = "Kafka1"
- //  spo_role_name = ""
-   force_ansible_run = ""
-   #000_${timestamp()}" #  "_${timestamp()}"
-
-   # Download
- //  nexus_cred = {
- //    nexususer = local.secrets.nexususer,
- //    nexuspass = local.secrets.nexuspass,
- //  }
-    kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
-
-   # VM properties
-   vm_count = 1
-   memory = 1024 #16*1024
-   cpu = 4
-#   vm_disk_data = [
-#     { size: "350G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
-#   ]
-
-   vm_props = local.vm_props_default
-   vault_file = local.vault_file
-   spo_role_name = "kafka"
-   awx_props = local.awx_props
-
- }
-
- module "KAFKA_SSL1" {
-   count = 0
-   # TF module properties
-   source = "./modules/spo_kafka_se"
-
-   # Ansible properties
-   inventory_group_name = "KafkaSSL"
- //  spo_role_name = ""
-   force_ansible_run = ""
-   #000_${timestamp()}" #  "_${timestamp()}"
-
-   # Download
-   # kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
-
-   # VM properties
-   vm_count = 1
-   memory = 2*1024
-   cpu = 2
-   vm_disk_data = [
- //    { size: "350G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
-   ]
-   vault_file = local.vault_file
-   vm_props = local.vm_props_default
- }
-
 
  module "PGSE_standalone" {
-   count = 0
+//   count = 0
    # TF module properties
-   depends_on = []
    source = "./modules/spo_pangolin"
 
    # Ansible properties
-   inventory_group_name = "Pangolin_alone-1"
-   force_ansible_run = "000" #  "_${timestamp()}"
+   inventory_group_name = "pangolin_cfga" # заполнить group_vars
 
    # Download
    pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"
@@ -218,34 +115,3 @@ module "Nginx_iag" {
    vault_file = local.vault_file
  }
 
-/*
-module "PGSE_cluster" {
-  # TF module properties
-  source = "./modules/pangolin"
-
-  # Ansible properties
-  inventory_group_name = "Pangolin-cluster-1"
-  force_ansible_run = ""
-
-  # Download
-  nexus_cred = {
-    nexususer = var.nexususer,
-    nexuspass = var.nexuspass,
-  }
-  pangolin_url = local.pangolin460-010_url// TODO перенести в файл настроек
-
-  # Install
-  installation_type = local.pangolin_installation_type.cluster
-  installation_subtype = local.pangolin_installation_subtype.cluster-patroni-etcd-pgbouncer
-
-  # VM properties
-  # только для postgres nodes
-  vm_pg_disk_data = [
-    { size : "10G", mnt_dir : local.pgdata_dir },
-  ]
-  vm_etcd_disk_data = [
-    { size : "2G", mnt_dir : local.pgdata_dir },
-  ]
-  vm_props = local.vm_props_default
-}
-*/
