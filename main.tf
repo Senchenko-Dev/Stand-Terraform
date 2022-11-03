@@ -2,7 +2,7 @@
 locals {
 
 
-  stand_name = "inner_bf1" # TODO Имя стенда
+  stand_name = "inner-bf1" # TODO Имя стенда
   network_name = "main_VDC02"
   vault_file = "secrets.yml" # todo внимание, хардкод в Jenkinsfile!
   # Для setup_vm. Публичные ключи для входа на хосты.
@@ -91,7 +91,7 @@ locals {
    source = "./modules/spo_pangolin"
 
    # Ansible properties
-   inventory_group_name = "pangolin_cfga"
+   inventory_group_name = "pangolin_cfga" # заполнить group_vars
 
    # Download
    pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"

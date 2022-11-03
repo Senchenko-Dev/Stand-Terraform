@@ -4,14 +4,14 @@ pgse_clean_all: true
 #custom_config: inventory/group_vars/Pangolin_alone-1/custom_config.yml
 
 #default_db
-tablespace_name: "{{ 'outerspace' | default('tbl_t', true) }}"
+tablespace_name: "{{ 'cfga_bf1' | default('tbl_t', true) }}"
 tablespace_location: "{{ '' | default('/pgdata/' + pg_major_version + '/tablespaces', true) }}"
-db_name: "{{ 'db_iob' | default('first_db', true) }}"
-schema_name: "{{ '' | default('sch1', true) }}"
+db_name: "{{ 'cfga_bf1' | default('first_db', true) }}"
+schema_name: "{{ 'cfga_bf1' | default('sch1', true) }}"
 sec_officer: "{{ '' | default('17644673', true) }}" #strictly 1 login
 support: "{{ ['sentsovaa'] | default([13289436, 13289437], true) }}" #list of logins
 as_admins: "{{ ['sentsovaa'] | default(['12345678'], true) }}" #list of logins
-as_TUZ: "{{ ['sa-r4c-devops-spo', 'stac'] | default(['test_tuz', 'test_tuz_devops'], true) }}" #list of logins
+as_TUZ: "{{ ['sa-r4c-devops-spo', 'cfga_bf1'] | default(['test_tuz', 'test_tuz_devops'], true) }}" #list of logins
 control_name: "{{ '' | default('RLM', true) }}"
 
 #PGDATA: "{{ '' | default('/pgdata/' + pg_major_version + '/data', true) }}"
