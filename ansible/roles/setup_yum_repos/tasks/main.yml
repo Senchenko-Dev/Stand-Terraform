@@ -1,29 +1,34 @@
-- name: reset repos when reset_repos defined and true
-  block:
-    - name: remove old repos setting
-      shell: mkdir -p backup && mv -f * backup/ || echo 'backup dir exists or no files to backup'
-      args:
-        chdir: /etc/yum.repos.d/
-      when: yum_move_old_repos | default("true") | bool
-    #      ignore_errors: yes
+- name: Удаление repo файлов (с бэкапом)
+  shell: mkdir -p backup && mv -f * backup/ || echo 'backup dir exists or no files to backup'
+  args:
+    chdir: /etc/yum.repos.d/
+  when: yum_move_old_repos | default("false") | bool
+#      ignore_errors: yes
 
-    - name: Add mirror EPEL7
-      yum_repository:
-        name: EPEL7-custom
-        description: EPEL7 mirror repo to access from SberCloud
-        file: custom
-        baseurl: "{{ baseurl_epel | default('https://mirror.yandex.ru/epel/$releasever/$basearch/',true) }}"
-        gpgcheck: no
-        enabled: yes
+- name: Установка пользовательского repo файла
+  copy:
+    src: "{{ yum_repos_custom_file }}"
+    dest: /etc/yum.repos.d/
+  when: yum_repos_custom_file is defined and yum_repos_custom_file != ''
 
-    - name: Add mirror CENTOS
-      yum_repository:
-        name: Centos-custom
-        description: Centos mirror repo to access from SberCloud
-        file: custom
-        baseurl: "{{ baseurl_centos | default('https://mirror.yandex.ru/centos/$releasever/os/$basearch/',true) }}"
-        gpgcheck: no
-        enabled: yes
+#- block:
+#    - name: Add mirror EPEL7
+#      yum_repository:
+#        name: EPEL7-custom
+#        description: EPEL7 mirror repo to access from SberCloud
+#        file: custom
+#        baseurl: "{{ baseurl_epel | default('https://mirror.yandex.ru/epel/$releasever/$basearch/',true) }}"
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Add mirror CENTOS
+#      yum_repository:
+#        name: Centos-custom
+#        description: Centos mirror repo to access from SberCloud
+#        file: custom
+#        baseurl: "{{ baseurl_centos | default('https://mirror.yandex.ru/centos/$releasever/os/$basearch/',true) }}"
+#        gpgcheck: no
+#        enabled: yes
 
 
     - name: list repos
