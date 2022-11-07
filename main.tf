@@ -96,7 +96,7 @@ locals {
 
    # Download and unpack
    pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"
-   unpack_exclude = ['installer']
+   unpack_exclude = ["installer"]
    # Install
    installation_type = "standalone"
    installation_subtype = "standalone-postgresql-only"
