@@ -4,7 +4,7 @@ min_space_pgdata: 0                          # minimal free disk space on the pg
 min_space_pgarclogs: 0                       # minimal free disk space on the pgarclogs (GB)
 min_space_pgerrorlogs: 0                     # minimal free disk space on the pgerrorlogs (GB)
 sos_file_size: 0                           # volume of the sos file will be created in /pgdata (MB)
-
+monitoring_ldap_servers: '^solution.sbt$'
 ####################################################### CONNECTION SETTINGS (mandatory) #######################################################
 # pg_hba settings for users as_admin/as_admin_read, all-sa-pam-group and other rules (you can write multiple lines separated by "\n")
 ldap_bind_tuz_name: 'SBT-SA-PGPSxxx' # name TUZ for ldap
