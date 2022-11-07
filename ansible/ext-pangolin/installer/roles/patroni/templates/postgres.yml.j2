@@ -142,7 +142,8 @@ postgresql:
         monitoring_ldap_servers: {% if segment == 'alpha' %}'^ca.sbrf.ru$|^omega.sbrf.ru$'
                                  {% elif segment == 'sigma' %}'^sigma.sbrf.ru$'
                                  {% elif segment == 'delta' %}'^delta.sbrf.ru$'
-                                 {% elif segment == 'pd10' %}'^solution.sbt$'{% endif %}
+                                 {% elif segment == 'pd10' %}'^solution.sbt$'
+                                 {% else %}'^no.{{segment}}.name$'{% endif %}
         pgaudit.log: 'ddl, role, connection, misc_set'
         password_encryption: 'scram-sha-256'
         password_policy.deny_default: '{{ password_policy_params.deny_default }}'
