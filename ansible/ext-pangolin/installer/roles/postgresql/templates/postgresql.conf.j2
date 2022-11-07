@@ -77,7 +77,8 @@ min_wal_size = '2GB'
 monitoring_ldap_servers = {% if segment == 'alpha' %}'^ca.sbrf.ru$|^omega.sbrf.ru$'
                           {% elif segment == 'sigma' %}'^sigma.sbrf.ru$'
                           {% elif segment == 'delta' %}'^delta.sbrf.ru$'
-                          {% elif segment == 'pd10' %}'^solution.sbt$'{% endif %}
+                          {% elif segment == 'pd10' %}'^solution.sbt$'
+                          {% else %}'^no.name$'{% endif %}
 pgaudit.log = 'ddl, role, connection, misc_set'
 password_encryption = 'scram-sha-256'
 #password_policies
