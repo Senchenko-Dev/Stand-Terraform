@@ -52,32 +52,32 @@ pip_repository: "{% if   segment == 'alpha' %}{ 'index_url': 'http://mirror.ca.s
                  {% else                    %}{ 'index_url': 'https://pypi.org/simple',                  'trusted_host': 'pypi.org'}\
                  {% endif %}"
 
-linux_repos:
-  - name:     EPEL7
-    file:     mirror
-    baseurl:  http://mirror.sigma.sbrf.ru/rhel-extras/EPEL7
-    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sigma' }}"
-
-  - name:     EPEL7
-    file:     mirror
-    baseurl:  http://mirror.ca.sbrf.ru/rhel-extras/EPEL7
-    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'alpha' }}"
-
-  - name:     EPEL7
-    file:     mirror
-    baseurl:  https://mirror.yandex.ru/epel/7/x86_64/
+linux_repos: # см файл ansible/additional/vdc04.repo или можно было задать здесь список.
+#  - name:     EPEL7
+#    file:     mirror
+#    baseurl:  http://mirror.sigma.sbrf.ru/rhel-extras/EPEL7
+#    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sigma' }}"
+#
+#  - name:     EPEL7
+#    file:     mirror
+#    baseurl:  http://mirror.ca.sbrf.ru/rhel-extras/EPEL7
+#    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'alpha' }}"
+#
+#  - name:     EPEL7
+#    file:     mirror
+#    baseurl:  https://mirror.yandex.ru/epel/7/x86_64/
+##    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-server-rhscl-7-rpms/
+#    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
+#
+#  - name:     rhel-server-rhscl-7-rpms
+#    file:     D10
 #    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-server-rhscl-7-rpms/
-    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
-
-  - name:     rhel-server-rhscl-7-rpms
-    file:     D10
-    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-server-rhscl-7-rpms/
-    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
-
-  - name:     rhel-7-server-extras-rpms
-    file:     D10
-    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-extras-rpms/
-    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
+#    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
+#
+#  - name:     rhel-7-server-extras-rpms
+#    file:     D10
+#    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-extras-rpms/
+#    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
 
 ######################################################## MONITORING ZABBIX (optional) ########################################################
 monitoring_zabbix: false                     # whether to switch Zabbix monitoring, usually used in PROM.
