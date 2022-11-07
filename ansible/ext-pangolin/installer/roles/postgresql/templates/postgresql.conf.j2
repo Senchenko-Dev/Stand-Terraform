@@ -78,7 +78,7 @@ monitoring_ldap_servers = {% if segment == 'alpha' %}'^ca.sbrf.ru$|^omega.sbrf.r
                           {% elif segment == 'sigma' %}'^sigma.sbrf.ru$'
                           {% elif segment == 'delta' %}'^delta.sbrf.ru$'
                           {% elif segment == 'pd10' %}'^solution.sbt$'
-                          {% else %}'^no.name$'{% endif %}
+                          {% else %}'^no.{{segment}}.name$'{% endif %}
 pgaudit.log = 'ddl, role, connection, misc_set'
 password_encryption = 'scram-sha-256'
 #password_policies
