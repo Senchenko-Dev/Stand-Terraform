@@ -92,6 +92,7 @@ locals {
 
    # Ansible properties
    inventory_group_name = "pangolin_cfga" # заполнить group_vars
+   force_ansible_run = "1"
 
    # Download
    pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"
