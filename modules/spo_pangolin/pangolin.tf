@@ -230,7 +230,7 @@ resource "local_file" "pangolin-inventory" {
         download_url: var.pangolin_url # filename
         download_dest: "${abspath(path.root)}/ansible/ext-pangolin/distr/${basename(var.pangolin_url)}" # filename
         unpack_dest: "${abspath(path.root)}/ansible/ext-pangolin/"
-        unpack_exclude: jsondecode(var.unpack_exclude)
+        unpack_exclude: jsonencode(var.unpack_exclude)
         //       unarchive:
         //        src: "{{ download_dest }}"
         //        dest: "{{ unpack_dest }}"
