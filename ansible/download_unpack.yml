@@ -28,6 +28,7 @@
       unarchive:
         src: "{{ download_dest }}"
         dest: "{{ unpack_dest }}"
+        exclude: "{{ unpack_exclude }}"
       when:
         - unpack_dest is defined
 
