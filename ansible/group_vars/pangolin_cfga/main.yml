@@ -10,7 +10,7 @@ db_name: "{{ 'cfga_bf1' | default('first_db', true) }}"
 schema_name: "{{ 'cfga_bf1' | default('sch1', true) }}"
 sec_officer: "{{ '' | default('17644673', true) }}" #strictly 1 login
 support: "{{ ['sentsovaa'] | default([13289436, 13289437], true) }}" #list of logins
-as_admins: "{{ ['sentsovaa','sentsov.a.a','14540224'] | default(['12345678'], true) }}" #list of logins
+as_admins: "{{ ['sentsovaa','14540224'] | default(['12345678'], true) }}" #list of logins
 as_TUZ: "{{ ['sa-r4c-devops-spo', 'cfga_bf1'] | default(['test_tuz', 'test_tuz_devops'], true) }}" #list of logins
 control_name: "{{ '' | default('RLM', true) }}"
 
