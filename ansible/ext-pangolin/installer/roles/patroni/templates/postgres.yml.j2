@@ -139,11 +139,7 @@ postgresql:
         max_wal_senders: '10'
         max_wal_size: '4GB'
         min_wal_size: '2GB'
-        monitoring_ldap_servers: {% if segment == 'alpha' %}'^ca.sbrf.ru$|^omega.sbrf.ru$'
-                                 {% elif segment == 'sigma' %}'^sigma.sbrf.ru$'
-                                 {% elif segment == 'delta' %}'^delta.sbrf.ru$'
-                                 {% elif segment == 'pd10' %}'^solution.sbt$'
-                                 {% else %}'^no.{{segment}}.name$'{% endif %}
+        monitoring_ldap_servers = '{{ monitoring_ldap_servers }}'
         pgaudit.log: 'ddl, role, connection, misc_set'
         password_encryption: 'scram-sha-256'
         password_policy.deny_default: '{{ password_policy_params.deny_default }}'
