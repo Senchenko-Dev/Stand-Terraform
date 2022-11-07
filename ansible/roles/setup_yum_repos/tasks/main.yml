@@ -31,11 +31,11 @@
 #        enabled: yes
 
 
-    - name: list repos
-      shell: cat *.repo
-      args:
-        chdir: /etc/yum.repos.d/
-      ignore_errors: yes
+- name: list repos
+  shell: cat *.repo
+  args:
+    chdir: /etc/yum.repos.d/
+  ignore_errors: yes
 
 #    - name: Add EPEL8 mirror repo to access from SberCloud
 #      yum_repository:
