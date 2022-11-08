@@ -135,8 +135,11 @@ module "NginxG1" {
   vault_file = local.vault_file
 }
 
-/*
-module "Nginx_iag" {
+
+
+
+# NGINX_IAG
+module "Nginx_IAG" {
   source = "./modules/spo_nginx_iag"
 
   ## VM properties
@@ -147,6 +150,55 @@ module "Nginx_iag" {
   inventory_group_name = "nginx_iag" // для связи с group_vars/group_name.yml
   vault_file = local.vault_file
 }
+
+
+
+
+# NGINX_SGW
+module "Nginx_SGW" {
+  source = "./modules/spo_nginx_sgw"
+
+  vm_count = 1
+
+  ## VM properties
+  vm_props = local.vm_props_default
+
+  # Ansible properties
+  nginx_sgw_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000178_sgwx/D-02.021.03-11_release_19_5_1_sgw_nginx_1_20_1_dzo_rhel7.x86_64/CI90000178_sgwx-D-02.021.03-11_release_19_5_1_sgw_nginx_1_20_1_dzo_rhel7.x86_64-distrib.zip"
+  inventory_group_name = "nginx_sgw" // для связи с group_vars/group_name.yml
+  vault_file = local.vault_file
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /*
