@@ -1,17 +1,17 @@
 terraform {
-  backend "pg" {}
-#  backend "kubernetes" {
-#    secret_suffix    = "state"
-#    host             = "api.stands-vdc03.solution.sbt:6443"
-#    config_path      = "ansible/dummy"
-#    insecure         = true
-#    namespace        = "tfstate-team-polyakov"
-#    exec {
-#      api_version = "client.authentication.k8s.io/v1beta1"
-#      command = "./ansible/login.sh"
-#      args = ["--token", "none", "--username","sbt-frontend-std", "--password", "Qwerty!2021", "--host", "https://10.255.8.50:6443", "--kubeconfig", "ansible/oc_kubeconfig"]
-#    }
-#  }
+#  backend "pg" {}
+  backend "kubernetes" {
+    secret_suffix    = "state"
+    host             = "api.stands-vdc03.solution.sbt:6443"
+    config_path      = "ansible/dummy"
+    insecure         = true
+    namespace        = "tfstate-team-polyakov"
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command = "./ansible/login.sh"
+      args = ["--token", "none", "--username","sbt-frontend-std", "--password", "Qwerty!2021", "--host", "https://10.255.8.50:6443", "--kubeconfig", "ansible/oc_kubeconfig"]
+    }
+  }
 
   required_providers {
     kubernetes = {
