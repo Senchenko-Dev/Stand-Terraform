@@ -1,7 +1,7 @@
 #0123
 locals {
 #12s
-  stand_name = "demo-sents"
+  stand_name = "senchenko-test"
   network_name = "main_VDC02"
   vault_file = "secrets.yml" # todo внимание, хардкод в Jenkinsfile!
   # Для setup_vm. Публичные ключи для входа на хосты.
@@ -113,7 +113,7 @@ locals {
   )
 //*/
 }
-/*
+
 # NGINX
 module "NginxG1" {
   source = "./modules/spo_nginx"
@@ -133,6 +133,7 @@ module "NginxG1" {
   vault_file = local.vault_file
 }
 
+/*
 module "Nginx_iag" {
   source = "./modules/spo_nginx_iag"
 
