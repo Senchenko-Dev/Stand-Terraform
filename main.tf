@@ -136,8 +136,7 @@ module "NginxG1" {
 }
 
 
-
-
+/*
 # NGINX_IAG
 module "Nginx_IAG" {
   source = "./modules/spo_nginx_iag"
@@ -168,7 +167,7 @@ module "Nginx_SGW" {
   inventory_group_name = "nginx_sgw" // для связи с group_vars/group_name.yml
   vault_file = local.vault_file
 }
-
+*/
 
 
 

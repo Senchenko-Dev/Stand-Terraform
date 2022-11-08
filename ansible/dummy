@@ -1,0 +1,13 @@
+kind: Config
+apiVersion: v1
+clusters:
+ - cluster:
+    server: https://localhost
+   name: dummy
+contexts:
+ - context:
+    cluster: dummy
+   name: dummy
+current-context: dummy
+preferences: {}
+users: []
