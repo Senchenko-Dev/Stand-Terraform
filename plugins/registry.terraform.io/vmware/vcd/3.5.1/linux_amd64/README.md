@@ -131,9 +131,9 @@ $HOME/.terraform.d/
 Once you have installed the plugin as mentioned above, you can simply create a new `config.tf` as defined in [the manual](https://www.terraform.io/docs/providers/vcd/index.html) and run 
 
 ```sh
-$ terraform1111 init
-$ terraform1111 plan
-$ terraform1111 apply
+$ terraform init
+$ terraform plan
+$ terraform apply
 ```
 
 When using terraform 0.13+, you also need to have a `terraform` block either in your script or in an adjacent `versions.tf` file,

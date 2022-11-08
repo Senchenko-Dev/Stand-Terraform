@@ -19,13 +19,13 @@ Clone repository to: `$GOPATH/src/github.com/llomgui/terraform-provider-openshif
 
 ```sh
 $ mkdir -p $GOPATH/src/github.com/llomgui; cd $GOPATH/src/github.com/llomgui
-$ git clone git@github.com:llomgui/terraform1111-provider-openshift
+$ git clone git@github.com:llomgui/terraform-provider-openshift
 ```
 
 Enter the provider directory and build the provider
 
 ```sh
-$ cd $GOPATH/src/github.com/llomgui/terraform1111-provider-openshift
+$ cd $GOPATH/src/github.com/llomgui/terraform-provider-openshift
 $ make build
 ```
 
@@ -44,7 +44,7 @@ directory.
 ```sh
 $ make build
 ...
-$ $GOPATH/bin/terraform1111-provider-openshift
+$ $GOPATH/bin/terraform-provider-openshift
 ...
 ```
 
