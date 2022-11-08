@@ -1,0 +1,32 @@
+# опции установки
+
+# путь куда  будет установлен nginx-iag
+NGINXDIR="/opt/nginx-iag"
+
+#for local test
+#NGINXDIR="/home/usr/nginx-iag"
+
+# директория с файлами логов
+NGINXLOGS_DIR="$NGINXDIR/logs"
+
+# директория с pid файлом
+NGINXPID_DIR="$NGINXDIR/pid"
+
+# pid файл
+NGINXPID="$NGINXPID_DIR/nginx_iag.pid"
+
+# reboot command
+rebootcmd="$NGINXDIR/start.sh"
+# reboot cron parameters
+rebootcronjob="@reboot $rebootcmd"
+
+# logrotate command
+#croncmd="$NGINXDIR/logrotate/logrotate.sh"
+# logrotate cron parameters
+#cronjob="0 */30 * * * $croncmd"
+
+# default installation path for iag-monitor
+monitoring_dir="/opt/iag-monitoring"
+
+# default monitoring server
+monitoring_server="127.0.0.1"

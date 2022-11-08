@@ -1,0 +1,122 @@
+---
+- name: change limit user.conf
+  blockinfile:
+    path: /etc/systemd/user.conf
+    block: |
+      DefaultLimitNOFILE=65536
+
+- name: delte string
+  lineinfile:
+    dest: /etc/systemd/user.conf
+    state: absent
+    regexp: "{{ item }}"
+  with_items:
+    - "BEGIN"
+    - "END"
+
+- name: change limit system.conf
+  blockinfile:
+    path: /etc/systemd/system.conf
+    block: |
+      DefaultLimitNOFILE=65536
+
+- name: delte string
+  lineinfile:
+    dest: /etc/systemd/system.conf
+    state: absent
+    regexp: "{{ item }}"
+  with_items:
+    - "BEGIN"
+    - "END"
+
+- name: Install libunwind
+  yum:
+    name: libunwind
+    state: latest
+
+- name: Install ldconfig
+  yum:
+    name: ldconfig
+    state: latest
+
+- name: Install Unzip
+  yum:
+    name: unzip
+    state: latest
+
+- name: Create Group
+  group:
+    name: "{{ nginx_sgw_group }}"
+    state: present
+
+- name: Create User
+  user:
+    name: "{{ nginx_sgw_user }}"
+    state: present
+    shell: /bin/bash
+    group: "{{ nginx_sgw_group }}"
+
+- name: change limit in limits.conf
+  blockinfile:
+    path: /etc/security/limits.conf
+    block: |
+      {{ nginx_sgw_user }}       soft    nofile  65535
+      {{ nginx_sgw_user }}       hard    memlock 65535
+
+- name: delte string
+  lineinfile:
+    dest: /etc/security/limits.conf
+    state: absent
+    regexp: "{{ item }}"
+  with_items:
+    - "BEGIN"
+    - "END"
+
+- name: Create Folder nginx-sgw
+  file:
+    path: /opt/nginx-sgw
+    state: directory
+    owner: "{{ nginx_sgw_user }}"
+    group: "{{ nginx_sgw_group }}"
+    mode: '0644'
+
+- name: Create Folder nginx-sgw-install
+  file:
+    path: /tmp/nginx-sgw-install
+    state: directory
+
+- name: unarchive
+  unarchive:
+    src: "{{ download_url | basename }}"
+    dest: /tmp/nginx-sgw-install
+
+- name: Unarchive nginx-sgw.tar.gz
+  unarchive:
+    src: /tmp/nginx-sgw-install/package/tar/nginx-sgw.tar.gz
+    dest: /tmp/nginx-sgw-install
+    remote_src: yes
+
+- name: Copy file install.options to folder
+  copy:
+    src: install.options
+    dest: /tmp/nginx-sgw-install/
+
+- name: Change install dir
+  lineinfile:
+    dest: /tmp/nginx-sgw-install/install.options
+    regexp: '^NGINXDIR'
+    line: 'NGINXDIR="/opt/nginx-sgw"'
+
+- name: Reboot the machine
+  shell: nohup bash -c "sleep 2s && shutdown -r now" &
+
+- name: Wait for machine to come back
+  wait_for_connection:
+    timeout: 30
+    delay: 3
+
+- name: Install.sh nginx-sgw
+  shell: ./install.sh
+  args:
+    chdir: /tmp/nginx-sgw-install
+

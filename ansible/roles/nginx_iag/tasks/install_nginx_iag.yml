@@ -1,4 +1,19 @@
 ---
+- name: Install libunwind
+  yum:
+    name: libunwind
+    state: latest
+
+- name: Install ldconfig
+  yum:
+    name: ldconfig
+    state: latest
+
+- name: Install Unzip
+  yum:
+    name: unzip
+    state: latest
+
 - name: Create Group
   group:
     name: "{{ nginx_iag_group }}"
@@ -24,41 +39,10 @@
     path: /tmp/nginx-sgw-install
     state: directory
 
-#- name: Download distrib
-#  get_url:
-#    url: "{{ download_url }}"
-#    dest: /tmp
-#    validate_certs: no
-#    username: "{{ nexus_user }}"
-#    password: "{{ nexus_pass }}"
-#    mode: '0755'
-
-#- name: Copy to host
-#  copy:
-#    src: "{{ download_url | basename }}"
-#    dest: /tmp
-
-#- find:
-#    paths: /tmp
-#    patterns: '*-distrib.zip'
-#  register: found
-
-#- debug:
-#    msg: "{{found.files.0.path}}"
-- yum:   # todo убрать в install deps
-    name: "{{item}}"
-    state: present
-  loop:
-#    - zipinfo
-    - unzip
-
 - name: unarchive
   unarchive:
     src: "{{ download_url | basename }}"
     dest: /tmp/nginx-sgw-install
-#    remote_src: yes
-
-
 
 - name: Unarchive nginx-sgw.tar.gz
   unarchive:
