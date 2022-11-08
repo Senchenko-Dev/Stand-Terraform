@@ -42,7 +42,7 @@
 - name: Install Unzip
   yum:
     name: unzip
-    state: present
+    state: latest
 
 - name: Create Group
   group:
