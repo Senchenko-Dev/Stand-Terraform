@@ -1,4 +1,3 @@
-
 terraform {
 #  backend "pg" {}
   backend "kubernetes" {
@@ -6,7 +5,7 @@ terraform {
     host             = "api.stands-vdc03.solution.sbt:6443"
     config_path      = "ansible/dummy"
     insecure         = true
-    namespace        = "tfstate-team-polyakov"
+    namespace        = "tfstate-team-polyakov" #создается проект руками в openshift
     exec {
       api_version = "client.authentication.k8s.io/v1beta1"
       command = "./ansible/login.sh"
