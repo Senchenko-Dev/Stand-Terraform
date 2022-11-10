@@ -15,7 +15,6 @@
         owner: root
         group: root
 
-
 #    - name: Install repos RHEL7-rpms
 #      yum_repository:
 #        name: RHEL7-rpms
