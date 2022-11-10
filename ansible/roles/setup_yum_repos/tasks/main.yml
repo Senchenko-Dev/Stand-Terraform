@@ -4,120 +4,129 @@
       shell: mkdir -p backup && mv -f * backup/ || echo 'backup dir exists or no files to backup'
       args:
         chdir: /etc/yum.repos.d/
-      when: yum_move_old_repos | default("true") | bool
+   #  when: yum_move_old_repos | default("true") | bool
     #      ignore_errors: yes
 
-    - name: Install repos RHEL7-rpms
-      yum_repository:
-        name: RHEL7-rpms
-        description: RHEL7-rpms
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/EPEL/
-        gpgcheck: no
-        enabled: yes
+    - name: Add custom repository
+      copy:
+        src: custom.repo
+        dest: /etc/yum.repos.d/custom.repo
+        mode: 0644
+        owner: root
+        group: root
 
-    - name: Install repos RHEL-7.8-extr
-      yum_repository:
-        name: RHEL-7.8-extr
-        description: RHEL-7.8-extr
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/RHEL7-rpms/
-        gpgcheck: no
-        enabled: yes
 
-    - name: Install repos RHEL7-rpms-opt
-      yum_repository:
-        name: RHEL7-rpms-opt
-        description: RHEL7-rpms-opt
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/RHEL7-rpms-opt/
-        gpgcheck: no
-        enabled: yes
-
-    - name: Install repos RHEL-7.8-eus-opts
-      yum_repository:
-        name: RHEL-7.8-eus-opts
-        description: RHEL-7.8-eus-opts
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/RHEL-7.8-eus-opts/
-        gpgcheck: no
-        enabled: yes
-
-    - name: Install repos rhel-7-server-ose-4.5
-      yum_repository:
-        name: rhel-7-server-ose-4.5
-        description: rhel-7-server-ose-4.5
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-ose-4.5-rpms/
-        gpgcheck: no
-        enabled: yes
-
-    - name: Install repos rhel-7-server-ansible-2.9-rpms
-      yum_repository:
-        name: rhel-7-server-ansible-2.9-rpms
-        description: rhel-7-server-ansible-2.9-rpms
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-ansible-2.9-rpms
-        gpgcheck: no
-        enabled: yes
-
-    - name: Install repos rhel-7-server-extras-rpms
-      yum_repository:
-        name: rhel-7-server-extras-rpms
-        description: rhel-7-server-extras-rpms
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-extras-rpms/
-        gpgcheck: no
-        enabled: yes
-
-    - name: Install repos rhel-7-server-rpms
-      yum_repository:
-        name: rhel-7-server-rpms
-        description: rhel-7-server-rpms
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-rpms/
-        gpgcheck: no
-        enabled: yes
-
-    - name: Install repos rhel-7-server-ose-4.6-rpms
-      yum_repository:
-        name: rhel-7-server-ose-4.6-rpms
-        description: rhel-7-server-ose-4.6-rpms
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-ose-4.6-rpms/
-        gpgcheck: no
-        enabled: yes
-
-    - name: Install repos rhel-7-server-optional-rpms
-      yum_repository:
-        name: rhel-7-server-optional-rpms
-        description: rhel-7-server-optional-rpms
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-optional-rpms/
-        gpgcheck: no
-        enabled: yes
-
-    - name: Install repos rhel-7-server-extras-rpms
-      yum_repository:
-        name: rhel-7-server-extras-rpms
-        description: rhel-7-server-extras-rpms
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-extras-rpms/
-        gpgcheck: no
-        enabled: no
-
-    - name: Install repos rhel-7-fast-datapath-rpms
-      yum_repository:
-        name: rhel-7-fast-datapath-rpms
-        description: rhel-7-server-extras-rpms
-        file: custom
-        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-fast-datapath-rpms/
-        gpgcheck: no
-        enabled: no
-
-    - name: list repos
-      shell: cat *.repo
-      args:
-        chdir: /etc/yum.repos.d/
-      ignore_errors: yes
+#    - name: Install repos RHEL7-rpms
+#      yum_repository:
+#        name: RHEL7-rpms
+#        description: RHEL7-rpms
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/EPEL/
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Install repos RHEL-7.8-extr
+#      yum_repository:
+#        name: RHEL-7.8-extr
+#        description: RHEL-7.8-extr
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/RHEL7-rpms/
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Install repos RHEL7-rpms-opt
+#      yum_repository:
+#        name: RHEL7-rpms-opt
+#        description: RHEL7-rpms-opt
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/RHEL7-rpms-opt/
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Install repos RHEL-7.8-eus-opts
+#      yum_repository:
+#        name: RHEL-7.8-eus-opts
+#        description: RHEL-7.8-eus-opts
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/RHEL-7.8-eus-opts/
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Install repos rhel-7-server-ose-4.5
+#      yum_repository:
+#        name: rhel-7-server-ose-4.5
+#        description: rhel-7-server-ose-4.5
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-ose-4.5-rpms/
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Install repos rhel-7-server-ansible-2.9-rpms
+#      yum_repository:
+#        name: rhel-7-server-ansible-2.9-rpms
+#        description: rhel-7-server-ansible-2.9-rpms
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-ansible-2.9-rpms
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Install repos rhel-7-server-extras-rpms
+#      yum_repository:
+#        name: rhel-7-server-extras-rpms
+#        description: rhel-7-server-extras-rpms
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-extras-rpms/
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Install repos rhel-7-server-rpms
+#      yum_repository:
+#        name: rhel-7-server-rpms
+#        description: rhel-7-server-rpms
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-rpms/
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Install repos rhel-7-server-ose-4.6-rpms
+#      yum_repository:
+#        name: rhel-7-server-ose-4.6-rpms
+#        description: rhel-7-server-ose-4.6-rpms
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-ose-4.6-rpms/
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Install repos rhel-7-server-optional-rpms
+#      yum_repository:
+#        name: rhel-7-server-optional-rpms
+#        description: rhel-7-server-optional-rpms
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-optional-rpms/
+#        gpgcheck: no
+#        enabled: yes
+#
+#    - name: Install repos rhel-7-server-extras-rpms
+#      yum_repository:
+#        name: rhel-7-server-extras-rpms
+#        description: rhel-7-server-extras-rpms
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-extras-rpms/
+#        gpgcheck: no
+#        enabled: no
+#
+#    - name: Install repos rhel-7-fast-datapath-rpms
+#      yum_repository:
+#        name: rhel-7-fast-datapath-rpms
+#        description: rhel-7-server-extras-rpms
+#        file: custom
+#        baseurl: http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-fast-datapath-rpms/
+#        gpgcheck: no
+#        enabled: no
+#
+#    - name: list repos
+#      shell: cat *.repo
+#      args:
+#        chdir: /etc/yum.repos.d/
+#      ignore_errors: yes
 
