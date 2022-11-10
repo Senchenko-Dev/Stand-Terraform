@@ -1,5 +1,5 @@
 terraform {
-  backend "pg" {}
+  #backend "pg" {}
   required_providers {
     kubernetes = {
       source  = "hashicorp/kubernetes"
