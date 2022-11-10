@@ -118,11 +118,10 @@ locals {
 module "NginxG1" {
   source = "./modules/spo_nginx"
 
-  count =  0
 # VM properties
   cpu = 1
   memory = 512
-  vm_count = 0
+  vm_count = 1
   vm_props = local.vm_props_default
   vm_disk_data = [
  //  { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
@@ -136,7 +135,7 @@ module "NginxG1" {
 }
 
 
-
+/*
 # NGINX_IAG
 module "Nginx_IAG" {
   source = "./modules/spo_nginx_iag"
@@ -166,7 +165,7 @@ module "Nginx_SGW" {
   inventory_group_name = "nginx_sgw" // для связи с group_vars/group_name.yml
   vault_file = local.vault_file
 }
-
+*/
 
 
 
