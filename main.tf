@@ -158,7 +158,7 @@ module "Nginx_IAG" {
 module "Nginx_SGW" {
   source = "./modules/spo_nginx_sgw"
 
-  vm_count = 1
+  vm_count = 0
 
   ## VM properties
   vm_props = local.vm_props_default
