@@ -87,7 +87,7 @@ locals {
 module "diOpenshiftServiceCore"  {
   source = "./modules/ansible_project_init"
 //  count = 0
-  for_each = {} # local.diOpenshiftServiceCore_projects
+  for_each = {} #local.diOpenshiftServiceCore_projects
   managment_system_type = var.managment_system_type
   project_name = each.value.oseProjectName
   kubeconfig = local.oc_kubeconfig
@@ -166,8 +166,8 @@ module "diOpenshiftgroup1" {
 
 module "config_awx_k8s_templates" {
   depends_on = [module.AWX, module.diOpenshiftgroup1]
-//  count = 0
-  count = "${length(local.awx_props) != 0 ? 1 : 0}"
+  count = 0
+ # count = "${length(local.awx_props) != 0 ? 1 : 0}"
   meta = fileset(path.root, "ansible/project_vars/*.yml")
   source = "./modules/awx_config_k8s_templates"
   kubeconfig = local.oc_kubeconfig
