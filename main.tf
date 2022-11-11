@@ -1,7 +1,7 @@
-#0123
+#01235
 locals {
 #12s
-  stand_name = "senchenko-test"
+  stand_name = "senchenko1-test"
   network_name = "main_VDC02"
   vault_file = "secrets.yml" # todo внимание, хардкод в Jenkinsfile!
   # Для setup_vm. Публичные ключи для входа на хосты.
@@ -120,9 +120,9 @@ module "NginxG1" {
 
   //count = 0
 # VM properties
-  cpu = 1
-  memory = 512
-  vm_count = 2
+  cpu = 5
+  memory = 8192
+  vm_count = 1
   vm_props = local.vm_props_default
   vm_disk_data = [
  //  { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
