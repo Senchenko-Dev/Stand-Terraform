@@ -122,7 +122,7 @@ module "NginxG1" {
 # VM properties
   cpu = 5
   memory = 8192
-  vm_count = 2
+  vm_count = 1
   vm_props = local.vm_props_default
   vm_disk_data = [
  //  { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
