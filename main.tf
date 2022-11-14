@@ -84,7 +84,7 @@ locals {
 }
 
 module "AWX" {
-  //count = 0
+  count = 0
   # TF path to the module
   source = "./modules/awx"
   # VM settings
@@ -118,11 +118,11 @@ locals {
 module "NginxG1" {
   source = "./modules/spo_nginx"
 
-  count = 0
+  //count = 0
 # VM properties
   cpu = 5
   memory = 8192
-  vm_count = 1
+  vm_count = 2
   vm_props = local.vm_props_default
   vm_disk_data = [
  //  { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
