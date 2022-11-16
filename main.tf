@@ -84,7 +84,7 @@ locals {
 }
 
 module "AWX" {
-  count = 0
+  //count = 0
   # TF path to the module
   source = "./modules/awx"
   # VM settings
@@ -118,7 +118,7 @@ locals {
 module "NginxG1" {
   source = "./modules/spo_nginx"
 
- // count = 0
+  count = 0
 # VM properties
   cpu = 5
   memory = 8192
