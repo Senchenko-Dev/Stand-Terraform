@@ -107,9 +107,6 @@
     regexp: '^NGINXDIR'
     line: 'NGINXDIR="/opt/nginx-sgw"'
 
-- name: export NGINXBIN
-  shell: export NGINXBIN=/opt/nginx-sgw/sbin/nginx
-
 - name: Reboot the machine
   shell: nohup bash -c "sleep 2s && shutdown -r now" &
 
@@ -118,8 +115,12 @@
     timeout: 30
     delay: 3
 
+- name: export NGINXBIN
+  shell: export NGINXBIN=/opt/nginx-sgw/sbin/nginx
+
 - name: Install.sh nginx-sgw
   shell: ./install.sh
   args:
     chdir: /tmp/nginx-sgw-install
+
 
