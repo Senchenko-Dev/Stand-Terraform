@@ -137,7 +137,7 @@ module "NginxG1" {
 
 
 
-
+/*
 # NGINX_IAG
 module "Nginx_IAG" {
   source = "./modules/spo_nginx_iag"
@@ -150,14 +150,14 @@ module "Nginx_IAG" {
   inventory_group_name = "nginx_iag" // для связи с group_vars/group_name.yml
   vault_file = local.vault_file
 }
+*/
 
 
-/*
 # NGINX_SGW
 module "Nginx_SGW" {
   source = "./modules/spo_nginx_sgw"
 
-  vm_count = 0
+  vm_count = 1
 
   ## VM properties
   vm_props = local.vm_props_default
