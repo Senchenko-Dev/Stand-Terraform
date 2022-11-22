@@ -107,15 +107,15 @@
     regexp: '^NGINXDIR'
     line: 'NGINXDIR="/opt/nginx-sgw"'
 
-#- name: add enviroment NGINXBIN
-#  lineinfile:
-#    dest: /root/.bash_profile
-#    insertafter: EOF
-#    line: export NGINXBIN=/opt/nginx-sgw/sbin/nginx
-#    state: present
-#
-#- name: Apply add new enviroment
-#  shell: source /root/.bash_profile
+- name: Add in environment NGINXBIN
+  lineinfile:
+    dest: /root/.bash_profile
+    insertafter: EOF
+    line: export NGINXBIN=/opt/nginx-sgw/sbin/nginx
+    state: present
+
+- name: Apply added new environment
+  shell: source /root/.bash_profile
 
 - name: Reboot the machine
   shell: nohup bash -c "sleep 2s && shutdown -r now" &
