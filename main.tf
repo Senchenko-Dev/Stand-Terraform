@@ -1,7 +1,7 @@
 #012356
 locals {
 #12s
-  stand_name = "senchenko1-test"
+  stand_name = "senchenko-test"
   network_name = "main_VDC02"
   vault_file = "secrets.yml" # todo внимание, хардкод в Jenkinsfile!
   # Для setup_vm. Публичные ключи для входа на хосты.
