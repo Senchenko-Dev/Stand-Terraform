@@ -115,7 +115,7 @@ locals {
    vm_props = local.vm_props_default
    vault_file = local.vault_file
  }
-
+#
 module "CORAX_Kafka" {
   source = "./modules/spo_kafka_se"
 
