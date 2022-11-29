@@ -107,6 +107,12 @@
     regexp: '^NGINXDIR'
     line: 'NGINXDIR="/opt/nginx-sgw"'
 
+- name: Copy conf file to /opt/nginx-sgw/conf
+  copy:
+    src: /tmp/nginx-sgw-install/package/conf/inventory/
+    dest: /opt/nginx-sgw/conf
+    remote_src: yes
+
 - name: Add in environment NGINXBIN
   lineinfile:
     dest: /root/.bash_profile
