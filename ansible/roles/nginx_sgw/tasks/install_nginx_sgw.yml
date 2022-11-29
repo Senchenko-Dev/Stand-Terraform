@@ -101,6 +101,21 @@
     src: install.options
     dest: /tmp/nginx-sgw-install/
 
+- name: Chamge Owner and group
+  file:
+    path: "/opt/nginx-sgw/conf/{{ item }}"
+    owner: "{{ nginx_sgw_user }}"
+    group: "{{ nginx_sgw_group }}"
+    mode: '0644'
+  with_items:
+    - http.js
+    - koi-utf
+    - koi-win
+    - mime.types
+    - nginx.conf
+    - nginx_common_headers.conf
+    - win-utf
+
 - name: Change install dir
   lineinfile:
     dest: /tmp/nginx-sgw-install/install.options
