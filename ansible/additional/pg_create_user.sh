@@ -11,3 +11,11 @@ EOF
 #  -- Создание Администратора АС
 #  CREATE USER user_as WITH ENCRYPTED PASSWORD 'xxxxxxxxxxxx' NOINHERIT;
 #  GRANT as_admin TO user_as;
+
+
+sudo -i -u postgres bash << EOF
+psql -c "CREATE USER cfga_bf1 WITH ENCRYPTED PASSWORD 'StrongUserAdminPassword720!' INHERIT;"
+psql -c "GRANT \"as_TUZ\" TO cfga_bf1;"
+psql -c "CREATE USER cfge_bf1 WITH ENCRYPTED PASSWORD 'StrongUserAdminPassword720!' INHERIT;"
+psql -c "GRANT \"as_TUZ\" TO cfge_bf1;"
+EOF
