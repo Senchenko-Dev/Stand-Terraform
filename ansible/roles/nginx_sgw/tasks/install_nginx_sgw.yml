@@ -111,6 +111,9 @@
   copy:
     src: /tmp/nginx-sgw-install/package/conf/inventory/
     dest: /opt/nginx-sgw/conf
+    owner: "{{ nginx_sgw_user }}"
+    group: "{{ nginx_sgw_group }}"
+    mode: '0644'
     remote_src: yes
 
 - name: Add in environment NGINXBIN
