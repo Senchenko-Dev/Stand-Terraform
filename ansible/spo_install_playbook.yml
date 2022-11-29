@@ -8,6 +8,7 @@
 
     - debug:
         var: "{{ vault_file }}"
+      when: vault_file is defined
 
     - name: Import secrets
       include_vars: "{{ vault_file }}"

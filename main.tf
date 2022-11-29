@@ -116,3 +116,14 @@ locals {
    vault_file = local.vault_file
  }
 
+module "CORAX_Kafka" {
+  source = "./modules/spo_kafka_se"
+
+  kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000065_kfka/KFK/6.272.0-11/KFK-6.272.0-11-distrib.zip"
+
+  inventory_group_name = "global_kafka"
+  vm_count = 3
+
+  vm_props = local.vm_props_default
+  vault_file = local.vault_file
+}
