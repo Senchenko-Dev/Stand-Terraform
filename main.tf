@@ -138,7 +138,7 @@ module "Kafka303" {
 
     # Ansible properties
     inventory_group_name = "Kafka1"
-    force_ansible_run = ""
+    force_ansible_run = "1"
 
     kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
 
