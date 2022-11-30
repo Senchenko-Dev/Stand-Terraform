@@ -128,7 +128,7 @@ module "CORAX_Kafka" {
   memory =3072
   vm_props = local.vm_props_default
   vault_file = local.vault_file
-  spo_role_name = "corax"
+//  spo_role_name = "corax"
 }
 
 module "Kafka303" {
