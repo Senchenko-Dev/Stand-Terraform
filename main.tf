@@ -117,6 +117,7 @@ locals {
  }
 #
 module "CORAX_Kafka1" {
+  count = 0
   source = "./modules/spo_kafka_se"
 
   kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000065_kfka/KFK/6.272.0-11/KFK-6.272.0-11-distrib.zip"
@@ -138,7 +139,7 @@ module "Kafka303" {
 
   # Ansible properties
   inventory_group_name = "Kafka1"
-  force_ansible_run = "12"
+  force_ansible_run = ""
 
   kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
 
