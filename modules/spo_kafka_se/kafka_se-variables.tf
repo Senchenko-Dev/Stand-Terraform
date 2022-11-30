@@ -13,13 +13,13 @@ variable "vm_disk_data" {
 variable "memory" {
   description = "RAM of Virtual Machine"
   type = number
-  default = 1024
+  default = 8*1024
 }
 
 variable "cpu" {
   description = "CPU of Virtual Machine"
   type = number
-  default = 1
+  default = 4
 }
 
 //variable "nexus_cred" {}
