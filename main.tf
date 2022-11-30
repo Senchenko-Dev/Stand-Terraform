@@ -124,17 +124,21 @@ module "CORAX_Kafka" {
 
   inventory_group_name = "global_kafka"
   vm_count = 3
-
+  cpu = 2
+  memory =2048
   vm_props = local.vm_props_default
   vault_file = local.vault_file
   spo_role_name = "corax"
 }
 
 module "Kafka303" {
+//  count = 0
   source = "./modules/spo_kafka_se"
   inventory_group_name = "Kafka1"
   vm_props = local.vm_props_default
   vault_file = local.vault_file
   vm_count = 2
+//  cpu = 2
+  memory = 2048
   kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD_group/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
 }
