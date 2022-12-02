@@ -132,7 +132,7 @@ module "CORAX_Kafka1" {
 }
 
 module "Kafka303" {
-  count = 0
+//  count = 0
 
   # TF module properties
   source = "./modules/spo_kafka_se"
