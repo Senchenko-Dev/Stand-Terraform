@@ -19,3 +19,12 @@ psql -c "GRANT \"as_TUZ\" TO cfga_bf1;"
 psql -c "CREATE USER cfge_bf1 WITH ENCRYPTED PASSWORD 'StrongUserAdminPassword720!' INHERIT;"
 psql -c "GRANT \"as_TUZ\" TO cfge_bf1;"
 EOF
+
+#sudo -i -u postgres bash << EOF
+#psql -c "CREATE USER currency_rates WITH ENCRYPTED PASSWORD 'StrongUserAdminPassword720!' INHERIT;"
+#psql -c "GRANT \"as_TUZ\" TO currency_rates;"
+#psql -c "ALTER ROLE currency_rates SET search_path = currency_rates;"
+#psql -c "GRANT USAGE ON SCHEMA currency_rates to currency_rates;"
+#EOF
+#
+#
