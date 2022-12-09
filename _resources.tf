@@ -61,19 +61,19 @@ locals {
         }
         sa = [{ name = local.devopsSaName}]
       }
-    },
-    control-panel-test = {
-      oseProjectName = "${local.projectPrefix}-${local.controlPanelName}"
-      values = {
-        quota = {
-          cpu: 20
-          mem: 40
-        }
-        cp = {
-          name: local.globals.controlPlaneName
-          template: "cp-2.0.2.yml"
-        }
-      }
+//    },
+//    control-panel-test = {
+//      oseProjectName = "${local.projectPrefix}-${local.controlPanelName}"
+//      values = {
+//        quota = {
+//          cpu: 20
+//          mem: 40
+//        }
+//        cp = {
+//          name: local.globals.controlPlaneName
+//          template: "cp-2.0.2.yml"
+//        }
+//      }
     }
   }
 }
@@ -155,8 +155,8 @@ locals {
 
 module "diOpenshiftServiceCore"  {
   source = "./modules/ansible_project_init"
-  for_each = {}
-//  for_each = local.diOpenshiftServiceCore_projects
+//  for_each = {}
+  for_each = local.diOpenshiftServiceCore_projects
   managment_system_type = var.managment_system_type
   project_name = each.value.oseProjectName
   kubeconfig = local.oc_kubeconfig
