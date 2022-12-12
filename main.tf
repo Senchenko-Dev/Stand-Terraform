@@ -116,6 +116,37 @@ locals {
    vault_file = local.vault_file
  }
 #
+ module "PGSE_standalone_test" {
+//   count = 0
+   # TF module properties
+   source = "./modules/spo_pangolin"
+
+   # Ansible properties
+   inventory_group_name = "pangolin_test" # заполнить group_vars
+   force_ansible_run = "0"
+
+   # Download and unpack
+   pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"
+   unpack_exclude = ["installer"]
+   # Install
+   installation_type = "standalone"
+   installation_subtype = "standalone-postgresql-only"
+   # VM properties
+   # только для postgres nodes
+   cpu = 2
+   memory = 3048 #8*1024
+   vm_pg_disk_data = [
+     { size : "200G", mnt_dir : "/pgdata" },  # только для postgres nodes
+   ]
+
+ //  vm_etcd_disk_data = [
+ //    { size : "2G", mnt_dir : local.pgdata_dir },  # только для postgres nodes
+ //  ]
+
+   vm_props = local.vm_props_default
+   vault_file = local.vault_file
+ }
+#
 module "CORAX_Kafka1" {
   count = 0
   source = "./modules/spo_kafka_se"
