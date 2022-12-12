@@ -89,8 +89,8 @@ locals {
           fpi_name = "coreplatform"
           values   = {
             quota    = {
-              cpu = 8
-              mem = 16
+              cpu = 20
+              mem = 30
             }
             labels     = {
               id_fp = "coreplatform",
