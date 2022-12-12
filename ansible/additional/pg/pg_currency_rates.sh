@@ -10,8 +10,8 @@ chmod 700 /pgdata/pg_tblspc/currency_rates_t
 user=currency_rates
 
 sudo -i -u postgres bash << EOF
-psql -c "create user currency_rates with encrypted password ‘StrongUserAdminPassword720!’;"
-psql -c "create user currency_rates_appl with encrypted password ‘StrongUserAdminPassword720!’;"
+psql -c "create user currency_rates with encrypted password 'StrongUserAdminPassword720!';"
+psql -c "create user currency_rates_appl with encrypted password 'StrongUserAdminPassword720!';"
 psql -c "GRANT \"as_TUZ\" TO currency_rates_appl;"
 psql -c "GRANT USAGE ON SCHEMA currency_rates TO \"as_TUZ\";"
 psql -c "GRANT USAGE ON SCHEMA currency_rates TO as_admin_read;"
