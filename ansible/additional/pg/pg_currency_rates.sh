@@ -17,6 +17,8 @@ chmod 700 /pgdata/pg_tblspc/currency_rates_t
 export PGDATABASE=test_db
 
 sudo -i -u postgres bash << EOF
+export PGDATABASE=test_db
+
 psql -c "create user currency_rates with encrypted password 'StrongUserAdminPassword720!';"
 psql -c "create user currency_rates_appl with encrypted password 'StrongUserAdminPassword720!';"
 psql -c "GRANT \"as_TUZ\" TO currency_rates;"
@@ -27,7 +29,7 @@ psql -c "GRANT ALL ON SCHEMA currency_rates TO currency_rates;"
 psql -c "GRANT ALL ON SCHEMA currency_rates TO db_admin;"
 
 # ------ todo это лучше параметрировать через {{ db_name }}  или задать заранее PGDATABASE
-psql test_db -c "create schema currency_rates AUTHORIZATION currency_rates;"
+psql -c "create schema currency_rates AUTHORIZATION currency_rates;"
 
 psql -c "grant connect on database postgres to currency_rates;"
 psql -c "grant all on schema currency_rates to currency_rates;"
@@ -47,5 +49,8 @@ psql -c "grant all privileges on all tables in schema currency_rates to currency
 psql -c "grant select on all tables in schema currency_rates to currency_rates;"
 psql -c "ALTER ROLE currency_rates SET search_path = currency_rates;"
 psql -c "ALTER ROLE currency_rates_appl SET search_path = currency_rates;"
+
+psql -c "CREATE SCHEMA ekpit AUTHORIZATION db_admin;"
+
 EOF
 

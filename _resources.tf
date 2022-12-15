@@ -61,19 +61,19 @@ locals {
         }
         sa = [{ name = local.devopsSaName}]
       }
-//    },
-//    control-panel-test = {
-//      oseProjectName = "${local.projectPrefix}-${local.controlPanelName}"
-//      values = {
-//        quota = {
-//          cpu: 20
-//          mem: 40
-//        }
-//        cp = {
-//          name: local.globals.controlPlaneName
-//          template: "cp-2.0.2.yml"
-//        }
-//      }
+    },
+    control-panel-test = {
+      oseProjectName = "${local.projectPrefix}-${local.controlPanelName}"
+      values = {
+        quota = {
+          cpu: 20
+          mem: 40
+        }
+        cp = {
+          name: local.globals.controlPlaneName
+          template: "cp-2.0.2.yml"
+        }
+      }
     }
   }
 }
@@ -108,16 +108,16 @@ locals {
             ]
           }
         },
-        entrance  = {
-          fpi_name = "entrance"
+        sentsov  = {
+          fpi_name = "sentsov"
           values   = {
             quota    = {
-              cpu = 2
-              mem = 4
+              cpu = 20
+              mem = 30
             }
             labels     = {
-              id_fp = "entrance",
-              fpname = "entrance",
+              id_fp = "sentsov",
+              fpname = "sentsov",
               segment = "${local.globals.solution}",
               stand = "${local.globals.stand}"
             }
@@ -131,14 +131,37 @@ locals {
             ]
           }
         },
+//        entrance  = {
+//          fpi_name = "entrance"
+//          values   = {
+//            quota    = {
+//              cpu = 2
+//              mem = 4
+//            }
+//            labels     = {
+//              id_fp = "entrance",
+//              fpname = "entrance",
+//              segment = "${local.globals.solution}",
+//              stand = "${local.globals.stand}"
+//            }
+//            bindings = [
+//              {
+//                roleType = "ClusterRole"
+//                roleName = "view"
+//                userKind = "Group"
+//                userName = "ose-trb-db"
+//              }
+//            ]
+//          }
+//        },
       }
       vars = {
         sector = "ses"
         values = {
-//          sm       = {
-//            cpNamespace = local.globals.stashedControlPlaneNamespace
-//            cpName      = local.globals.controlPlaneName
-//          }
+          sm       = {
+            cpNamespace = local.globals.stashedControlPlaneNamespace
+            cpName      = local.globals.controlPlaneName
+          }
           bindings = [
             {
               roleType = "ClusterRole"

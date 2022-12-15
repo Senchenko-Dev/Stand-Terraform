@@ -18,8 +18,8 @@ chmod 700 {{ tablespace_location }}/{{ schema_name }}_t
 
 sudo -i -u postgres bash << EOF
 export PGDATABASE=test_db
-psql -c "create user currency_rates with encrypted password 'StrongUserAdminPassword720!';"
-psql -c "create user currency_rates_appl with encrypted password 'StrongUserAdminPassword720!';"
+psql -c "create user currency_rates with encrypted password 'StrongUserPassword720!';"
+psql -c "create user currency_rates_appl with encrypted password 'StrongUserPassword720!';"
 psql -c "GRANT \"as_TUZ\" TO currency_rates;"
 psql -c "GRANT \"as_TUZ\" TO currency_rates_appl;"
 psql -c "GRANT USAGE ON SCHEMA currency_rates TO \"as_TUZ\";"
@@ -48,5 +48,8 @@ psql -c "grant all privileges on all tables in schema currency_rates to currency
 psql -c "grant select on all tables in schema currency_rates to currency_rates;"
 psql -c "ALTER ROLE currency_rates SET search_path = currency_rates;"
 psql -c "ALTER ROLE currency_rates_appl SET search_path = currency_rates;"
+
+psql -c "CREATE SCHEMA ekpit AUTHORIZATION db_admin;"
+
 EOF
 
