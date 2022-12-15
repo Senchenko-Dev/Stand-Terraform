@@ -21,7 +21,7 @@ psql -c "GRANT \"as_TUZ\" TO cfge_bf1;"
 EOF
 
 #sudo -i -u postgres bash << EOF
-#psql -c "CREATE USER currency_rates WITH ENCRYPTED PASSWORD 'StrongUserAdminPassword720!' INHERIT;"
+#psql -c "CREATE USER currency_rates WITH ENCRYPTED PASSWORD 'StrongUserPassword720!' INHERIT;"
 #psql -c "GRANT \"as_TUZ\" TO currency_rates;"
 #psql -c "create schema dyncontent"
 #psql -c "ALTER ROLE currency_rates SET search_path = currency_rates;"
