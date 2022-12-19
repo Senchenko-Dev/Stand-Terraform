@@ -179,8 +179,8 @@ locals {
 
 module "diOpenshiftServiceCore"  {
   source = "./modules/ansible_project_init"
-  for_each = {}
-//  for_each = local.diOpenshiftServiceCore_projects
+//  for_each = {}
+  for_each = local.diOpenshiftServiceCore_projects
   managment_system_type = var.managment_system_type
   project_name = each.value.oseProjectName
   kubeconfig = local.oc_kubeconfig
