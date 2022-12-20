@@ -191,3 +191,13 @@ module "config_awx_ansible" {
   vault_file = var.vault_file
   hosts = vcd_vm.kafka
 }
+
+resource "local_file" "efs-inventory" {
+  depends_on = [local_file.kafka-inventory]
+  content = templatefile("tf_templates/kafka_se/efs_inv_kafka.ini",
+  {
+    vm_instances_kafka_nodes = vcd_vm.kafka,
+    inventory_group_name = var.inventory_group_name
+  })
+  filename = "ansible/inventory/efs/efs_inv_${var.inventory_group_name}.ini"
+}

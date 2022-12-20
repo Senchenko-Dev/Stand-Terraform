@@ -278,3 +278,14 @@ resource "local_file" "pangolin-inventory" {
     }
   }
 }
+
+
+resource "local_file" "efs-inventory" {
+  depends_on = [local_file.pangolin-inventory]
+  content = templatefile("tf_templates/pangolin/efs_inv_pg.ini",
+  {
+    inventory_group_name = var.inventory_group_name
+    vm_instances_postgres_nodes = vcd_vm.Pangolin-postgres,
+  })
+  filename = "ansible/inventory/efs/efs_inv_${var.inventory_group_name}.ini"
+}
