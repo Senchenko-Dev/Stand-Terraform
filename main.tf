@@ -116,7 +116,7 @@ locals {
    vault_file = local.vault_file
  }
 #
- module "PGSE_standalone_test" {
+module "PGSE_standalone_test" {
 //   count = 0
    # TF module properties
    source = "./modules/spo_pangolin"
