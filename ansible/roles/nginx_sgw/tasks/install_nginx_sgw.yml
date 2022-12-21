@@ -101,7 +101,6 @@
     src: install.options
     dest: /tmp/nginx-sgw-install/
 
-
 - name: Change install dir
   lineinfile:
     dest: /tmp/nginx-sgw-install/install.options
