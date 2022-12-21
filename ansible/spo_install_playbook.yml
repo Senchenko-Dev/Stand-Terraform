@@ -1,7 +1,7 @@
 ---
 - hosts: all
   become: yes
-  serial: "{{ rolling_update_serial | default('50%') }}"
+  serial: "{{ rolling_update_serial | default('100%') }}"
   gather_facts: no
 
   tasks:
