@@ -108,29 +108,29 @@ locals {
             ]
           }
         },
-        sentsov  = {
-          fpi_name = "sentsov"
-          values   = {
-            quota    = {
-              cpu = 30
-              mem = 40
-            }
-            labels     = {
-              id_fp = "sentsov",
-              fpname = "sentsov",
-              segment = "${local.globals.solution}",
-              stand = "${local.globals.stand}"
-            }
-            bindings = [
-              {
-                roleType = "ClusterRole"
-                roleName = "view"
-                userKind = "Group"
-                userName = "ose-trb-db"
-              }
-            ]
-          }
-        },
+//        sentsov  = {
+//          fpi_name = "sentsov"
+//          values   = {
+//            quota    = {
+//              cpu = 30
+//              mem = 40
+//            }
+//            labels     = {
+//              id_fp = "sentsov",
+//              fpname = "sentsov",
+//              segment = "${local.globals.solution}",
+//              stand = "${local.globals.stand}"
+//            }
+//            bindings = [
+//              {
+//                roleType = "ClusterRole"
+//                roleName = "view"
+//                userKind = "Group"
+//                userName = "ose-trb-db"
+//              }
+//            ]
+//          }
+//        },
 //
 //        entrance  = {
 //          fpi_name = "entrance"
