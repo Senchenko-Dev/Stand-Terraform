@@ -39,6 +39,7 @@ terraform {
   required_version = ">= 0.13"
 }
 
+
  provider "ansiblevault" {
    root_folder = "."
    vault_pass  = var.vault_password
