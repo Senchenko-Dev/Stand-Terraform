@@ -14,6 +14,10 @@ terraform {
   }
 
   required_providers {
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 1.1.0"
+    }
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = "~> 2.8.0"
@@ -35,6 +39,7 @@ terraform {
   required_version = ">= 0.13"
 }
 
+
  provider "ansiblevault" {
    root_folder = "."
    vault_pass  = var.vault_password
@@ -51,6 +56,19 @@ locals {
   # secrets = sensitive(yamldecode(data.ansiblevault_path.path.value))
   oc_kubeconfig = "${abspath(path.root)}/ansible/oc_kubeconfig"
   k8s_kubeconfig = "${abspath(path.root)}/ansible/k8s_kubeconfig"
+}
+
+
+provider "helm" {
+  kubernetes {
+    host = var.host
+    #cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
+    exec {
+      api_version = "client.authentication.k8s.io/v1alpha1"
+      command     = "./ansible/login.sh"
+      args = ["--token", try(local.secrets.token, "none"), "--username", local.secrets.os.username, "--password", local.secrets.os.password, "--host", var.host, "--kubeconfig", local.oc_kubeconfig]
+    }
+  }
 }
 
 provider "openshift" {

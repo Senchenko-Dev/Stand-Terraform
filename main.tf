@@ -120,8 +120,8 @@ module "NginxG1" {
 
   count = 1
 # VM properties
-  cpu = 5
-  memory = 8192
+  cpu = 2
+  memory = 2048
   vm_count = 1
   vm_props = local.vm_props_default
   vm_disk_data = [
