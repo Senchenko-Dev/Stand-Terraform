@@ -120,6 +120,23 @@ resource "local_file" "nginx-inventory" {
   }
 }
 
+#resource "helm_release" "nginx" {
+#  name        = "nginx"
+#  chart       = "nginx"
+#  repository  = "./charts"
+#  namespace   = "tfstate-team-polyakov1"
+#  max_history = 3
+#  create_namespace = true
+#  wait             = true
+#  reset_values     = true
+#}
+
+resource "helm_release" "test-charts" {
+  name       = "my-local-chart"
+  chart      = "./charts/my-awsome-chart-0.1.0.tgz"
+  namespace   = "tfstate-team-polyakov1"
+}
+
 module "config_awx_ansible" {
   count = "${length(var.awx_props) != 0 ? 1 : 0}"
   source = "../awx_config_group"
