@@ -131,6 +131,7 @@ resource "local_file" "nginx-inventory" {
 #  reset_values     = true
 #}
 
+
 resource "helm_release" "test-charts" {
   depends_on = [vcd_vm.VM-nginx]
   name       = "my-local-chart"
