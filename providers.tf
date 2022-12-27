@@ -59,17 +59,19 @@ locals {
 }
 
 
-#provider "helm" {
-#  kubernetes {
-#    host = var.host
-#    #cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
-#    exec {
-#      api_version = "client.authentication.k8s.io/v1alpha1"
-#      command     = "./ansible/login.sh"
-#      args = ["--token", try(local.secrets.token, "none"), "--username", local.secrets.os.username, "--password", local.secrets.os.password, "--host", var.host, "--kubeconfig", local.oc_kubeconfig]
-#    }
-#  }
-#}
+provider "helm" {
+  kubernetes {
+    host = "api.stands-vdc03.solution.sbt:6443"
+    #cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
+    config_path      = "ansible/dummy"
+    insecure         = true
+    exec {
+      api_version = "client.authentication.k8s.io/v1alpha1"
+      command     = "./ansible/login.sh"
+      args = ["--token", try(local.secrets.token, "none"), "--username", local.secrets.os.username, "--password", local.secrets.os.password, "--host", var.host, "--kubeconfig", local.oc_kubeconfig]
+    }
+  }
+}
 
 provider "openshift" {
   load_config_file = "false"
