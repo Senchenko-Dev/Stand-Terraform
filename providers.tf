@@ -59,6 +59,7 @@ locals {
 }
 
 
+
 provider "helm" {
   kubernetes {
     host = "api.stands-vdc03.solution.sbt:6443"
