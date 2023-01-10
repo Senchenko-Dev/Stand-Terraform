@@ -1,0 +1,52 @@
+---
+- import_tasks: info.yml
+# - debug: 
+#     msg: "{{ team.split('\n') }}"
+
+# - debug: 
+#     msg: "{{ references.split('\n') }}"
+ 
+# TODO переместить в настройку awx 
+- name: Install python3-pip
+  package:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - python3
+    - python3-pip
+    - git
+
+- name: Install pip package atlassian-python-api
+  pip:
+    name: atlassian-python-api
+    extra_args: --index-url https://spo.solution.sbt/python/simple/ --trusted-host spo.solution.sbt
+    executable: pip3
+  delegate_to: "{{ awx_host }}"
+
+- import_tasks: check.yml
+  delegate_to: "{{ awx_host }}"
+
+- import_tasks: generate.yml
+  delegate_to: "{{ awx_host }}"
+  when: check is defined and check == false
+    
+- name: Create PR from source branch "{{ cert_branch }}"
+  shell: | 
+    python3 pr.py --user "{{ git_username }}" \
+          --passwd "{{ git_password }}" \
+          --src_branch "{{ cert_branch }}"
+  args:
+    chdir: "{{ tmp_repo }}"
+  register: pull_request
+  when: new_branch is defined and git_clone.rc == 0
+  delegate_to: "{{ awx_host }}"
+
+# - name: Remove temporary repository "{{ tmp_repo }}"
+#   file:
+#     path: "{{ tmp_repo }}" 
+#     state: absent
+#   delegate_to: "{{ awx_host }}"
+#   when: git_clone is defined and git_clone.rc != 0 or git_clone.rc == 0
+    
+- import_tasks: info.yml
+  when: check is defined and check == true or generate is defined and generate == true

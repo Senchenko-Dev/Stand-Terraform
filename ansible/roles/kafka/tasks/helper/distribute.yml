@@ -1,0 +1,27 @@
+- block:
+  - name: Create initial temp dir
+    file:
+      path: "{{ tmp_dir }}"
+      state: directory
+      mode: 0777
+  - name: Check temp dir
+    stat:
+      path: "{{ tmp_dir }}/{{ original_distr | default(role_name) }}"
+    register: tmp_check
+  - name: Create temp dir
+    file:
+      path: "{{ tmp_dir }}/{{ original_distr | default(role_name) }}"
+      state: absent
+    when: tmp_check.stat.exists and not tmp_check.stat.isdir
+  - name: Create temp dir
+    file:
+      path: "{{ tmp_dir }}/{{ original_distr | default(role_name) }}"
+      state: directory
+      mode: 0777
+  - name: Upload to temp
+    copy:
+      src: "../files/{{ hostvars[inventory_hostname][role_name].distr }}"
+      dest: "{{ tmp_dir }}/{{ original_distr | default(role_name) }}/{{ hostvars[inventory_hostname][role_name].distr }}"
+      mode: 0777
+  when: local_distribution_source
+  tags: always

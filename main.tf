@@ -1,4 +1,3 @@
-#0123456
 locals {
 
 
@@ -44,6 +43,7 @@ locals {
   install_awx_props = {
     awx_port = 30800
     pod_nginx_port = 30900
+    vault_file = local.vault_file
 #    awx_login = local.secrets.awx.awx_login # "admin"
 #    awx_password = local.secrets.awx.awx_password
     scm_cred_name = "${local.stand_name} SCM Credential"
@@ -103,7 +103,7 @@ locals {
 module "NginxG1" {
   source = "./modules/spo_nginx"
 # VM properties
-  vm_count = 1
+  vm_count = 0
   memory = 512
   cpu = 1
   vm_disk_data = [
@@ -134,13 +134,13 @@ module "Nginx_iag" {
 
 
  module "KAFKA_standalone1" {
-#   depends_on = [module.AWX]
+   # depends_on = [module.AWX]
    count = 1
    # TF module properties
-   source = "./modules/spo_kafka_se"
+   source = "./modules/kafka_corex"
 
    # Ansible properties
-   inventory_group_name = "Kafka1"
+   inventory_group_name = "kafka-corex"
  //  spo_role_name = ""
    force_ansible_run = ""
    #000_${timestamp()}" #  "_${timestamp()}"
@@ -150,11 +150,11 @@ module "Nginx_iag" {
  //    nexususer = local.secrets.nexususer,
  //    nexuspass = local.secrets.nexuspass,
  //  }
-    kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
+   kafka_url = "http://10.42.4.125/mirror/docker/images/kafka/KFK-6.zip"
 
    # VM properties
-   vm_count = 1
-   memory = 1024 #16*1024
+   vm_count = 3
+   memory = 4024 #16*1024
    cpu = 4
 #   vm_disk_data = [
 #     { size: "350G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
@@ -182,7 +182,7 @@ module "Nginx_iag" {
    # kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
 
    # VM properties
-   vm_count = 1
+   vm_count = 0
    memory = 2*1024
    cpu = 2
    vm_disk_data = [
@@ -256,3 +256,30 @@ module "PGSE_cluster" {
   vm_props = local.vm_props_default
 }
 */
+
+module "ELK_standalone1" {
+
+
+  count = 0
+  # TF module properties
+  source = "./modules/elk"
+
+  # Ansible properties
+  inventory_group_name = "ELK1"
+  force_ansible_run = ""
+
+  # VM properties
+  vm_count = 1
+  memory = 6 * 1024 #16*1024
+  cpu = 6
+
+  vm_disk_data = [
+   { size: "40G", mnt_dir: "/opt/elastic" , owner: "nginx"},
+  ]
+
+  vm_props = local.vm_props_default
+  vault_file = local.vault_file
+  spo_role_name = "elk"
+  awx_props = local.awx_props
+
+}

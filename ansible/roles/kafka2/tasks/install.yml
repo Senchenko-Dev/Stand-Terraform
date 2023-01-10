@@ -1,0 +1,96 @@
+# установка необходимых пакетов
+- name: install neccessary tools
+  package:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  with_items:
+    - net-tools
+    - unzip
+    - java
+    - python-setuptools
+    - libffi-devel
+#        - python-setuptools
+#        - libffi-devel
+
+# Создание юзера
+- include_role:
+    name: ../kafka/roles/kafka_sber
+    tasks_from: create_user.yml
+
+# проверка количества нод zookeeper и брокеров kafka, выбор режима установки
+- include_role:
+    name: ../kafka/roles/select_deploy_mode
+
+# проверка конифгурации zookeeper & kafka (брокеры, порты, директории)
+- include_role:
+    name: ../kafka/roles/check_deploy_config_settings
+
+# установка jdk
+- include_role:
+    name: ../kafka/roles/custom_jdk
+
+# проверка что небходимые порты не заняты
+- include_role:
+    name: ../kafka/roles/get_generate_and_check_ports
+
+# удаление директорий от предыдущей установки
+- include_role:
+    name: ../kafka/roles/cleanup_work_dirs
+
+# создает DistroDirs и распаковывает kafka.zip
+- include_role:
+    name: ../kafka/roles/copy_distro_to_server
+
+# запуск скрипта deploy-ssl__zk_plain_no_auth__kafka_ssl_(no|with)_auth.sh
+- include_role:
+    name: ../kafka/roles/deploy_config
+
+# установка фактов директории с конфигом и расширение скрпитов
+- include_role:
+    name: ../kafka/roles/kafka_se_distro_check
+
+# копирование конфигов и установка кластера или стандалон
+- include_role:
+    name: ../kafka/roles/set_zookeeper_props
+
+# настройка jmx zookeeper
+- include_role:
+    name: ../kafka/roles/set_zookeeper_jmx_props
+
+# установка systemd unit
+- include_role:
+    name: ../kafka/roles/start_zookeeper_systemd
+
+# конфигрурация server.properties
+- include_role:
+    name: ../kafka/roles/set_kafka_props
+
+# настройка jmx kafka
+- include_role:
+    name: ../kafka/roles/set_kafka_jmx_props
+
+# копирование сертификатов
+- include_role:
+    name: ../kafka/roles/set_kafka_cert
+
+
+#- include_role:
+#    name: ../kafka/roles/generate_keys_for_ssl_configs
+#  delegate_to: localhost
+
+# добавление новых ключей
+- include_role:
+    name: ../kafka/roles/set_security_configs_for_ssl
+
+# настройка systemd юнитов и запуск kafka
+- include_role:
+    name: ../kafka/roles/start_kafka_systemd
+
+# вывод инофрмации о запущенном процессе имя, pid, порты
+- include_role:
+    name: ../kafka/roles/summary_information
+
+
+
+

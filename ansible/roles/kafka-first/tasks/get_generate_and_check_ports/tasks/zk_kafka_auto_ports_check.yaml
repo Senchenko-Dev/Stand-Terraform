@@ -1,0 +1,28 @@
+- name: Get Ports That Already in Use
+  set_fact:
+    ports_already_used: "{{ tcp_listen_ports | intersect(zk_jmx_ports + kafka_jmx_ports + kafka_brokers_ports + zk_quorum_ports_list + zk_client_ports) }}"
+
+- debug:
+    var: ansible_facts.tcp_listen
+
+- debug:
+    var: ports_already_used
+
+- block:
+    - name: List of Busy Ports
+      set_fact:
+        tcp_listen_violations: "{{ tcp_listen_violations | default([]) }} + [{{ item }}]"
+      with_items: "{{ ansible_facts.tcp_listen }}"
+      when: item.port in ports_already_used'
+
+    - name: List of Busy Ports
+      debug:
+        msg: TCP port {{ item.port }} busy by pid {{ item.pid }} with process name {{ item.name }}
+      #vars:
+        #tcp_listen_violations: "{{ ansible_facts.tcp_listen | selectattr('port', 'in',ports_already_used | default([]) ) | list }}"
+      loop: "{{ tcp_listen_violations }}"
+
+    - name: Stop Deploy!!!
+      fail: msg="Attention!!! Some ports are already in use! See information above."
+  when: ports_already_used | length > 0 and ports_already_used is defined
+  any_errors_fatal: true

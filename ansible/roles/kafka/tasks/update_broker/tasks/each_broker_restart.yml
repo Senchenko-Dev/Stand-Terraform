@@ -1,0 +1,93 @@
+- block:
+  - name: Get Kafka realpath
+    command: realpath -m "{{ kafka.installdir }}"
+    register: kfk_realpath
+  - include_tasks: "{{ role_path }}/tasks/helper/stop_wait.yml"
+    vars:
+      stop_command: ./bin/kafka-server-stop
+      pgrep_str: "{{ kfk_realpath.stdout }}.*Kafka"
+      from_dir: "{{ kafka.installdir }}"
+      app_name: Kafka
+
+  - block:
+    - name: Get Zookeeper realpath
+      command: realpath -m "{{ zookeeper.installdir }}"
+      register: zk_realpath
+    - include_tasks: "{{ role_path }}/tasks/helper/stop_wait.yml"
+      vars:
+        stop_command: ./bin/zookeeper-server-stop
+        pgrep_str: "{{ zk_realpath.stdout }}.*QuorumPeerMain"
+        from_dir: "{{ zookeeper.installdir }}"
+        app_name: Zookeeper
+    when: "'zookeeper' in group_names"
+
+  - block:
+    - name: Remove old files (lib, share, src)
+      command: "rm -rf lib share src"
+      args:
+        chdir: "{{ kafka.installdir }}"
+    - name: Add new files (lib, share, src)
+      shell: "mv {{ update_broker.installdir }}/{lib,share,src} ."
+      args:
+        chdir: "{{ kafka.installdir }}"
+    - name: Remove temporary dir
+      command: rm -rf "{{ update_broker.installdir }}"
+    when: binary_add
+
+  - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+    vars:
+      dir: "{{ kafka.logdir }}"
+    when: kafka.cleanLog
+
+  - block:
+    - name : Confirm clean Kafka data
+      pause:
+        prompt: "Are you sure you want to continue clean Kafka data? For continue press Enter. Or Ctrl-C and enter A for stop clean"
+    - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+      vars:
+        dir: "{{ kafka.datadir }}"
+    when: kafka.cleanData
+
+  - block:
+    - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+      vars:
+        dir: "{{ zookeeper.logdir }}"
+      when: zookeeper.cleanLog
+
+    - block:
+      - name : Confirm clean Zookeeper data
+        pause:
+          prompt: "Are you sure you want to continue clean Zookeeper data? For continue press Enter. Or Ctrl-C and enter A for stop clean"
+      - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+        vars:
+          dir: "{{ zookeeper.datadir }}"
+      when: zookeeper.cleanData
+    when: "'zookeeper' in group_names"
+
+  - include_tasks: "{{ role_path }}/tasks/helper/start_wait.yml"
+    vars:
+      start_command: ./bin/zookeeper-server-start -daemon etc/kafka/zookeeper.properties
+      log: "{{ zookeeper.logdir }}/zookeeper.log"
+      search_line: 'binding to port'
+      from_dir: "{{ zookeeper.installdir }}"
+      app_name: Zookeeper
+    when: "'zookeeper' in group_names"
+
+  - include_tasks: "{{ role_path }}/tasks/helper/start_wait.yml"
+    vars:
+      start_command: ./bin/kafka-server-start -daemon etc/kafka/server.properties
+      log: "{{ kafka.logdir }}/server.log"
+      search_line: 'started \(kafka.server.KafkaServer\)'
+      from_dir: "{{ kafka.installdir }}"
+      app_name: Kafka
+
+  - name: Wait for replication end
+    command: "./bin/kafka-topics --zookeeper {{ zk_port_list }} --describe --under-replicated-partitions"
+    args:
+      chdir: "{{ kafka.installdir }}"
+    register: wait_replica
+    until: wait_replica.stdout|trim == ""
+    retries: "{{ wait_for_start }}"
+    delay: 1
+
+  delegate_to: "{{ each_broker }}"

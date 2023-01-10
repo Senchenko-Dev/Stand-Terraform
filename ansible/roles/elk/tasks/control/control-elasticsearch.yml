@@ -1,0 +1,13 @@
+---
+- name: Start service elasticsearch
+  import_tasks: ../../handlers/start-elasticsearch.yml
+  when: action == 'start'
+
+- name: Stop service elasticsearch
+  import_tasks: ../../handlers/stop-elasticsearch.yml
+  when: action == 'stop'
+
+- name: Restart service elasticsearch
+  import_tasks: ../../handlers/restart-elasticsearch.yml
+  when: action == 'restart'
+

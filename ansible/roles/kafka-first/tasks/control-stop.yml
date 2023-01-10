@@ -1,0 +1,26 @@
+
+#- include_role:
+#    name: ../kafka/roles/check_distro_apache_or_confluent
+#
+##- include_role:
+##    name: ../kafka/roles/check_deploy_config_settings
+#
+#- include_role:
+#    name: ../kafka/roles/stop_kafka
+#
+#- include_role:
+#    name: ../kafka/roles/stop_zookeeper
+#
+#- include_role:
+#    name: ../kafka/roles/stop_kafka_agent
+
+---
+- name: service_stop kafka
+  service:
+    name: kafka
+    state: stopped
+
+- name: service_stop zookeeper
+  service:
+    name: zookeeper
+    state: stopped

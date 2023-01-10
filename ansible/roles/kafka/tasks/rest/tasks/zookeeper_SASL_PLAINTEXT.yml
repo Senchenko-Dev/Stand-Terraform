@@ -1,0 +1,7 @@
+- block:
+  - name: Change {{ kafka_admin_jaas }}
+    replace:
+      path: "{{ rest.installdir }}/etc/kafka/jaas/{{ kafka_admin_jaas }}"
+      regexp: '(principal="kafka/).*@.*(\";$)'
+      replace: '\1{{ inventory_hostname | lower }}@{{ realm }}\2'
+  tags: install

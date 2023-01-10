@@ -1,0 +1,14 @@
+---
+
+- block:
+  - name: Gather Facts on Listening Ports
+    listen_ports_facts:
+
+  - name: Kill SberKafka Agent Processes
+    shell: "kill -9 {{ item.pid }}"
+    vars:
+      tcp_listen_violations: "{{ ansible_facts.tcp_listen | selectattr('port', 'in', [ 4567 ]) | list }}"
+    loop: "{{ tcp_listen_violations }}"
+    ignore_errors: yes # "Suppress less informative ansible error output in favour of our own error output. E.g.: kill -9 item.pid will return "No such process" instead of ansible error message like "non-zero return code""
+
+  when: inventory_hostname in groups['KafkaNodes']

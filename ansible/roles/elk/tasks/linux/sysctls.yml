@@ -1,0 +1,7 @@
+- name: Add sysctl.conf parameter
+  sysctl:
+    name: "{{ item.name }}"
+    state: present
+    reload: "{{ item.reload | default(omit) }}"
+    sysctl_set: "{{ item.sysctl_set | default(omit) }}"
+    value: "{{ item.value }}"

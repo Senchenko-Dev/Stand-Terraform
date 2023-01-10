@@ -1,0 +1,8 @@
+- hosts: all
+  pre_tasks:
+    - include_tasks: "{{ role_path }}/tasks/helper/get_default_vars.yml"
+      tags: always
+
+- hosts: kafka
+  roles:
+    - kafka_topics

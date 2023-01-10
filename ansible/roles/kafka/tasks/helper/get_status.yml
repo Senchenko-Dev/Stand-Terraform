@@ -1,0 +1,17 @@
+- block:
+  - name: Check port ({{port}}) and compare installdir ({{hostvars[inventory_hostname][role_name].installdir}})
+    shell: |
+      PID=$(netstat -tunlp 2>/dev/null | grep ":{{ port }}\s" | awk '{split($7,a,"/"); print a[1]}')
+      DIR=$(pwdx "$PID" | awk '{print $2}')
+      INSTALLDIR=$(realpath "{{hostvars[inventory_hostname][role_name].installdir}}")
+      UPTIME=$(ps -o etime= -p "$PID" | xargs -r)
+      if [ x"$DIR" == x"$INSTALLDIR" ]; then
+          echo "OK (PID: $PID, Uptime: $UPTIME)"
+      else
+          echo "FAIL"
+      fi
+    register: status
+  - name: Add {{role_name|capitalize}} status to global dict
+    set_fact:
+      cep_status: "{{  cep_status|default({}) | combine({role_name : status.stdout}) }}"
+  tags: always

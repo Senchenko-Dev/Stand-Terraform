@@ -1,0 +1,64 @@
+---
+# Список сертификатов
+- set_fact:
+    certs: "{{ [cert_name] | product(cert_ext) | map('join', '.') | list }}"
+
+- debug: 
+    var: certs
+
+# Добавление в список CA 
+- set_fact:
+    certs: "{{ certs + [cert_name] | product(['ca.crt']) | map('join', '-') | list }}"
+
+# Временная директория репозитория
+# - set_fact:
+#     tmp_repo: "/tmp/terra_project_prepare_silimyankin" 
+
+# Ветка в которой будут храниться сертификаты
+# - set_fact:
+#     cert_branch: 'generated_certs'
+
+- name: Clone git repository
+  shell: "git clone https://$GIT_USER:$GIT_PASS@dzo.sw.sbc.space/bitbucket-ci/scm/insteip/terra_project_prepare_silimyankin.git {{ tmp_repo }}"
+  ignore_errors: true
+  environment:
+    GIT_USER: "{{ git_username }}"
+    GIT_PASS: "{{ git_password }}"
+  register: git_clone
+
+- name: Set config git
+  shell: |
+    git config --global user.email "add_certs@example.com"
+    git config --global user.name "{{ inventory_hostname }}"
+  ignore_errors: true
+  args:
+    chdir: "{{ tmp_repo }}"
+
+# Директория с сертификатами в репозитори
+# - set_fact:
+#     cert_path: "{{ tmp_repo }}/ansible/roles/elk/files/certs"
+
+- name: Create directory for certs
+  file:
+    path: "{{ cert_path }}"
+    state: directory
+  delegate_to: "{{ awx_host }}"
+
+# Проверка существования сертификатов
+- name: Check certs exist
+  stat:
+    path: "{{ cert_path }}/{{ item }}"
+  with_items: "{{ certs }}"
+  register: certs_exist
+    
+# Список сертификатов которые есть в cert_path должно быть 3 штуки
+- set_fact:
+    certs_exist: "{{ certs_exist | json_query('results[?stat.exists==''true''].item') }}"
+
+- set_fact:
+    check: false
+    
+# Установить флаг check true если сертификаты на месте и генерация не требуется
+- set_fact:
+    check: true
+  when: certs_exist | length >= 2

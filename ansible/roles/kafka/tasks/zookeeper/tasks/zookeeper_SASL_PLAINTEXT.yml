@@ -1,0 +1,19 @@
+- block:
+  - name: Change {{ zookeeper_jaas }}
+    replace:
+      path: "{{ zookeeper.installdir }}/etc/kafka/jaas/{{ zookeeper_jaas }}"
+      regexp: '(principal="zookeeper/).*@.*(\";$)'
+      replace: '\1{{ inventory_hostname | lower }}@{{ realm }}\2'
+  - name: Add jaas to zookeeper-server-start
+    replace:
+      path: "{{ zookeeper.installdir }}/bin/zookeeper-server-start"
+      regexp: '({{ zookeeper_jmx_properties }}")'
+      replace: '\1\n    "-Djava.security.auth.login.config=${base_dir}/etc/kafka/jaas/{{ zookeeper_jaas }}"'
+    when: zookeeper_jaas not in zk_sh.stdout
+  - name: Add krb5.conf to zookeeper-server-start
+    replace:
+      path: "{{ zookeeper.installdir }}/bin/zookeeper-server-start"
+      regexp: '({{ zookeeper_jmx_properties }}")'
+      replace: '\1\n    "-Djava.security.krb5conf=/etc/krb5.conf"'
+    when: "'krb5.conf' not in zk_sh.stdout"
+  tags: install

@@ -1,0 +1,26 @@
+kafka_acls: []
+#Examples
+# kafka_acls:
+#   - principal: ANONYMOUS # имя принципала
+#     operations: ALL # разрешенные операции (Read,Write,Create,Delete,Alter,Describe,ClusterAction,AlterConfigs,DescribeConfigs,IdempotentWrite,All)
+#     topics: "*" # используемые топики
+#     cluster: true # добавление кластерной ACL (по умолчанию false)
+#     groups: "*" # имена групп для подключения (обязательно для consumer)
+#     command_configs: "./config/producer.properties"
+#  - principal: CN=fqdn.foohost,OU=00CA,O=Savings Bank of the Russian Federation,C=RU # имя принципала (в случае с SSL)
+#    operations: ALL # разрешенные операции
+#    topics: "test2" # используемые топики
+#    cluster: true # добавление кластерной ACL (по умолчанию false)
+#    groups: "*" # имена групп для подключения (обязательно для consumer)
+#  - principal: CN=ApacheKafka-Admins,OU=00CA,O=Savings Bank of the Russian Federation,C=RU
+#    operations: ALL # разрешенные операции
+#    topics: "*" # используемые топики
+#    cluster: true # добавление кластерной ACL (по умолчанию false)
+#    groups: "*" # имена групп для подключения (обязательно для consumer)
+#  - principal: CN=ApacheKafka-RLM-Portal,OU=00CA,O=Savings Bank of the Russian Federation,C=RU
+#    operations: ALL # разрешенные операции (Read,Write,Create,Delete,Alter,Describe,ClusterAction,AlterConfigs,DescribeConfigs,IdempotentWrite,All)
+#    topics: "*" # используемые топики
+#    cluster: true # добавление кластерной ACL (по умолчанию false)
+#    groups: "*" # имена групп для подключения (обязательно для consumer)
+#    #resource_pattern_type: PREFIXED # возможные значения <ANY|MATCH|LITERAL|PREFIXED>
+#    #transactional_id: cep_transact # указание transactional-id

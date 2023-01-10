@@ -1,0 +1,19 @@
+- block:
+  - name: Find *.jaas
+    find:
+      paths: "{{ kafka.installdir }}/etc/kafka/jaas/"
+      patterns: "*.jaas"
+    register: all_jaas
+  - name: Change *.jaas
+    replace:
+      path: "{{ item.path }}"
+      regexp: "(^\\s*password).*"
+      replace: '\1="{{ zookeeper.kafkaBrokerPassword | trim }}";'
+    with_items: "{{ all_jaas.files }}"
+    no_log: "{{ ansible_no_log }}"
+  - name: Chmod 0660 for *.jaas
+    file:
+      path: "{{ item.path }}"
+      mode: 0660
+    with_items: "{{ all_jaas.files }}"
+  tags: install

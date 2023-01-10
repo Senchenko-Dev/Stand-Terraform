@@ -1,0 +1,70 @@
+#  [KafkaNodes]
+#  [ZookeeperNodes]
+
+#  [all:vars]
+#  [KafkaNodes:vars]
+#  [ZookeeperNodes:vars]
+
+- fail:
+    msg: "You MUST set externalString or hosts_group_WF parameter as <zone_name>.Kafka, which must have child groups <zone_name>.Broker.Core and <zone_name>.Zookeeper.Core"
+  when: (externalString is not defined or (externalString | string | length == 0)) and (hosts_group_WF is not defined or (hosts_group_WF | string | length == 0))
+  run_once: yes
+
+- block:
+    - name: Determine ZookeeperNodes
+      set_fact: zookeeper_nodes="{{ externalString | replace('.Kafka','.Zookeeper.Core') }}"
+
+    - name: Determine KafkaNodes
+      set_fact: kafka_nodes="{{ externalString | replace('.Kafka','.Broker.Core') }}"
+
+  when: externalString is defined
+  run_once: yes
+
+- block:
+    - name: Determine ZookeeperNodes
+      set_fact: zookeeper_nodes="{{ hosts_group_WF | replace('.Kafka','.Zookeeper.Core') }}"
+
+    - name: Determine KafkaNodes
+      set_fact: kafka_nodes="{{ hosts_group_WF | replace('.Kafka','.Broker.Core') }}"
+
+  when: hosts_group_WF is defined and externalString is not defined
+  run_once: yes
+
+
+
+- name: Autofill ZIds
+  set_fact: ZIds=["{{ groups[zookeeper_nodes].index(inventory_hostname) }}"]
+  when: inventory_hostname in groups[zookeeper_nodes] and ZIds == "auto"
+
+- name: Autofill KBrokerIds
+  set_fact: KBrokerIds=["{{ groups[kafka_nodes].index(inventory_hostname) }}"]
+  when: inventory_hostname in groups[kafka_nodes] and KBrokerIds == "auto"
+
+
+
+
+#  [KafkaNodes]
+- name: Создание виртуальной группы KafkaNodes
+  add_host:
+    name: "{{ item }}"
+    groups:
+      - KafkaNodes
+  loop: "{{groups[kafka_nodes]}}"
+  run_once: yes
+
+#  [ZookeeperNodes]
+- name: Создание виртуальной группы ZookeeperNodes
+  add_host:
+    name: "{{ item }}"
+    groups:
+      - ZookeeperNodes
+  loop: "{{groups[zookeeper_nodes]}}"
+  run_once: yes
+
+- name: Подготовленные группы
+  debug:
+    var: groups["{{item}}"]
+  loop:
+    - KafkaNodes
+    - ZookeeperNodes
+  run_once: yes

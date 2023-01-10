@@ -1,0 +1,22 @@
+- block:
+  - name: Change {{ zookeeper_jaas }}
+    replace:
+      path: "{{ zookeeper.installdir }}/etc/kafka/jaas/{{ zookeeper_jaas }}"
+      regexp: "({{ user_kafka }}).*$"
+      replace: '\1="{{ zookeeper.kafkaBrokerPassword | trim }}";'
+  - name: Change {{ kafka_admin_jaas }}
+    replace:
+      path: "{{ zookeeper.installdir }}/etc/kafka/jaas/{{ kafka_admin_jaas }}"
+      regexp: "(^\\s*password).*"
+      replace: '\1="{{ zookeeper.kafkaBrokerPassword | trim }}";'
+  - name: Find *.jaas
+    find:
+      paths: "{{ zookeeper.installdir }}/etc/kafka/jaas/"
+      patterns: "*.jaas"
+    register: all_jaas
+  - name: Chmod 0660 for *.jaas
+    file:
+      path: "{{ item.path }}"
+      mode: 0660
+    with_items: "{{ all_jaas.files }}"
+  tags: install

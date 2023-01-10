@@ -4,47 +4,55 @@
       shell: mkdir -p backup && mv -f * backup/ || echo 'backup dir exists or no files to backup'
       args:
         chdir: /etc/yum.repos.d/
-      when: yum_move_old_repos | default("true") | bool
+    # when: yum_move_old_repos | default("true") | bool
     #      ignore_errors: yes
 
-    - name: Add mirror EPEL7
-      yum_repository:
-        name: EPEL7-custom
-        description: EPEL7 mirror repo to access from SberCloud
-        file: custom
-        baseurl: "{{ baseurl_epel | default('https://mirror.yandex.ru/epel/$releasever/$basearch/',true) }}"
-        gpgcheck: no
-        enabled: yes
+    - name: Add custom repository
+      copy:
+        src: custom.repo
+        dest: /etc/yum.repos.d/custom.repo
+        mode: 0644
+        owner: root
+        group: root
 
-    - name: Add mirror CENTOS
-      yum_repository:
-        name: Centos-custom
-        description: Centos mirror repo to access from SberCloud
-        file: custom
-        baseurl: "{{ baseurl_centos | default('https://mirror.yandex.ru/centos/$releasever/os/$basearch/',true) }}"
-        gpgcheck: no
-        enabled: yes
+    # - name: Add mirror EPEL7
+    #   yum_repository:
+    #     name: EPEL7-custom
+    #     description: EPEL7 mirror repo to access from SberCloud
+    #     file: custom
+    #     baseurl: "{{ baseurl_epel | default('https://mirror.yandex.ru/epel/$releasever/$basearch/',true) }}"
+    #     gpgcheck: no
+    #     enabled: yes
+
+    # - name: Add mirror CENTOS
+    #   yum_repository:
+    #     name: Centos-custom
+    #     description: Centos mirror repo to access from SberCloud
+    #     file: custom
+    #     baseurl: "{{ baseurl_centos | default('https://mirror.yandex.ru/centos/$releasever/os/$basearch/',true) }}"
+    #     gpgcheck: no
+    #     enabled: yes
 
 
-    - name: list repos
-      shell: cat *.repo
-      args:
-        chdir: /etc/yum.repos.d/
-      ignore_errors: yes
+    # - name: list repos
+    #   shell: cat *.repo
+    #   args:
+    #     chdir: /etc/yum.repos.d/
+    #   ignore_errors: yes
 
-#    - name: Add EPEL8 mirror repo to access from SberCloud
-#      yum_repository:
-#        name: EPEL8_Everything
-#        description: EPEL8 mirror repo to access from SberCloud
-#        file: mirror
-#        baseurl: http://mirror.logol.ru/epel/8/Everything/x86_64/
-#        gpgcheck: no
-#        enabled: yes
-#    - name: Add EPEL8 mirror repo to access from SberCloud
-#      yum_repository:
-#        name: EPEL8_Modular
-#        description: EPEL8 mirror repo to access from SberCloud
-#        file: mirror
-#        baseurl: http://mirror.logol.ru/epel/8/Modular/x86_64/
-#        gpgcheck: no
-#        enabled: yes
+# #    - name: Add EPEL8 mirror repo to access from SberCloud
+# #      yum_repository:
+# #        name: EPEL8_Everything
+# #        description: EPEL8 mirror repo to access from SberCloud
+# #        file: mirror
+# #        baseurl: http://mirror.logol.ru/epel/8/Everything/x86_64/
+# #        gpgcheck: no
+# #        enabled: yes
+# #    - name: Add EPEL8 mirror repo to access from SberCloud
+# #      yum_repository:
+# #        name: EPEL8_Modular
+# #        description: EPEL8 mirror repo to access from SberCloud
+# #        file: mirror
+# #        baseurl: http://mirror.logol.ru/epel/8/Modular/x86_64/
+# #        gpgcheck: no
+# #        enabled: yes

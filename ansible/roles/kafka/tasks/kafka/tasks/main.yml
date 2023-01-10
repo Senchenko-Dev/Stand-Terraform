@@ -1,0 +1,290 @@
+### DISTRIBUTE SECTION ###
+
+- include_tasks: "{{ role_path }}/tasks/helper/distribute.yml"
+  tags: distribute
+  when:
+    - ZK_ALREADY_DONE is undefined
+    - inventory_hostname not in groups['zookeeper']
+
+- name: Download password-encrypt-cli
+  copy:
+    src: "../files/{{ password_encoder_cli_path }}"
+    dest: "/tmp/{{ password_encoder_cli_path }}"
+    mode: 0777
+    #flat: true
+  #run_once: true
+  when: simple_security == 'SSL'
+
+- name: Set encrypt_key
+  set_fact:
+    encrypt_key: "{{ lookup('pipe', 'echo ApacheKafkaSecure | base64') }}"
+  when: simple_security == 'SSL'
+
+- name: Encode passwords
+  set_fact:
+    kafka: "{{ kafka | combine(changed_kafka, recursive=True) }}"
+  vars:
+    changed_kafka:
+      keyStorePasswordEncrypted: "{{ kafka.keyStorePassword | encrypt(encrypt_key) }}"
+      trustStorePasswordEncrypted: "{{ kafka.trustStorePassword | encrypt(encrypt_key) }}"
+      keyPasswordEncrypted: "{{ kafka.keyPassword | encrypt(encrypt_key) }}"
+      audit:
+        keyStorePasswordEncrypted: "{{ (kafka.audit | default(kafka)).keyStorePassword | encrypt(encrypt_key) }}"
+        trustStorePasswordEncrypted: "{{ (kafka.audit | default(kafka)).trustStorePassword | encrypt(encrypt_key) }}"
+        keyPasswordEncrypted: "{{ (kafka.audit | default(kafka)).keyPassword | encrypt(encrypt_key) }}"
+  when: simple_security == 'SSL'
+
+### DISTRIBUTE SECTION ###
+
+- include_tasks: "{{ role_path }}/tasks/helper/distribute.yml"
+  tags: distribute
+  when:
+    - ZK_ALREADY_DONE is undefined
+    - inventory_hostname not in groups['zookeeper']
+
+### SERVICE SECTION ###
+- include_tasks: "{{ role_path }}/tasks/helper/create_service.yml"
+  when: enabled_service
+  vars:
+    start_command: "{{ kafka.installdir }}/bin/kafka-server-start -daemon {{ kafka.installdir }}/etc/kafka/server.properties"
+    stop_command: "{{ kafka.installdir }}/bin/kafka-server-stop"
+    from_dir: "{{ kafka.installdir }}"
+    app_name: kafka
+  tags: install
+
+### STOP SECTION ###
+
+- block:
+  - name: Check kafka.service
+    shell: systemctl list-unit-files | grep "^[ ]*kafka.service"
+    register: kafka_service
+    failed_when: false
+    tags: always
+  - name: Check state of kafka.service
+    shell: systemctl list-units --state=active,activating | grep "^[ ]*kafka.service"
+    register: kafka_service_active
+    failed_when: false
+  - name: Stop as service
+    raw: sudo systemctl stop kafka.service
+    when: kafka_service.rc == 0 and kafka_service_active.rc == 0
+  - name: Disable service
+    raw: sudo systemctl disable kafka
+    when: kafka_service.rc == 0
+  - block:
+    - name: Get realpath
+      command: realpath -m "{{ kafka.installdir }}"
+      register: app_realpath
+    - include_tasks: "{{ role_path }}/tasks/helper/stop_wait.yml"
+      vars:
+        stop_command: "./bin/kafka-server-stop.sh" # if you need run stop script, else kill PID (default)
+        pgrep_str: "{{ app_realpath.stdout }}.*DistributedLog"
+    when: kafka_service.rc != 0 or kafka_service_active.rc != 0
+  tags: stop
+
+### INSTALL SECTION ###
+
+- block:
+  - include_tasks: "{{ role_path }}/tasks/helper/backup.yml"
+    when: kafka.backup_installdir | default(false)
+    tags:
+      - backup
+      - backup_restore
+      - backup_remove
+  - block:
+    - include_tasks: "{{ role_path }}/tasks/helper/unpack.yml"
+    - name: Chmod for *.sh
+      shell: chmod +x *.sh
+      args:
+        chdir: "{{ kafka.installdir }}"
+    - name: Adding {{ security }} config
+      shell: "./deploy-{{ security | lower }}.sh"
+      args:
+        chdir: "{{ kafka.installdir }}"
+    - name: Set correct rights
+      shell: find . -type d -exec chmod 755 {} \; && find . -type f -exec chmod 644 {} \;
+      args:
+        chdir: "{{ kafka.installdir }}"
+    when: (ZK_ALREADY_DONE is undefined and inventory_hostname not in groups['zookeeper']) or kafka.installdir != zookeeper.installdir
+  # - include_tasks: "{{ role_path }}/tasks/helper/custom_files.yml"
+  #   tags: custom_files
+  - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+    vars:
+      dir: "{{ kafka.logdir }}"
+    when:
+      - kafka.cleanLog
+      - (ZK_ALREADY_DONE is undefined and inventory_hostname not in groups['zookeeper']) or kafka.logdir != zookeeper.logdir
+  - name: Check kafka.datadir
+    shell: "find {{ kafka.datadir }} -mindepth 1 -maxdepth 1 -type d | grep 'fs[0-9]'"
+    register: mounted_datadirs
+    failed_when: false
+    when: kafka.datadir.split(',') | length == 1
+  - name: Update kafka.datadir to {{ new_datadir | default('...') }}
+    set_fact:
+      kafka: "{{ kafka | combine({'datadir': new_datadir}, recursive=True) }}"
+    vars:
+      new_datadir: "{{ mounted_datadirs.stdout_lines|join(',') }}"
+    when:
+      - mounted_datadirs.changed
+      - mounted_datadirs.stdout
+  - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+    vars:
+      dir: "{{ item }}"
+    with_items: "{{ kafka.datadir.split(',') }}"
+    when:
+      - kafka.cleanData
+      - (ZK_ALREADY_DONE is undefined and inventory_hostname not in groups['zookeeper']) or item != zookeeper.datadir
+  - name: Change server.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/config/server.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "broker.id", value: "{{ kafka.id | default(groups['kafka'].index(inventory_hostname) + 1) }}" }
+      - { key: "listeners", value: "PLAINTEXT://{{ inventory_hostname | lower }}:{{ kafka.port }}" }
+      - { key: "log.dirs", value: "{{ kafka.datadir }}" }
+      - { key: "zookeeper.connect", value: "{{ zk_port_list }}" }
+      - { key: "auto.create.topics.enable", value: "{{ kafka.autoCreateTopics | lower }}" }
+      - { key: "offsets.topic.replication.factor", value: "{{ (groups['kafka']|length > 2) | ternary('3', groups['kafka']|length) }}" }
+      - { key: "transaction.state.log.replication.factor", value: "{{ (groups['kafka']|length > 2) | ternary('3', groups['kafka']|length) }}" }
+      - { key: "transaction.state.log.min.isr", value: "{{ (groups['kafka']|length > 2) | ternary('3', groups['kafka']|length) }}" }
+      - { key: "offsets.retention.minutes", value: "{{ kafka.offsets_retention_minutes }}" }
+      - { key: "zookeeper.connection.timeout.ms", value: "{{ kafka.zookeeper_connection_timeout_ms }}" }
+      - { key: "zookeeper.session.timeout.ms", value: "{{ kafka.zookeeper_session_timeout_ms }}" }
+      - { key: "max.incremental.fetch.session.cache.slots", value: "{{ kafka.max_incremental_fetch_session_cache_slots }}" } # default value = 1000
+      - { key: "log.roll.hours", value: "{{ kafka.log_roll_hours }}" } #default value = 168 - 7 days
+      - { key: "queued.max.requests", value: "{{ kafka.queued_max_requests }}"} #default value = 500
+      - { key: "replica.fetch.max.bytes", value: "{{ kafka.replica_fetch_max_bytes }}" } #default value = 1Mb.
+  - name: Change JMX properties in kafka_jmx.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/config/jmx/kafka-jmx.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "com.sun.management.jmxremote",                      value: "true" }
+      - { key: "com.sun.management.jmxremote.port",                 value: "{{ kafka.jmxport }}" }
+      - { key: "com.sun.management.jmxremote.ssl",                  value: "false" }
+      - { key: "com.sun.management.jmxremote.authenticate",         value: "{{ kafka.jmx_security_enable | default(false) | lower }}"}
+      - { key: "com.sun.management.jmxremote.access.file",          value: "./config/jmx/jmxremote.access"}
+      - { key: "com.sun.management.jmxremote.password.file",        value: "./config/jmx/jmxremote.password"}
+  - block:
+    - name: Generate jmxremote.access file
+      copy:
+        dest: "{{ kafka.installdir }}/config/jmx/jmxremote.access"
+        content: |
+          {% for user in kafka.jmx_access_roles %}
+          {{ user.user }} {{ user.access }}
+          {% endfor %}
+    - name: Generate jmxremote.password file
+      copy:
+        dest: "{{ kafka.installdir }}/config/jmx/jmxremote.password"
+        content: |
+          {% for user in kafka.jmx_access_roles %}
+          {{ user.user }} {{ user.password }}
+          {% endfor %}
+    when:
+      - kafka.jmx_security_enable | default(false)
+      - kafka.jmx_access_roles is defined
+      - (ZK_ALREADY_DONE is undefined and inventory_hostname not in groups['zookeeper']) or kafka.installdir != zookeeper.installdir
+    no_log: "{{ ansible_no_log }}"
+  - name: Chmod 0400 for ./bin/jmxremote.*
+    file:
+      path: "{{ kafka.installdir }}/config/jmx/{{ item }}"
+      mode: 0400
+    with_items:
+      - jmxremote.access
+      - jmxremote.password
+  - name: dos2unix {{ kafka.installdir }}/bin
+    dos2unix:
+      path: "{{ kafka.installdir }}/bin"
+  - name: Chmod for ./bin/*
+    shell: chmod +x *
+    args:
+      chdir: "{{ kafka.installdir }}/bin"
+  - name: Set JDK path
+    lineinfile:
+      path: "{{ kafka.installdir }}/bin/kafka-run-class.sh"
+      regexp: "export JAVA_HOME"
+      line: "{{ customJavaPath | ternary('export JAVA_HOME='+customJavaPath|string, '') }}"
+      insertbefore: '^.*JAVA_HOME" ]'
+  - name: Remove KAFKA_JMX_OPTS and Dcom.sun.management.config.file
+    lineinfile:
+      path: "{{ kafka.installdir }}/bin/kafka-server-start.sh"
+      regexp: "(export KAFKA_JMX_OPTS.*|-Dcom.sun.management.config.file=)"
+      state: absent
+  - name: Add current KAFKA_JMX_OPTS
+    lineinfile:
+      path: "{{ kafka.installdir }}/bin/kafka-server-start.sh"
+      insertbefore: '^EXTRA_ARGS='
+      firstmatch: yes
+      line: 'export KAFKA_JMX_OPTS="-Dcom.sun.management.config.file=$base_dir/config/jmx/kafka-jmx.properties"'
+  - name: Replacing Xms and Xmx
+    replace:
+      path: "{{ kafka.installdir }}/bin/kafka-server-start.sh"
+      regexp: "{{ item.from }}"
+      replace: "{{ item.to }}"
+    with_items:
+      - { from: "-Xms[0-9]+[kmgKMG]", to: "-Xms{{ kafka.xms }}"}
+      - { from: "-Xmx[0-9]+[kmgKMG]", to: "-Xmx{{ kafka.xmx }}"}
+  - name: Check kafka-server-start
+    shell: "cat {{ kafka.installdir }}/bin/kafka-server-start.sh"
+    register: kafka_sh
+  - name: Change logdir
+    lineinfile:
+      path: "{{ kafka.installdir }}/bin/kafka-server-start.sh"
+      regexp: "(^EXTRA_ARGS=.*$)"
+      line: 'export LOG_DIR="{{ kafka.logdir }}"\n\1'
+      backrefs: yes
+    when: "'LOG_DIR' not in kafka_sh.stdout"
+  - include_tasks: kafka_SSL.yml
+    when: simple_security == 'SSL'
+  - name: Change log4j.properties (enable authorizer.logger)
+    ini_file:
+      path: "{{ kafka.installdir }}/config/log4j.properties"
+      section:
+      option: log4j.logger.kafka.authorizer.logger
+      value: INFO, authorizerAppender
+  - include_tasks: kafka_audit.yml
+    when: security | upper is search('AUDIT')
+
+  - include_tasks: "{{ role_path }}/tasks/helper/change_ini.yml"
+    with_items: "{{ kafka.iniChange }}"
+    loop_control:
+      loop_var: outer_item
+    when: kafka.iniChange is defined and kafka.iniChange
+    tags: ini_change
+  tags: install
+
+### START SECTION ###
+
+- block:
+  - block:
+    - name: Start as service
+      raw: sudo systemctl start kafka.service
+    - name: Enable service
+      raw: sudo systemctl enable kafka
+    when: kafka_service.rc == 0
+  - include_tasks: "{{ role_path }}/tasks/helper/start_wait.yml"
+    vars:
+      start_command: "nohup ./bin/kafka-server-start.sh -daemon config/server.properties 2>&1 < /dev/null &"
+      log: "{{ kafka.logdir }}/server.log"
+      search_line: 'started \(kafka.server.KafkaServer\)'
+    when: kafka_service.rc != 0
+
+  - name: Wait for port open
+    wait_for:
+      port: "{{ kafka.port }}"
+      timeout: "{{ wait_for_start }}"
+      host: "{{ inventory_hostname }}"
+  - name: Wait for string in log
+    wait_for:
+      path: "{{ kafka.logdir }}/server.log"
+      timeout: "{{ wait_for_start }}"
+      search_regex: 'started \(kafka.server.KafkaServer\)'
+
+  - include_tasks: "{{ role_path }}/tasks/helper/get_status.yml"
+    vars:
+      port: "{{ kafka.port }}"
+    tags: status
+  tags: start

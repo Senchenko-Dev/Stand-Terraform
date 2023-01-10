@@ -1,0 +1,8 @@
+- name: Change line in file
+  lineinfile:
+    path: "{{ item.path }}"
+    regexp: "{{ item.regexp | default(omit) }}"
+    line: "{{ item.line | default(omit) }}"
+    validate: "{{ item.validate | default(omit) }}"
+    state: "{{ item.state | default(omit) }}"
+    insertafter: "{{ item.insertafter | default(omit) }}"

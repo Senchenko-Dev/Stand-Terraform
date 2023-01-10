@@ -1,0 +1,26 @@
+- block:
+  - name: Check default custom files
+    local_action: stat path={{ role_path }}/custom_files
+    register: default_custom_files
+  - name: Upload default custom files
+    copy:
+      src: "{{ role_path }}/custom_files/" # upload files from dir
+      dest: "{{ hostvars[inventory_hostname][role_name].installdir }}"
+    when: default_custom_files.stat.exists
+  - name: Check custom files from inventories
+    local_action: stat path={{ inventory_dir }}/custom_files/{{ role_name }}
+    register: inventory_custom_files
+  - name: Upload custom files from inventories
+    copy:
+      src: "{{ inventory_dir }}/custom_files/{{ role_name }}/" # upload files from dir
+      dest: "{{ hostvars[inventory_hostname][role_name].installdir }}"
+    when: inventory_custom_files.stat.exists
+  - name: Check custom files from inventories (only for this host)
+    local_action: stat path={{ inventory_dir }}/custom_files/{{ inventory_hostname }}/{{ role_name }}
+    register: inventory_fqdn_custom_files
+  - name: Upload custom files from inventories (only for this host)
+    copy:
+      src: "{{ inventory_dir }}/custom_files/{{ inventory_hostname }}/{{ role_name }}/" # upload files from dir
+      dest: "{{ hostvars[inventory_hostname][role_name].installdir }}"
+    when: inventory_fqdn_custom_files.stat.exists
+  tags: always

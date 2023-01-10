@@ -1,0 +1,38 @@
+- name: Uncomment Existing Properties
+  replace:
+    path: "{{ path_item }}/{{ config_sub_dir }}/server.properties"
+    regexp: '^#{{ item.0 }}.*'
+    replace: '{{ item.0 }}={{ item.1 }}'
+  with_together:
+    - "{{ kafka_props_keys }}"
+    - "{{ kafka_props_values }}"
+  when: kafka_props_keys is defined and kafka_props_values is defined
+
+- name: Change Existing Properties Values
+  replace:
+    path: "{{ path_item }}/{{ config_sub_dir }}/server.properties"
+    regexp: '^{{ item.0 }}.*'
+    replace: '{{ item.0 }}={{ item.1 }}'
+  with_together:
+    - "{{ kafka_props_keys }}"
+    - "{{ kafka_props_values }}"
+  when: kafka_props_keys is defined and kafka_props_values is defined
+
+- name: Add Properties If Not Exists
+  lineinfile:
+    path: "{{ path_item }}/{{ config_sub_dir }}/server.properties"
+    line: '{{ item.0 }}={{ item.1 }}'
+  with_together:
+    - "{{ kafka_props_keys }}"
+    - "{{ kafka_props_values }}"
+  when: kafka_props_keys is defined and kafka_props_values is defined
+
+- name: Replace Existing Properties with space value
+#- name: Comment Existing Properties
+  replace:
+    path: "{{ path_item }}/{{ config_sub_dir }}/server.properties"
+    regexp: '^{{ item }}'
+#    replace: '{{ item }}='
+    replace: '{{ item }}'
+  with_items: "{{ kafka_props_key_commented_out }}"
+  when: kafka_props_key_commented_out is defined

@@ -1,0 +1,28 @@
+#  This all to be executed on localhost
+
+- stat:
+    path: "{{ WORKSPACE }}/distrib.zip"
+  register: distrib_exists
+  #todo and if it is not a Kafka distr?
+
+- name: download distr zip
+  changed_when: False
+  maven_artifact:
+    group_id: "{{ kafka_group_id }}"
+    artifact_id: "{{ kafka_artifact_id }}"
+    version: "{{ kafka_artifact_version }}"
+    extension: "{{ nexus_artifact_type }}"
+    classifier: "{{ nexus_classifier|default('') }}"
+    repository_url: "{{ nexus_repo_url }}"
+    username: "{{ nexus_url_username }}"
+    password: "{{ nexus_url_password }}"
+    dest: "{{ kafka_tool_path }}/roles/copy_distro_to_server/files/kafka.zip"
+    mode: '0755'
+    timeout: 600
+    verify_checksum: never
+    validate_certs: "{{ validate_ssl }}"
+  when: not distrib_exists.stat.exists
+
+- name: move distr zip
+  shell: "mv {{ WORKSPACE }}/distrib.zip {{ kafka_tool_path }}/roles/copy_distro_to_server/files/kafka.zip"
+  when: distrib_exists.stat.exists

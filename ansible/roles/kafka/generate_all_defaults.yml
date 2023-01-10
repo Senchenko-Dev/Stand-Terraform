@@ -1,0 +1,4 @@
+- hosts: localhost
+  tasks:
+    - name: Generate roles/defaults.yml
+      shell: for f in roles/*/defaults/main.yml; do (cat "${f}"; echo); done > roles/defaults.yml

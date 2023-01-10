@@ -1,0 +1,30 @@
+- name: Create user
+  user:
+    name: "{{ item.name }}"
+    state: present
+    expires: "{{ item.expires | default(omit) }}"
+    createhome: "{{ item.createhome | default(true) }}"
+    uid: "{{ item.uid | default(omit) }}"
+    group: "{{ item.group | default(omit) }}"
+    groups: "{{ item.groups | default(omit) }}"
+    password: "{{ item.password | default(omit) }}"
+    shell: "{{ item.shell | default('/bin/bash') }}"
+
+- name: Add sudo permisions
+  lineinfile:
+    path: "/etc/sudoers.d/{{ item.name }}"
+    #regexp: '^[\t #]*{{ item.name }}[\t ].*$'
+    #insertafter: '^[\t ]*root[\t ]*.*$'
+    line: "{{ item.name }}{{ '\t' }}{{ item.sudo.host | default('ALL') }}=({{ item.sudo.runas | default('ALL') }}){{ ' \tNOPASSWD: ' if item.sudo.nopasswd | default(True) else ' \t' }}{{ item.sudo.cmnd }}"
+    create: yes
+    owner: root
+    group: root
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  when:
+  - item.sudo is defined
+
+- name: Change inactivity user settings
+  command:
+    _raw_params: "chage -m -1 -M -1 -I -1 -E -1 -W -1 {{ item.name }}"
+  when: item.service is defined and item.service

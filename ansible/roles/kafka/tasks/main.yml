@@ -1,84 +1,43 @@
 ---
-- name: install neccessary tools
+- import_tasks: "{{ role_path }}/tasks/helper/get_default_vars.yml"
+  delegate_to: localhost
+
+- name: "Install packages"
   package:
     name: "{{ item }}"
     state: present
-    update_cache: yes
-  with_items:
-    - net-tools
+  loop:
     - unzip
-    - java
-#        - python-setuptools
-#        - libffi-devel
+    - net-tools
+    - java-11-openjdk.x86_64
+  become: yes
+
+    
+- import_tasks: zookeeper/tasks/main.yml
+  become: yes
+  tags: [install]
+- import_tasks: kafka/tasks/main.yml
+  become: yes
+  tags: [install]
+- import_tasks: kafka_acls/tasks/main.yml
+  become: yes
+  tags: [install]
+- import_tasks: kafka_topics/tasks/main.yml
+  become: yes
   tags: [install]
 
-- debug:
-    var: KPorts + KJMXPorts + ZQuorumPorts + ZPorts + ZJMXPorts + KAgentPort
-  tags: [install, precheck]
+# - import_tasks: helper/get_status.yml
+#   tags: [health-check]
 
-- import_tasks: kafka_sber/tasks/create_user.yml
-  tags: [install, precheck]
 
-- import_tasks: select_deploy_mode/tasks/main.yaml
-  tags: [install, precheck]
+- name: Save status to ./status
+  become: yes
+  template: src="{{ role_path }}/tasks/helper/status.j2" dest=./status
+  tags: always
 
-- import_tasks: check_deploy_config_settings/tasks/main.yaml
-  tags: [install, precheck]
 
-- import_tasks: custom_jdk/tasks/main.yaml
-  tags: [install]
 
-- import_tasks: get_generate_and_check_ports/tasks/main.yaml
-  tags: [install, precheck]
 
-- import_tasks: cleanup_work_dirs/tasks/main.yaml
-  tags: [install]
 
-- import_tasks: copy_distro_to_server/tasks/main.yaml
-  tags: [install]
 
-- import_tasks: deploy_config/tasks/main.yaml
-  tags: [install]
 
-- import_tasks: kafka_se_distro_check/tasks/main.yaml
-  tags: [install]
-
-- import_tasks: set_zookeeper_props/tasks/main.yaml
-  tags: [install, configure]
-
-- import_tasks: set_zookeeper_jmx_props/tasks/main.yaml
-  tags: [ install, configure ]
-
-- import_tasks: start_zookeeper_systemd/tasks/main.yaml
-  tags: [install, configure, control-start, control-restart]
-
-- import_tasks: set_kafka_props/tasks/main.yaml
-  tags: [install, configure]
-
-- import_tasks: set_kafka_jmx_props/tasks/main.yaml
-  tags: [install, configure]
-
-- import_tasks: set_kafka_cert/tasks/main.yaml
-  tags: [install, configure]
-
-- import_tasks: generate_keys_for_ssl_configs/tasks/main.yaml
-  delegate_to: localhost
-  tags: [install, configure]
-
-- import_tasks: set_security_configs_for_ssl/tasks/main.yaml
-  tags: [install, configure]
-
-- import_tasks: start_kafka_systemd/tasks/main.yaml
-  tags: [install, configure]
-
-- import_tasks: summary_information/tasks/main.yaml
-  tags: [install, configure]
-
-- import_tasks: control-start.yml
-  tags: [never, control-start]
-
-- import_tasks: control-stop.yml
-  tags: [never, control-stop]
-
-- import_tasks: control-restart.yml
-  tags: [never, control-restart]

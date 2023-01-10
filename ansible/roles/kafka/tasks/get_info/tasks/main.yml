@@ -1,0 +1,86 @@
+- name: "Create data dir {{ get_info.datadir }}"
+  file:
+    path: "{{ get_info.datadir }}"
+    state: directory
+  tags: always
+- block:
+  - block:
+    - name: Tar log file Apache Kafka
+      archive:
+        path: "{{ kafka.logdir }}/*"
+        format: tar
+        dest: "{{ get_info.datadir }}/kafka_log.tar"
+        exclude_path: "{{ kafka.logdir }}/zookeeper.*"
+    - name: Get Apache Kafka archive file
+      fetch:
+        src: "{{ get_info.datadir }}/kafka_log.tar"
+        dest: "{{ get_info.localDatadir }}/{{ inventory_hostname }}/kafka/"
+        flat: yes
+    when: "'kafka' in group_names"
+  - block:
+    - name: Tar log file and data Apache Zookeeper
+      archive:
+        path: "{{ item.value }}"
+        format: tar
+        dest: "{{ get_info.datadir }}/{{ item.key }}.tar"
+      with_items:
+        - { key: "zookeeper_log", value: "{{ zookeeper.logdir }}/zookeeper.*" }
+        - { key: "zookeeper_data", value: "{{ zookeeper.datadir }}/*" }
+    - name: Get Apache Zookeeper archive file
+      fetch:
+        src: "{{ get_info.datadir }}/{{ item }}.tar"
+        dest: "{{ get_info.localDatadir }}/{{ inventory_hostname }}/zookeeper/"
+        flat: yes
+      with_items:
+        - zookeeper_log
+        - zookeeper_data
+    when: "'zookeeper' in group_names"
+  - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+    vars:
+      dir: "{{ get_info.datadir }}"
+  tags: copy_log
+
+- block:
+  - name : Confirm clean data
+    pause:
+      prompt: "Are you sure you want to continue clean data and log directories? For continue press Enter. Or Ctrl-C and enter A for stop clean"
+  - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+    vars:
+      dir: "{{ item }}"
+    with_items:
+      - "{{ kafka.logdir }}"
+      - "{{ kafka.datadir }}"
+    when: "'kafka' in group_names"
+  - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+    vars:
+      dir: "{{ item }}"
+    with_items:
+      - "{{ zookeeper.logdir }}"
+      - "{{ zookeeper.datadir }}/version-2"
+    when: "'zookeeper' in group_names"
+  tags: clean_data
+
+- block:
+  - name: Run commands for get info topics
+    shell: "{{ item.command }} > {{ get_info.datadir }}/{{ item.file }}"
+    args:
+      chdir: "{{ kafka.installdir }}"
+    with_items:
+      - { command: "./bin/kafka-topics --describe --zookeeper {{ zk_port_list }} --under-replicated-partitions", file: "kafka-topics.under.replicated.txt" }
+      - { command: "./bin/kafka-topics --describe --zookeeper {{ zk_port_list }} --unavailable-partitions", file: "kafka-topics.unavailable.partitions.txt" }
+      - { command: "./bin/kafka-topics --describe --zookeeper {{ zk_port_list }}", file: "kafka-topics.txt" }
+  - name: Copy file to localhost
+    fetch:
+      src: "{{ get_info.datadir }}/{{ item }}"
+      dest: "{{ get_info.localDatadir }}/"
+      flat: yes
+    with_items:
+      - kafka-topics.under.replicated.txt
+      - kafka-topics.unavailable.partitions.txt
+      - kafka-topics.txt
+  - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+    vars:
+      dir: "{{ get_info.datadir }}"
+  tags: get_info_topics
+  run_once: true
+  when: "'kafka' in group_names"

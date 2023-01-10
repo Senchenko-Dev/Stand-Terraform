@@ -1,0 +1,42 @@
+---
+- fail: msg="Attention!!! An error was detected! No Zookeeper hosts specified in inventory file. Check the correctness of the entered data."
+  when: groups['ZookeeperNodes'] | length == 0
+  any_errors_fatal: true
+
+- fail: msg="Attention!!! An error was detected! ZIds is undefined in inventory file or the value is incorrect. Check the correctness of the entered data."
+  when: (ZIds is undefined or ZIds | length < 1) and inventory_hostname in groups['ZookeeperNodes']
+  any_errors_fatal: true
+
+- set_fact:
+    zk_ids_list: []
+- name: Get Number of Zookeepers to Determine Zookeeper Deployment Mode (Standalone or Quorum modes)
+  set_fact:
+    zk_ids_list: "{{ zk_ids_list + hostvars[item]['ZIds'] }}"
+  with_items: "{{ groups['ZookeeperNodes'] }}"
+- set_fact: num_zk_ids="{{ zk_ids_list | length }}"
+- debug:
+    msg: Zookeeper Cluster Mode
+  when: num_zk_ids | int > 1
+- debug:
+    msg: Zookeeper Standalone Mode
+  when: num_zk_ids | int == 1
+
+- fail: msg="Attention!!! An error was detected! No Kafka hosts specified in inventory file. Check the correctness of the entered data."
+  when: groups['KafkaNodes'] | length == 0
+  any_errors_fatal: true
+
+- fail: msg="Attention!!! An error was detected! KBrokerIds is not defined in the inventory file or the value is incorrect. Check the correctness of the entered data."
+  when: (KBrokerIds is undefined or KBrokerIds | length < 1) and inventory_hostname in groups['KafkaNodes']
+  any_errors_fatal: true
+
+- name: Get Number of Kafka Brokers Across the Cluster (To Configure JMX Ports)
+  set_fact:
+    list_of_kafka_broker_ids: "{{ list_of_kafka_broker_ids | default([]) + hostvars[item]['KBrokerIds'] }}"
+  with_items: "{{ groups['KafkaNodes'] }}"
+- set_fact: num_kafka_brokers_ids="{{ list_of_kafka_broker_ids | length }}"
+- debug:
+    msg: Kafka Multiple Broker Startup Mode
+  when: num_kafka_brokers_ids | int > 1
+- debug:
+    msg: Kafka Single Broker Startup Mode
+  when: num_kafka_brokers_ids | int == 1

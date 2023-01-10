@@ -1,0 +1,29 @@
+---
+- name: Create Distro Dirs
+  file:
+    path: "{{ item }}"
+    state: directory
+    recurse: yes
+    owner: "{{kafka_user }}"
+  with_items: "{{ DistroDirs }}"
+
+- name: Copy Distributive to Host
+  unarchive:
+    src: files/kafka.zip
+    dest: "{{ item }}"
+    owner: "{{kafka_user }}"
+  with_items: "{{ DistroDirs }}"
+
+- name: Get List of Kafka SberEdition *.sh Files
+  find:
+    paths: "{{ item }}"
+    patterns: "*.sh"
+  register: deploy_files
+  with_items: "{{ DistroDirs }}"
+
+- name: Set Execution Permissions for Kafka SberEdition *.sh Files
+  file:
+    path: "{{ item.path }}"
+    mode: u+x
+  no_log: true
+  with_items: "{{ deploy_files.results | map(attribute='files') | list }}"

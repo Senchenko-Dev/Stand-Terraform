@@ -1,0 +1,20 @@
+---
+distrib_protocol: https
+distrib_auth_section: "{{ distrib_user }}:{{ distrib_user_pass }}"
+
+distrib_server_elk_path: "{{ distrib_protocol }}://{{ distrib_auth_section }}@{{ url_nexus }}/nexus/content/repositories/Nexus_PROD/Nexus_PROD/SBRF-Distrib/ELK"
+#elastic_pkg: "{{ distrib_server_elk_path }}/Elasticsearch/{{ package_mjr_version }}/elasticsearch-{{ package_version }}-x86_64.rpm"
+#kibana_pkg: "{{ distrib_server_elk_path }}/Kibana/{{ package_mjr_version }}/kibana-{{ package_version }}-x86_64.rpm"
+
+# architecture_logstash_ver:
+#     7.13.2: -x86_64
+#     7.12.1: -x86_64
+# architecture_logstash: "{{ architecture_logstash_ver[package_version] | default('') }}"
+
+#logstash_pkg: "{{ distrib_server_elk_path }}/Logstash/{{ package_mjr_version }}/logstash-{{ package_version }}{{architecture_logstash}}.rpm"
+
+# elastic_pkg: "http://10.42.4.125/mirror/docker/images/awx/other/elk/elasticsearch-8.4.3-x86_64.rpm"
+# kibana_pkg: "http://10.42.4.125/mirror/docker/images/awx/other/elk/kibana-8.4.3-x86_64.rpm"
+# logstash_pkg: "http://10.42.4.125/mirror/docker/images/awx/other/elk/logstash-8.4.3-x86_64.rpm"
+
+# net_zone: INSTEIP

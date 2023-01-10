@@ -1,0 +1,54 @@
+---
+- import_tasks: start-elasticsearch.yml
+- import_tasks: start-kibana.yml
+- import_tasks: start-logstash.yml
+- import_tasks: stop-elasticsearch.yml
+- import_tasks: stop-kibana.yml
+- import_tasks: stop-logstash.yml
+- import_tasks: restart-elasticsearch.yml
+- import_tasks: restart-kibana.yml
+- import_tasks: restart-logstash.yml
+
+
+# - name: start elasticsearch
+#   service:
+#     name: "{{ item.name }}"
+#     state: started
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages and item.name == 'elasticsearch'
+
+# - name: start kibana
+#   service:
+#     name: "{{ item.name }}"
+#     state: started
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages and item.name == 'kibana'
+  
+# - name: start logstash
+#   service:
+#     name: "{{ item.name }}"
+#     state: started
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages and item.name == 'logstash'
+
+
+# - name: restart elasticsearch
+#   service:
+#     name: "{{ item.name }}"
+#     state: restarted
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages and item.name == 'elasticsearch'
+
+# - name: restart kibana
+#   service:
+#     name: "{{ item.name }}"
+#     state: restarted
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages and item.name == 'kibana'
+  
+# - name: restart logstash
+#   service:
+#     name: "{{ item.name }}"
+#     state: restarted
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages and item.name == 'logstash'

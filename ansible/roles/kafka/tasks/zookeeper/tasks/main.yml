@@ -1,0 +1,267 @@
+- name: Download password-encrypt-cli
+  copy:
+    src: "../files/{{ password_encoder_cli_path }}"
+    dest: "/tmp/{{ password_encoder_cli_path }}"
+    mode: 0777
+    #flat: true
+  #run_once: true
+  when: simple_security == 'SSL'
+
+
+### DISTRIBUTE SECTION ###
+
+- block:
+  - include_tasks: "{{ role_path }}/tasks/helper/distribute.yml"
+    vars:
+      original_distr: kafka
+  - name: Set ZK_ALREADY_DONE
+    set_fact:
+      ZK_ALREADY_DONE: true
+  tags: distribute
+
+
+- name: Set encrypt_key
+  set_fact:
+    encrypt_key: "{{ lookup('pipe', 'echo ApacheKafkaSecure | base64') }}"
+  when: simple_security == 'SSL'
+
+- name: Encode passwords
+  set_fact:
+    zookeeper: "{{ zookeeper | combine(changed_zookeeper, recursive=True) }}"
+  vars:
+    changed_zookeeper:
+      keyStorePasswordEncrypted: "{{ zookeeper.keyStorePassword | encrypt(encrypt_key) }}"
+      trustStorePasswordEncrypted: "{{ zookeeper.trustStorePassword | encrypt(encrypt_key) }}"
+  when: simple_security == 'SSL'
+
+### SERVICE SECTION ###
+- include_tasks: "{{ role_path }}/tasks/helper/create_service.yml"
+  when: enabled_service
+  vars:
+    start_command: "{{ zookeeper.installdir }}/bin/zookeeper-server-start.sh -daemon config/zookeeper.properties"
+    stop_command: "{{ zookeeper.installdir }}/bin/zookeeper-server-stop.sh"
+    from_dir: "{{ zookeeper.installdir }}"
+    app_name: zookeeper
+  tags: install
+
+### STOP SECTION ###
+
+- block:
+  - name: Check zookeeper.service
+    shell: systemctl list-unit-files | grep "^[ ]*zookeeper.service"
+    register: zookeeper_service
+    failed_when: false
+    tags: always
+  - name: Check state of zookeeper.service
+    shell: systemctl list-units --state=active,activating | grep "^[ ]*zookeeper.service"
+    register: zookeeper_service_active
+    failed_when: false
+  - name: Stop as service
+    raw: sudo systemctl stop zookeeper.service
+    when: zookeeper_service.rc == 0 and zookeeper_service_active.rc == 0
+  - name: Disable service
+    raw: sudo systemctl disable zookeeper
+    when: zookeeper_service.rc == 0
+  - block:
+    - name: Get realpath
+      command: realpath -m "{{ zookeeper.installdir }}"
+      register: app_realpath
+    - include_tasks: "{{ role_path }}/tasks/helper/stop_wait.yml"
+      vars:
+        stop_command: "./bin/zookeeper-server-stop.sh" # if you need run stop script, else kill PID (default)
+        pgrep_str: "{{ app_realpath.stdout }}.*QuorumPeerMain"
+    when: zookeeper_service.rc != 0 or zookeeper_service_active.rc != 0
+  tags: stop
+
+### INSTALL SECTION ###
+
+- block:
+  - include_tasks: "{{ role_path }}/tasks/helper/backup.yml"
+    when: zookeeper.backup_installdir | default(false)
+    tags:
+      - backup
+      - backup_restore
+      - backup_remove
+  - include_tasks: "{{ role_path }}/tasks/helper/unpack.yml"
+    vars:
+      original_distr: kafka
+  ### WORK WITH SBT DISTR FROM NEXUS (.zip with configs) ###
+  - name: Chmod for *.sh
+    shell: chmod +x *.sh
+    args:
+      chdir: "{{ zookeeper.installdir }}"
+  - name: Adding {{ security }} config
+    shell: "./deploy-{{ security | lower }}.sh"
+    args:
+      chdir: "{{ zookeeper.installdir }}"
+  - name: Set correct rights
+    shell: find . -type d -exec chmod 755 {} \; && find . -type f -exec chmod 644 {} \;
+    args:
+      chdir: "{{ zookeeper.installdir }}"
+  - name: Set ZK_ALREADY_DONE
+    set_fact:
+      ZK_ALREADY_DONE: true
+  # - include_tasks: "{{ role_path }}/tasks/helper/custom_files.yml"
+  #   tags: custom_files
+  - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+    vars:
+      dir: "{{ zookeeper.logdir }}"
+    when: zookeeper.cleanLog
+  - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+    vars:
+      dir: "{{ zookeeper.datadir }}"
+    when: zookeeper.cleanData
+  - name: Check current distr version
+    shell: ls | grep -Eo "^kafka_2\.[0-9]+-[0-9]+\.[0-9]+" | cut -d "-" -f2 | head -n1 | sed s/^5/2/
+    args:
+      chdir: "{{ zookeeper.installdir }}/libs"
+    register: distr_version
+  - name: Change zookeeper.properties
+    ini_file:
+      path: "{{ zookeeper.installdir }}/config/zookeeper.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "clientPort", value: "{{ zookeeper.port }}"}
+      - { key: "dataDir", value: "{{ zookeeper.datadir }}"}
+      - { key: "autopurge.snapRetainCount", value: "100"}
+      - { key: "autopurge.purgeInterval", value: "1"}
+  - block:
+    - name: Change zookeeper.properties for cluster
+      ini_file:
+        path: "{{ zookeeper.installdir }}/config/zookeeper.properties"
+        section:
+        option: "{{ item.key }}"
+        value: "{{ item.value }}"
+      with_items:
+        - { key: "tickTime", value: "3000"}
+        - { key: "initLimit", value: "50"}
+        - { key: "syncLimit", value: "5"}
+    - name: Change zookeeper.properties for cluster (add servers)
+      ini_file:
+        path: "{{ zookeeper.installdir }}/config/zookeeper.properties"
+        section:
+        option: "server.{{ hostvars[item.1].zookeeper.id | default(item.0 + 1) }}"
+        value: "{{ item.1 }}:{{ zookeeper.quorumPorts }}"
+      with_indexed_items:
+        - "{{ groups[with_group|default('zookeeper')] }}"
+    - name: Create myid for cluster
+      copy:
+        dest: "{{ zookeeper.datadir }}/myid"
+        content: "{{ zookeeper.id | default(groups[with_group|default('zookeeper')].index(inventory_hostname) + 1) }}"
+    when: groups[with_group|default('zookeeper')]|length > 1
+  - name: Check zookeeper-server-start
+    shell: "cat {{ zookeeper.installdir }}/bin/zookeeper-server-start.sh"
+    register: zk_sh
+  - name: Change JMX properties in zookeeper_jmx.properties
+    ini_file:
+      path: "{{ zookeeper.installdir }}/config/jmx/zookeeper-jmx.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "com.sun.management.jmxremote",                      value: "true" }
+      - { key: "com.sun.management.jmxremote.port",                 value: "{{ zookeeper.jmxport }}" }
+      - { key: "com.sun.management.jmxremote.ssl",                  value: "false" }
+      - { key: "com.sun.management.jmxremote.authenticate",         value: "{{ zookeeper.jmx_security_enable | default(false) | lower }}"}
+      - { key: "com.sun.management.jmxremote.access.file",          value: "./config/jmx/jmxremote.access"}
+      - { key: "com.sun.management.jmxremote.password.file",        value: "./config/jmx/jmxremote.password"}
+  - block:
+    - name: Generate jmxremote.access file
+      copy:
+        dest: "{{ zookeeper.installdir }}/config/jmx/jmxremote.access"
+        content: |
+          {% for user in zookeeper.jmx_access_roles %}
+          {{ user.user }} {{ user.access }}
+          {% endfor %}
+    - name: Generate jmxremote.password file
+      copy:
+        dest: "{{ zookeeper.installdir }}/config/jmx/jmxremote.password"
+        content: |
+          {% for user in zookeeper.jmx_access_roles %}
+          {{ user.user }} {{ user.password }}
+          {% endfor %}
+    when:
+      - zookeeper.jmx_security_enable | default(false)
+      - zookeeper.jmx_access_roles is defined
+    no_log: "{{ ansible_no_log }}"
+  - name: Chmod 0400 for ./bin/jmxremote.*
+    file:
+      path: "{{ zookeeper.installdir }}/config/jmx/{{ item }}"
+      mode: 0400
+    with_items:
+      - jmxremote.access
+      - jmxremote.password
+  - name: dos2unix {{ zookeeper.installdir }}/bin
+    dos2unix:
+      path: "{{ zookeeper.installdir }}/bin"
+  - name: Chmod for ./bin/*
+    shell: chmod +x *
+    args:
+      chdir: "{{ zookeeper.installdir }}/bin"
+  - name: Set JDK path
+    lineinfile:
+      path: "{{ zookeeper.installdir }}/bin/kafka-run-class.sh"
+      regexp: "export JAVA_HOME"
+      line: "{{ customJavaPath | ternary('export JAVA_HOME='+customJavaPath|string, '') }}"
+      insertbefore: '^.*JAVA_HOME" ]'
+  - name: Remove KAFKA_JMX_OPTS and Dcom.sun.management.config.file
+    lineinfile:
+      path: "{{ zookeeper.installdir }}/bin/zookeeper-server-start.sh"
+      regexp: "(export KAFKA_JMX_OPTS.*|-Dcom.sun.management.config.file=)"
+      state: absent
+  - name: Add current KAFKA_JMX_OPTS
+    lineinfile:
+      path: "{{ zookeeper.installdir }}/bin/zookeeper-server-start.sh"
+      insertbefore: '^EXTRA_ARGS='
+      firstmatch: yes
+      line: 'export KAFKA_JMX_OPTS="-Dcom.sun.management.config.file=$base_dir/config/jmx/zookeeper-jmx.properties"'
+  - name: Replacing Xms and Xmx
+    replace:
+      path: "{{ zookeeper.installdir }}/bin/zookeeper-server-start.sh"
+      regexp: "{{ item.from }}"
+      replace: "{{ item.to }}"
+    with_items:
+      - { from: "-Xms[0-9]+[kmgKMG]", to: "-Xms{{ zookeeper.xms }}"}
+      - { from: "-Xmx[0-9]+[kmgKMG]", to: "-Xmx{{ zookeeper.xmx }}"}
+  - name: Change logdir
+    lineinfile:
+      path: "{{ zookeeper.installdir }}/bin/zookeeper-server-start.sh"
+      regexp: "(^EXTRA_ARGS=.*$)"
+      line: 'export LOG_DIR="{{ zookeeper.logdir }}"\n\1'
+      backrefs: yes
+    when: "'LOG_DIR' not in zk_sh.stdout"
+  - include_tasks: zookeeper_SSL.yml
+    when: security | upper is search('ZK_MTLS')
+  - include_tasks: "{{ role_path }}/tasks/helper/change_ini.yml"
+    with_items: "{{ zookeeper.iniChange }}"
+    loop_control:
+      loop_var: outer_item
+    when: zookeeper.iniChange is defined and zookeeper.iniChange
+  tags: install
+
+### START SECTION ###
+
+- block:
+  - block:
+    - name: Start as service
+      raw: sudo systemctl start zookeeper.service
+    - name: Enable service
+      raw: sudo systemctl enable zookeeper
+    when: zookeeper_service.rc == 0
+  - include_tasks: "{{ role_path }}/tasks/helper/start_wait.yml"
+    vars:
+      start_command: "./bin/zookeeper-server-start.sh -daemon config/zookeeper.properties"
+      log: "{{ zookeeper.logdir }}/zookeeper.log"
+      search_line: 'binding to port'
+    when: zookeeper_service.rc != 0
+  - name: Wait for port open
+    wait_for:
+      port: "{{ zookeeper.port }}"
+      timeout: "{{ wait_for_start }}"
+  - include_tasks: "{{ role_path }}/tasks/helper/get_status.yml"
+    vars:
+      port: "{{ zookeeper.port }}"
+    tags: status
+  tags: start

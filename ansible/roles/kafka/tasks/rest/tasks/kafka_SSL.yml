@@ -1,0 +1,32 @@
+- block:
+  - name: Change kafka-rest.properties
+    ini_file:
+      path: "{{ rest.installdir }}/etc/kafka-rest/kafka-rest.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "client.ssl.keystore.location",    value: "{{ rest.keyStoreFilePath }}" }
+      - { key: "client.ssl.keystore.password",    value: "{{ rest.keyStorePassword }}" }
+      - { key: "client.ssl.keystore.type",        value: "JKS" }
+      - { key: "client.ssl.truststore.location",  value: "{{ rest.trustStoreFilePath }}" }
+      - { key: "client.ssl.truststore.password",  value: "{{ rest.trustStorePassword }}" }
+      - { key: "client.ssl.truststore.type",      value: "JKS" }
+      - { key: "client.ssl.key.password",         value: "{{ rest.keyPassword }}" }
+    no_log: "{{ ansible_no_log }}"
+  - block:
+    - name: Create SSL path
+      file:
+        path: "{{ rest.installdir }}/ssl"
+        state: directory
+        mode: 0770  
+    - name: Upload *.jks
+      copy:
+        src: "{{ inventory_dir }}/{{ item }}"
+        dest: "{{ rest.installdir }}/ssl"
+        mode: 0600
+      with_items:
+        - "{{ rest.keyStoreFilePath }}"
+        - "{{ rest.trustStoreFilePath }}"
+    when: rest.needUploadJks
+  tags: install

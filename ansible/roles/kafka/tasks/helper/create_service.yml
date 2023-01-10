@@ -1,0 +1,33 @@
+- block:
+   - name: Check {{app_name}}.service
+     shell: systemctl list-unit-files | grep "^[ ]*{{app_name}}.service"
+     register: check_service
+     failed_when: false
+     tags: always
+
+   - name: Copy systemd {{app_name}}.service file
+     become: yes
+     template:
+       src: "{{ role_path }}/tasks/helper/service.j2"
+       dest: "/etc/systemd/system/{{app_name}}.service"
+     notify: "reload systemd"
+     failed_when: false
+     tags: always
+
+   - name: Check state of {{app_name}}.service
+     shell: systemctl list-units --state=active,activating | grep "^[ ]*{{app_name}}.service"
+     register: check_service_active
+     failed_when: false
+     tags: always
+
+   - name: Enable service
+     raw: sudo systemctl enable {{app_name}}.service
+     when: check_service_active.rc != 0
+     failed_when: false
+     tags: always
+
+   - name: After create check {{app_name}}.service
+     shell: systemctl list-unit-files | grep "^[ ]*{{app_name}}.service"
+     register: check_service_exist
+     failed_when: false
+     tags: always

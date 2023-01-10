@@ -1,0 +1,67 @@
+zookeeper_user: zookeeper
+zookeeper_group: zookeeper
+
+enabled_service: false
+# default settings
+zookeeper:
+  distr: "kafka.zip" # путь до приложения относительно /files
+  installdir: "/opt/Apache/kafka" # абсолютный путь на конечном сервере до приложения
+  logdir: "/opt/Apache/kafka/logs" # абсолютный путь на конечном сервере до логов приложения
+  datadir: "/zookeeper" # абсолютный путь на конечном сервере до данных приложения
+  #backup_installdir: /tmp/installer # если параметр задан, то делаем бэкап installdir в эту директорию. Не должно совпадать с installdir
+  cleanLog: "true" # очистить путь до логов при установке
+  cleanData: "true" # очистить путь до данных при установке
+  xms: "128m" # начальный heap size
+  xmx: "1G" # максимальный heap size
+  port: "2181" # используемый порт
+  jmxport: "7000" # порт для подключения по JMX
+  jmx_security_enable: "true" # включение авторизации для JMX
+  jmx_access_roleles: # переменные для генерации доступов. Если переменная не определена, то текущие доступы не меняются
+    - user: "myuser"
+      access: "readonly"
+      password: "mypassword"
+  #id: 3 # уникальный zookeeper id для quorum (по умолчанию: порядковый номер хоста в inventory)
+  #superUser: CN=00CA0000.KafkaCluster1,OU=00CA,O=SBRF,L=Moscow,C=RU # DN суперпользователя, иначе берется CN сертификата
+  quorumPorts: "2888:3888" # порты для quorum (первый - для лидера, второй - на всех хостах, включая лидера)
+  trustStorePath: "ssl/zookeeper.jks" # путь от inventories/_стенд_/ до файла с trustStore
+  trustStorePassword: "SeCuRePaSsWorD2" # пароль от trustStore
+  keyStorePath: "ssl/zookeeper.jks " # путь от inventories/_стенд_/ до файла с keyStore
+  keyStorePassword: "SeCuRePaSsWorD2" # пароль от keyStore
+
+  #iniChange: # изменить или добавить значение в файле формата ini/properties
+  #  - fileName: /opt/Apache/kafka/etc/kafka/zookeeper.properties # полный путь до файла или относительно installdir
+  #    changeList:
+  #      - key: tickTime
+  #        value: 5000
+  #        section: Defaults # необязательное поле с именем [секции] для изменения
+  #        state: absent # необязательное поле, при пустом value удаляет строчку с указанным key, при пустом section - удаляет секцию
+  config_providers: "decode"
+  config_providers_decode_class: "ru.sbt.ss.kafka.DecryptionConfigProvider"
+  security_encoding_class: "ru.sbt.ss.password.decoder.SimpleTextPasswordDecoder"
+  security_encoding_salt: "ru.sbt.ss.password.salt.SbtSaltProvider"
+  serverCnxnFactory:  "org.apache.zookeeper.server.NettyServerCnxnFactory"
+  #SSL Quorum
+  ssl_quorum_enabledProtocols: "TLSv1.2"
+  sslQuorum: "true"
+  ssl_quorum_ciphersuites: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+  ssl_quorum_hostnameVerification: "false"
+  #SSL
+  ssl_client_enable: "true"
+  ssl_client_auth: "required"
+  ssl_enabled_potocols: "TLSv1.2"
+  ssl_endpoint_identification_algorithm: ""
+  ssl_ciphersuites: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+  ssl_hostnameVerification: "false"
+  ssl_client_portUnification: "false"
+  #SSL AUTH
+  ssl_clientAuth: "need"
+  ssl_quorum_clientAuth: "need"
+  ssl_enabledProtocols: "TLSv1.2"
+  authProvider_x509: "org.apache.zookeeper.server.auth.X509AuthenticationProvider"
+  ssl_authProvider: "x509"
+  #PLAINT
+  plaintext_client_portUnification: "true"
+  #CLIENT
+  zookeeper_ssl_endpoint_identification_algorithm: "false"
+  clientCnxnSocket: "org.apache.zookeeper.ClientCnxnSocketNetty"
+

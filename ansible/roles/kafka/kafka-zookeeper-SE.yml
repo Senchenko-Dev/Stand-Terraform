@@ -1,0 +1,25 @@
+---
+- hosts: all
+  tasks:
+  - include_tasks: "{{ role_path }}/tasks/helper/get_default_vars.yml"
+    tags: always
+  - set_fact:
+      local_distribution_source: true
+  - debug:
+      msg:
+      - "{{zookeeper.cleanData }}"
+      - "{{zookeeper.cleanLog }}"
+      - "{{kafka.cleanData }}"
+      - "{{kafka.cleanLog }}"
+
+
+- hosts: zookeeper
+  roles:
+  - zookeeper
+
+- hosts: kafka
+  roles:
+  - kafka
+  - kafka_topics
+  - kafka_acls
+

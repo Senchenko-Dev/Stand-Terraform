@@ -1,0 +1,227 @@
+#lvm_vg_name: "{{ ansible_lvm['vgs'] | list | first }}"
+elk_group: elasticsearch
+
+
+pass_upper_letters: "{{ lookup('password', '/dev/null length=3 chars=ascii_letters') | upper }}"
+pass_lower_letters: "{{ lookup('password', '/dev/null length=4 chars=ascii_letters') | lower }}"
+pass_punctuation: '!-_,?'
+pass_digits: "{{ lookup('password', '/dev/null length=3 chars=digits') }}"
+pass_template: "{{ ( pass_upper_letters + pass_lower_letters + pass_punctuation + pass_digits ) | shuffle | join() }}"
+
+os_conf_packages:
+- pkg: "{{ elastic_pkg }}"
+  name: elasticsearch
+  stack: yes
+- pkg: "{{ logstash_pkg }}"
+  name: logstash
+  stack: yes
+- pkg: "{{ kibana_pkg }}"
+  name: kibana
+  stack: yes
+- pkg: "java-{{ java_version }}-openjdk.x86_64"
+  name: java
+  stack: false
+
+# required_packages: "{{ elk_set.replace(' ','').split('+') | map('lower') | list }}"
+sudo: '/usr/bin/false'
+
+os_conf_groups:
+- name: elasticsearch
+- name: logstash
+- name: kibana
+
+os_conf_lvs:
+- name: lvusr
+  size: 40G
+  path: /usr
+  extend_only: true
+- name: lvelastic
+  size: 40G
+  path: /opt/elastic
+  fstype: ext4
+  owner: "{{ elk_login }}"
+  group: "{{ elk_group }}"
+  mode: '0775'
+- name: lvhome
+  size: 40G
+  path: /home
+  extend_only: true
+- name: lvvar
+  size: 100%FREE
+  path: /var
+  extend_only: true
+
+os_conf_limits:
+- domain: "{{ elk_login }}"
+  limit_type: soft
+  limit_item: nproc
+  value: 65535
+- domain: "{{ elk_login }}"
+  limit_type: hard
+  limit_item: nproc
+  value: 65535
+- domain: "{{ elk_login }}"
+  limit_type: soft
+  limit_item: nofile
+  value: 65535
+- domain: "{{ elk_login }}"
+  limit_type: hard
+  limit_item: nofile
+  value: 65535
+- domain: elasticsearch
+  limit_type: soft
+  limit_item: nproc
+  value: 65535
+- domain: elasticsearch
+  limit_type: hard
+  limit_item: nproc
+  value: 65535
+- domain: elasticsearch
+  limit_type: soft
+  limit_item: nofile
+  value: 65535
+- domain: elasticsearch
+  limit_type: hard
+  limit_item: nofile
+  value: 65535
+- domain: logstash
+  limit_type: soft
+  limit_item: nproc
+  value: 65535
+- domain: logstash
+  limit_type: hard
+  limit_item: nproc
+  value: 65535
+- domain: logstash
+  limit_type: soft
+  limit_item: nofile
+  value: 65535
+- domain: logstash
+  limit_type: hard
+  limit_item: nofile
+  value: 65535
+- domain: kibana
+  limit_type: soft
+  limit_item: nproc
+  value: 65535
+- domain: kibana
+  limit_type: hard
+  limit_item: nproc
+  value: 65535
+- domain: kibana
+  limit_type: soft
+  limit_item: nofile
+  value: 65535
+- domain: kibana
+  limit_type: hard
+  limit_item: nofile
+  value: 65535
+
+os_conf_users:
+- name: "{{ elk_login }}"
+  password: "{{ elk_secret | password_hash('sha512') }}"
+  groups:
+  - elasticsearch
+  - logstash
+  - kibana
+  service: true
+- name: elasticsearch
+  groups: "{{ elk_group }}, elk"
+  createhome: false
+- name: logstash
+  groups: "{{ elk_group }}, elk"
+  createhome: false
+- name: kibana
+  groups: "{{ elk_group }}, elk"
+  createhome: false
+
+os_conf_files:
+- path: /opt/elastic
+  owner: "{{ elk_login }}"
+  group: elasticsearch
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /opt/logstash
+  owner: "{{ elk_login }}"
+  group: logstash
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /etc/elasticsearch
+  owner: "{{ elk_login }}"
+  group: elasticsearch
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /etc/logstash
+  owner: "{{ elk_login }}"
+  group: logstash
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /etc/kibana
+  owner: "{{ elk_login }}"
+  group: kibana
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /var/log/elasticsearch
+  group: elasticsearch
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /var/log/logstash
+  group: logstash
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /usr/share/elasticsearch
+  owner: "{{ elk_login }}"
+  group: elasticsearch
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /usr/share/logstash
+  owner: "{{ elk_login }}"
+  group: logstash
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /usr/share/kibana
+  owner: "{{ elk_login }}"
+  group: kibana
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /var/lib/elasticsearch
+  group: elasticsearch
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /var/lib/logstash
+  group: logstash
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /var/lib/kibana
+  group: kibana
+  state: directory
+  recurse: True
+  mode: g+w
+- path: /etc/default/logstash
+  owner: elk
+  group: logstash
+  state: touch
+
+os_conf_sysctls:
+- name: vm.max_map_count
+  value: 262144
+  sysctl_set: yes
+
+os_conf_lineinfiles:
+- alias: elasticsearch
+  path: /usr/share/elasticsearch/jdk/conf/security/java.security
+  insertafter: '^[\t ]*jdk.tls.disabledAlgorithms.*\\$'
+  regexp: '^[\t #]*EC keySize < 224, 3DES_EDE_CBC, anon, NULL.*$'
+  line: '    EC keySize < 224, 3DES_EDE_CBC, anon'

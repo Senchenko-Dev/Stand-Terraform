@@ -1,0 +1,12 @@
+- hosts: rest
+  pre_tasks:
+    - include_tasks: "{{ role_path }}/tasks/helper/get_default_vars.yml"
+      tags: always
+  roles:
+    - rest
+
+- hosts: localhost
+  post_tasks:
+    - name: Save status to ./status
+      template: src="{{ role_path }}/tasks/helper/status.j2" dest=./status
+      tags: always

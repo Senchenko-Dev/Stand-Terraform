@@ -18,7 +18,7 @@ variable "cpu" {
 }
 
 variable "inventory_group_name" {
-  description = "inventory_group_name"
+  description = "Имя группы в инвентаре Ansible"
   type = string
 }
 variable "vault_file" {
@@ -33,4 +33,15 @@ variable "spo_role_name" {
 }
 variable "nginx_iag_url" {
 //  default = ""
+}
+
+variable "vault_file" {}
+
+variable "awx_props" {
+  default = {}
+}
+
+variable "spo_role_name" {
+  description = "Переменная для использования альтернативной роли (например, для тестирования обновленной версии.)"
+  default = "kafka"
 }

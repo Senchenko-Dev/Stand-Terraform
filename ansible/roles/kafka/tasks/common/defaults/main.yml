@@ -1,0 +1,23 @@
+# ansible_user: default_user # пользователь для коннекта по SSH
+#ansible_ssh_pass: # пароль для "ansible_user"
+tmp_dir: /tmp/installer # путь до временной директории на конечных серверах
+wait_for_start: 120 # время (в секундах) на корректный старт приложения (падает с ошибкой при превышении)
+check_correct_start: true # проверка корректности запуска приложения по наличию строки в логе
+security: PLAINTEXT__ZK_PLAIN_NO_AUTH__KAFKA_PLAINTEXT_NO_AUTH # протокол безопасности
+local_distribution_source: true # использовать дистрибутив, загруженный на localhost в каталог files
+# возможные варианты:
+#   PLAINTEXT__ZK_PLAIN_NO_AUTH__KAFKA_PLAINTEXT_NO_AUTH
+#   PLAINTEXT__ZK_SASL_DIGEST_MD5_WITH_AUTH__KAFKA_PLAINTEXT_NO_AUTH
+#   SASL_PLAINTEXT__ZK_SASL_DIGEST_MD5_WITH_AUTH__KAFKA_SASL_KERBEROS_WITH_AUTH
+#   SASL_PLAINTEXT__ZK_SASL_KERBEROS_NO_AUTH__KAFKA_SASL_KERBEROS_WITH_AUTH
+#   SASL_PLAINTEXT__ZK_SASL_KERBEROS_WITH_AUTH__KAFKA_SASL_KERBEROS_WITH_AUTH
+#   SASL_PLAINTEXT__ZK_SASL_KERBEROS_WITH_AUTH__KAFKA_SASL_SSL_WITH_AUTH
+#   SSL__ZK_PLAIN_NO_AUTH__KAFKA_SSL_NO_AUTH
+#   SSL__ZK_PLAIN_NO_AUTH__KAFKA_SSL_WITH_AUTH
+#   SSL__ZK_SASL_DIGEST_MD5_WITH_AUTH__KAFKA_SSL_WITH_AUTH
+
+customJavaPath: false # абсолютный путь до используемой java ("customJavaPath"/bin/java) (или false для использования java из PATH)
+ansible_no_log: false # отключить вывод паролей в лог/output
+realm: "VM.MOS.CLOUD.SBRF.RU" # реалм ldap сервера
+
+password_encoder_cli_path: password-encrypt-cli-1.3.jar # путь до утилиты для шифрования паролей

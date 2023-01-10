@@ -1,0 +1,17 @@
+[Unit]
+Description={{app_name}} service
+After=network.service
+
+[Service]
+WorkingDirectory={{ from_dir | default(hostvars[inventory_hostname][role_name].installdir) }}
+Type=forking
+User={{kafka_user}}
+Group={{kafka_group}}
+ExecStart={{ start_command }}
+ExecStop={{ stop_command }}
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+

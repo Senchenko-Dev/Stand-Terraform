@@ -1,0 +1,10 @@
+- name: Create or modificate files
+  file:
+    path: "{{ item.path }}"
+    src: "{{ item.src | default(omit) }}"
+    owner: "{{ item.owner | default(omit) }}"
+    group: "{{ item.group | default(omit) }}"
+    mode: "{{ item.mode | default(omit) }}"
+    state: "{{ item.state | default(omit) }}"
+    recurse: "{{ item.recurse | default(omit) }}"
+    force: "{{ item.force | default(omit) }}"

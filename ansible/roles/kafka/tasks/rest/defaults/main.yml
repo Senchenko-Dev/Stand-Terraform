@@ -1,0 +1,32 @@
+rest:
+  distr: confluent.zip  # путь до приложения относительно /files
+  installdir: /opt/Apache/kafka-rest # абсолютный путь на конечном сервере до приложения ( ОСТОРОЖНО ПРИ УСТАНОВКЕ В ДИРЕКТОРИЮ С РАБОЧЕЙ KAFKA )
+  logdir: /opt/Apache/kafka-rest/logs # абсолютный путь на конечном сервере до логов приложения
+  cleanInstall: true # очистка installdir при установке ( ВЫКЛЮЧИТЬ ПРИ УСТАНОВКЕ В ДИРЕКТОРИЮ С РАБОЧЕЙ KAFKA )
+  cleanLog: true # очистка logdir при установке
+  xmx: 256m # максимальный heap size
+  webport: 2088 # используемый порт
+  jmxport: 7070 # порт для подключения по JMX
+  id: kafka-rest-test-server # уникальный идентификатор инстанса Kafka Rest
+  https:
+    enable: false # включить использование https (иначе http)
+    needUploadJks: true # необходимость загрузки хранилища на сервер
+    trustStoreFilePath: ssl/https.jks # путь от корня ansible до файла с trustStore
+    trustStorePassword: My+SFjwa0UeEWC4p0Dg5lnXkO0jnbE3r # пароль от trustStore (зашифрованный ./bin/password-encoder)
+    keyStoreFilePath: ssl/https.jks # путь от корня ansible до файла с keyStore
+    keyStorePassword: My+SFjwa0UeEWC4p0Dg5lnXkO0jnbE3r # пароль от keyStore (зашифрованный ./bin/password-encoder)
+    keyPassword: My+SFjwa0UeEWC4p0Dg5lnXkO0jnbE3r # пароль от сертификата (зашифрованный ./bin/password-encoder)
+  # используется при "security: SSL_*"
+  needUploadJks: true # необходимость загрузки хранилища на сервер (для подключения к Kafka)
+  trustStoreFilePath: ssl/broker.jks # путь от корня ansible до файла с trustStore
+  trustStorePassword: My+SFjwa0UeEWC4p0Dg5lnXkO0jnbE3r # пароль от trustStore (зашифрованный ./bin/password-encoder)
+  keyStoreFilePath: ssl/broker.jks # путь от корня ansible до файла с keyStore
+  keyStorePassword: My+SFjwa0UeEWC4p0Dg5lnXkO0jnbE3r # пароль от keyStore (зашифрованный ./bin/password-encoder)
+  keyPassword: My+SFjwa0UeEWC4p0Dg5lnXkO0jnbE3r # пароль от сертификата (зашифрованный ./bin/password-encoder)
+  #iniChange: # изменить или добавить значение в файле формата ini/properties
+  #  - fileName: etc/kafka-rest/kafka-rest.properties # полный путь до файла или относительно installdir
+  #    changeList:
+  #      - key: modification.cluster.deny
+  #        value: "false"
+  #        section: Defaults # необязательное поле с именем [секции] для изменения
+  #        state: absent # необязательное поле, при пустом value удаляет строчку с указанным key, при пустом section - удаляет секцию

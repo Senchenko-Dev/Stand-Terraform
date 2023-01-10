@@ -256,7 +256,6 @@ resource "local_file" "pangolin-inventory" {
         custom_config = "${abspath(path.root)}/ansible/additional/pg_custom_config.yml"  # group_vars/custom_dev.yml # todo мне думается, лучше задавать в group_vars и сам файл располагать там же.
         manual_run = "yes"
         local_distr_path = "../"
-//        local_distr_path = "${abspath(path.root)}/ext-pangolin/" todo check
         etcd_cluster_name = "${var.vm_props.stand_name}-${var.inventory_group_name}_etcd"
         clustername = "${var.vm_props.stand_name}-${var.inventory_group_name}"
         vault_file = var.vault_file

@@ -1,0 +1,30 @@
+# kafka_topics: []
+## Examples
+#kafka_topics:
+#  replicationFactor: 1 # число брокеров Kafka для храненения топика (по умолчанию)
+#  partitions: 10 # количетсво партиций (по умолчанию)
+#  skipIfExists: true # пропускать создание, если топик уже существует
+#  command_configs: "./config/producer.properties"
+#  list:
+#    - name: test1 # с дефолтными параметрами
+#    - name: test2 # с указанием настроек
+#      replicationFactor: 1
+#      partitions: 5
+#      configs: # изменение конфигурации на уровне топика (см. документацию)
+#          - "cleanup.policy=compact"
+#          - "max.message.bytes=10485760"
+#
+
+
+kafka_topics:
+  replicationFactor: 1 # число брокеров Kafka для храненения топика (по умолчанию)
+  partitions: 10 # количетсво партиций (по умолчанию)
+  skipIfExists: true # пропускать создание, если топик уже существует
+  # command_configs: "./config/producer.properties"
+  list:
+    - name: ufs-ul-sbercms-content-data
+      replicationFactor: 1
+      partitions: 2
+    - name: ufs-sbercms-content-acknowledgement
+      replicationFactor: 1
+      partitions: 2  

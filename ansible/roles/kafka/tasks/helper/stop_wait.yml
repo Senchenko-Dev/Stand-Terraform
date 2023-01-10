@@ -1,0 +1,33 @@
+- debug:
+    var: inventory_hostname
+- debug:
+    var: hostvars
+- block:
+  - name: Get realpath installdir
+    command: realpath -m "{{ from_dir | default(hostvars[inventory_hostname][role_name].installdir) }}"
+    register: realpath_installdir
+  - name: Search PID
+    shell: "ps ux | grep -E \"{{ pgrep_str | default(realpath_installdir.stdout) }}\" | grep -v grep | awk '{print $2}'"
+    register: pid
+    failed_when: pid.rc > 1 # rc=1 when pid not found
+  - block:
+    - name: Stop {{ app_name|default('') }}
+      shell: "{{ stop_command | default('kill ' + pid.stdout_lines|join(' ')) }}"
+      args:
+        chdir: "{{ from_dir | default(hostvars[inventory_hostname][role_name].installdir) }}"
+      async: "{{ wait_for_start }}"
+      poll: 0
+    - name: "Wait for correct stop {{ app_name|default('') }}(PIDs: {{ pid.stdout_lines|join(',') }})"
+      vars:
+        pid_prepare: "{% for item in pid.stdout_lines %}! -e /proc/{{ item }}/status#{% endfor %}" # check pid not exist
+      shell: "[[ {{ pid_prepare[:-1].split('#')|join(' && ') }} ]]" # [[ ! -e /proc/19149/status && ! -e /proc/484/status ]]
+      register: correct_stop
+      until: correct_stop.rc == 0
+      retries: "{{ wait_for_start }}"
+      delay: 1
+      ignore_errors: true
+    - name: Force kill app {{ app_name|default('') }}
+      shell: "kill -9 {{ pid.stdout_lines|join(' ') }}"
+      when: correct_stop.rc == 1
+    when: pid is defined and pid.stdout
+  tags: always

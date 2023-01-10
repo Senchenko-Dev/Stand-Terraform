@@ -1,0 +1,15 @@
+references: |
+  confluence: ссылка на конфлюенс
+  bitbucket: ссылка на битбакет
+
+team: |
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  | name              | email                      |
+  |-------------------|----------------------------|
+  | Иван Иванов       | ivanivanov@sberbank.ru     |
+  | Петр Петров       | petrP@sberbank.ru          |
+  | Вася Пупкин       | pupkinvasilii@sberbank.ru  |
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+info:
+  cert_jira_request: https://dzo.sw.sbc.space/jira/browse/CORESUP-10772

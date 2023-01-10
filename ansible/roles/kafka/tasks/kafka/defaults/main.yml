@@ -1,0 +1,73 @@
+kafka_user: kafka
+kafka_group: kafka
+
+enabled_service: false
+# default settings
+kafka:
+  distr: "kafka.zip" # путь до приложения относительно /files
+  installdir: "/opt/Apache/kafka" # абсолютный путь на конечном сервере до приложения
+  logdir: "/opt/Apache/kafka/logs" # абсолютный путь на конечном сервере до логов приложения
+  datadir: "/KAFKADATA" # абсолютный путь на конечном сервере до данных приложения (через запятую, если путей несколько)
+  #backup_installdir: /tmp/installer # если параметр задан, то делаем бэкап installdir в эту директорию. Не должно совпадать с installdir
+  cleanLog: "true" # очистить путь до логов при установке
+  cleanData: "true" # очистить путь до данных при установке
+  xms: "256m" # начальный heap size
+  xmx: "5G" # максимальный heap size
+  port: "9093" # используемый порт
+  jmxport: "7010" # порт для подключения по JMX
+  jmx_security_enable: "true" # включение авторизации для JMX
+  jmx_access_roles: # переменные для генерации доступов. Если переменная не определена, то текущие доступы не меняются
+    - user: "myuser"
+      access: "readonly"
+      password: "mypassword"
+  #id: 3 # уникальный broker.id для брокера в кластере (по умолчанию: порядковый номер хоста в inventory)
+  #superUser: CN=00CA0000.KafkaCluster1,OU=00CA,O=SBRF,L=Moscow,C=RU # DN суперпользователя, иначе берется CN сертификата
+  autoCreateTopics: "false" # автосоздание топиков
+  trustStorePath: "ssl/kafka.jks" # путь от inventories/_стенд_/ до файла с trustStore (или абсолютный на сервере при needUploadJks: false)
+  trustStorePassword: "SeCuRePaSsWorD2" # пароль от trustStore
+  keyStorePath: "ssl/kafka.jks" # путь от inventories/_стенд_/ до файла с keyStore (или абсолютный на сервере при needUploadJks: false)
+  keyStorePassword: "SeCuRePaSsWorD2" # пароль от keyStore
+  keyPassword: "SeCuRePaSsWorD2" # пароль от ключа в хранилище
+  #admin_rights: # список DN администраторов доступа
+  #  - CN=00CA0000M.ControlPlane.ift.sbrf,OU=00CA,O=SBRF,L=Moscow,ST=Moscow,C=RU
+  #iniChange: # изменить или добавить значение в файле формата ini/properties
+  #  - fileName: /opt/Apache/kafka/etc/kafka/server.properties # полный путь до файла или относительно installdir
+  #    changeList:
+  #      - key: log.segment.bytes
+  #        value: 1073741824
+  #        section: Defaults # необязательное поле с именем [секции] для изменения
+  #        state: absent # необязательное поле, при пустом value удаляет строчку с указанным key, при пустом section - удаляет секцию
+  use_broker_not_zk: "true" # проводить создание/удаление topic/acl через брокер, а не через zookeeper (может работать не на всех версиях kafka!)
+    # при SSL необходимо использовать переменные (можно передавать через --extra-vars):
+    # admin_jks_file - путь до jks файла (локально, на сервере с ansible)
+  # admin_jks_password - пароль от jks файла
+  audit: # настройки аудита
+    log: "true" # запись событий аудита в лог
+    rest: "true" # запись событий аудита в rest endpoint
+    trustStorePath: "ssl/kafka.jks" # путь от inventories/_стенд_/ до файла с trustStore
+    trustStorePassword: "SeCuRePaSsWorD2" # пароль от trustStore
+    keyStorePath: "ssl/kafka.jks" # путь от inventories/_стенд_/ до файла с keyStore
+    keyStorePassword: "SeCuRePaSsWorD2" # пароль от keyStore
+    keyPassword: "SeCuRePaSsWorD2" # пароль от ключа в хранилище
+    url: "https://localhost:8084" # префикс url для отправки событий аудита
+    metamodel: "v1/metamodel" # суффикс для метамодели
+    event: "v1/event" # суффикс для событий
+    system_id: "Synapse.ES Kafka Audit" # идентификатор событий аудита
+  ssl_enabled_potocols: "TLSv1.2"
+  ssl_client_auth: "required"
+  ssl_endpoint_identification_algorithm: " "
+  ssl_cipher_suites: "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+  security_inter_broker_protocol: "SSL"
+  config_providers: "decode"
+  config_providers_decode_class: "ru.sbt.ss.kafka.DecryptionConfigProvider"
+  config_providers_decode_param_security_encoding_class: "ru.sbt.ss.password.decoder.SimpleTextPasswordDecoder"
+  config_providers_decode_param_security_encoding_salt: "ru.sbt.ss.password.salt.SbtSaltProvider"
+  security_protocol: "SSL"
+  ##
+  offsets_retention_minutes: "43200"
+  zookeeper_connection_timeout_ms: "30000"
+  zookeeper_session_timeout_ms: "6000"
+  max_incremental_fetch_session_cache_slots: "100000"
+  log_roll_hours: "1"
+  queued_max_requests: "1000"
+  replica_fetch_max_bytes: "5242880"

@@ -1,0 +1,39 @@
+- name: "Create logical volume '{{ item.name }}'"
+  lvol:
+    vg: "{{ lvm_vg_name }}"
+    lv: "{{ item.name }}"
+    size: "{{ item.size }}"
+    resizefs: true
+  ignore_errors: yes
+
+- name: Section for new lv only
+  block:
+  - name: "Create filysystem on '{{ item.name }}' device"
+    filesystem:
+      fstype: "{{ item.fstype }}"
+      dev: "/dev/mapper/{{ lvm_vg_name }}-{{ item.name }}"
+
+  - name: "Create '{{ item.path }}' mount point"
+    file:
+      path: "{{ item.path }}"
+      state: "{{ item.state | default('directory') }}"
+      mode: 0755
+
+  - name: "Mount logical volume '{{ item.name }}' to '{{ item.path }}' directory"
+    mount:
+      name: "{{ item.path }}"
+      src: "/dev/mapper/{{ lvm_vg_name }}-{{ item.name }}"
+      fstype: "{{ item.fstype }}"
+      #opts: defaults,acl,user_xattr
+      state: mounted
+      dump: 1
+      passno: 2
+
+  - name: "Change '{{ item.path }}' permissions"
+    file:
+      path: "{{ item.path }}"
+      state: "{{ item.state | default('directory') }}"
+      owner: "{{ item.owner | default(omit) }}"
+      group: "{{ item.group | default(omit) }}"
+      mode: "{{ item.mode | default(omit) }}"
+  when: item.extend_only is not defined or not item.extend_only

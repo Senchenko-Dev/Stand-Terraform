@@ -1,0 +1,5 @@
+- name: Add groups
+  group:
+    name: "{{ item.name }}"
+    gid: "{{ item.gid | default(omit) }}"
+    state: present

@@ -1,0 +1,76 @@
+- hosts: localhost
+  tasks:
+    - name: Create csr
+      shell: >
+        rm -rf kafka-server.jks broker.csr *.pem &&
+        keytool -genkey -keyalg RSA -alias broker -keystore kafka-server.jks -storepass {{ jks_password }} -validity 1440 -keysize 2048
+        -dname 'CN=ApacheKafka-{{ ansible_date_time.iso8601_basic_short }},OU=00CA,O=Savings Bank of the Russian Federation,C=RU'
+        -ext SAN={{ kafka_ips | map('regex_replace', '^(.*)$', 'ip:\1') | join(',') }}
+        &&
+        keytool -certreq -alias broker -keyalg RSA -file broker.csr -keystore kafka-server.jks -storepass {{ jks_password }}
+        &&
+        cat broker.csr
+      register: broker_csr
+
+    - name: Send csr to RLM
+      uri:
+        url: "{{ rlm_url }}"
+        headers:
+          Authorization: "Token {{ rlm_token }}"
+        body: "{{ rlm_object | to_json }}"
+        body_format: json
+        method: POST
+        validate_certs: no
+      vars:
+        rlm_object:
+          params:
+            ca_info:
+              ca_type: "{{ rlm_ca_type }}"
+            cert_info:
+              csr: "{{ broker_csr.stdout | regex_replace('\\r\\n', '\\n') }}"
+              email: AK-Admins@omega.sbrf.ru
+              certificate_type: universal
+            no_add_validation: true
+            #server_id: CI02522653
+          items:
+            - invstend_ci_stend: "{{ rlm_ci_stend }}"
+          start_at: now
+          service: tls_cert
+          approved: true
+          user: 0
+      register: rlm_responce
+
+    - name: Check rlm task ({{ rlm_responce.json.id }}) status
+      uri:
+        url: "{{ rlm_url }}{{ rlm_responce.json.id }}"
+        headers:
+          Authorization: "Token {{ rlm_token }}"
+        body_format: json
+        validate_certs: no
+      register: rlm_status
+      until: rlm_status.json.status | default() == "success"
+      retries: 180
+      delay: 10
+
+    - name: Create pem's from responce
+      copy:
+        dest: "{{ item }}.pem"
+        content: "{{ rlm_status.json.payload.success_answer_json[item] }}"
+      with_items:
+        - root_cert
+        - intermediate_cert
+        - published_cert
+
+    - name: Create jks
+      shell: >
+        keytool -import -alias root -file root_cert.pem -keystore kafka-server.jks -storepass {{ jks_password }} -noprompt
+        &&
+        keytool -import -alias intermediate -file intermediate_cert.pem -keystore kafka-server.jks -storepass {{ jks_password }} -noprompt
+        &&
+        keytool -import -alias broker -file published_cert.pem -keystore kafka-server.jks -storepass {{ jks_password }} -noprompt
+
+    - name: Add old root certs
+      shell: >
+        keytool -import -alias old_root -file certs/{{ rlm_ca_type }}/root.cer -keystore kafka-server.jks -storepass {{ jks_password }} -noprompt
+        &&
+        keytool -import -alias old_intermediate -file certs/{{ rlm_ca_type }}/intermediate.cer -keystore kafka-server.jks -storepass {{ jks_password }} -noprompt

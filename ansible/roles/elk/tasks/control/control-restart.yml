@@ -1,0 +1,20 @@
+---
+- name: Restart service elasticsearch
+  import_tasks: ../../handlers/restart-elasticsearch.yml
+  when: unit in required_packages and unit == 'elasticsearch'
+
+- name: Restart service kibana
+  import_tasks: ../../handlers/restart-kibana.yml
+  when: unit in required_packages and unit == 'kibana'
+
+- name: Restart service logstash
+  import_tasks: ../../handlers/restart-logstash.yml
+  when: unit in required_packages and unit == 'logstash'
+
+# - name: Restart services
+#   service:
+#     name: "{{ item.name }}"
+#     state: restarted
+#     enabled: True
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages

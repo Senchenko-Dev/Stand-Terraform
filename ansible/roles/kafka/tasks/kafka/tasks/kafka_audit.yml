@@ -1,0 +1,78 @@
+- block:
+  - name: Delete obsolete audit appender in {{ kafka.installdir }}/config/log4j.properties
+    lineinfile:
+      path: "{{ kafka.installdir }}/config/log4j.properties"
+      state: absent
+      regexp: '^(log4j.appender.auditAppender|log4j.logger.kafka.audit.logging|log4j.additivity.kafka.audit.logging)'
+  - name: Change log4j.properties (add auditFileAppender)
+    ini_file:
+      path: "{{ kafka.installdir }}/config/log4j.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "log4j.appender.auditFileAppender", value: "org.apache.log4j.DailyRollingFileAppender" }
+      - { key: "log4j.appender.auditFileAppender.DatePattern", value: "'.'yyyy-MM-dd-HH" }
+      - { key: "log4j.appender.auditFileAppender.File", value: "${kafka.logs.dir}/kafka-audit.log" }
+      - { key: "log4j.appender.auditFileAppender.layout", value: "org.apache.log4j.PatternLayout" }
+      - { key: "log4j.appender.auditFileAppender.layout.ConversionPattern", value: "[%d] %p %m (%c)%n" }
+      - { key: "log4j.logger.kafka.audit.provider.LogAuditProvider", value: "INFO, auditFileAppender" }
+    when: kafka.audit.log
+  - name: Add new audit to server.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/config/server.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value | default('') }}"
+      state: "{{ (item.absent | default(false)) | ternary('absent', 'present') }}"
+    vars:
+      log_provider: "{{ kafka.audit.log | ternary('kafka.audit.provider.LogAuditProvider','') }}"
+      rest_provider: "{{ kafka.audit.rest | ternary('kafka.audit.provider.TsAuditProvider','') }}"
+    with_items:
+      - { key: "audit.conf.path", absent: true }
+      - { key: "kafka.se.audit.enable", value: "{{ (kafka.audit.rest or kafka.audit.log) | lower }}" }
+      - { key: "system.id", value: kafka.audit.system_id }
+      - { key: "kafka.se.audit.provider", value: "{{ [rest_provider, log_provider] | select() | join(',') }}" }
+      - { key: "kafka.se.audit.provider.tsaudit.model.url", value: "{{ kafka.audit.url }}/{{ kafka.audit.metamodel }}" }
+      - { key: "kafka.se.audit.provider.tsaudit.event.url", value: "{{ kafka.audit.url }}/{{ kafka.audit.event }}" }
+
+  - name: Change server.properties for LogAuditProvider usage
+    ini_file:
+      path: "{{ kafka.installdir }}/config/server.properties"
+      section:
+      option: kafka.se.audit.provider
+      value: kafka.audit.provider.LogAuditProvider
+    when: ssl_and_plaintext|default(false)
+
+  - name: Add audit jks to server.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/config/server.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "kafka.se.audit.provider.tsaudit.ssl.keystore.location", value: "{{ kafka.audit.keyStorePath }}" }
+      - { key: "kafka.se.audit.provider.tsaudit.ssl.keystore.password", value: "${decode:{{ kafka.audit.keyStorePasswordEncrypted }}}" }
+      - { key: "kafka.se.audit.provider.tsaudit.ssl.truststore.location", value: "{{ kafka.audit.trustStorePath }}" }
+      - { key: "kafka.se.audit.provider.tsaudit.ssl.truststore.password", value: "${decode:{{ kafka.audit.trustStorePasswordEncrypted }}}" }
+      - { key: "kafka.se.audit.provider.tsaudit.ssl.endpoint.identification.algorithm", value: "all" }
+    when:
+      - kafka.audit.url is search("https://")
+      - kafka.audit.rest
+  - block:
+    - name: Create SSL path
+      file:
+        path: "{{ kafka.installdir }}/ssl"
+        state: directory
+        mode: 0750
+    - name: Upload *.jks
+      copy:
+        src: "{{ inventory_dir }}/{{ item }}"
+        dest: "{{ kafka.installdir }}/ssl"
+        mode: 0664
+      with_items: "{{ ([kafka.audit.trustStorePath] + [kafka.audit.keyStorePath]) | unique }}"
+    when:
+      - kafka.audit.url is search("https://")
+      - kafka.audit.rest
+
+  tags: install

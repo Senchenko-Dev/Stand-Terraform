@@ -1,0 +1,14 @@
+---
+- name: Start service logstash
+  import_tasks: ../../handlers/start-logstash.yml
+  when: action == 'start'
+
+- name: Stop service logstash
+  import_tasks: ../../handlers/stop-logstash.yml
+  when: action == 'stop'
+
+- name: Restart service logstash
+  import_tasks: ../../handlers/restart-logstash.yml
+  when: action == 'restart'
+
+

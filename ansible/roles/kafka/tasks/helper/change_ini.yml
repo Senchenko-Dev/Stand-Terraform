@@ -1,0 +1,13 @@
+- block:
+  - name: Change {{ outer_item.fileName }}
+    vars:
+      installdir: "{{ hostvars[inventory_hostname][role_name].installdir }}"
+      relative: "{{ (outer_item.fileName|search('^/')) | ternary('', installdir + '/') }}"
+    ini_file:
+      path: "{{ relative + outer_item.fileName }}"
+      section: "{{ item.section|default('') }}"
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+      state: "{{ item.state|default('present') }}"
+    with_items: "{{ outer_item.changeList }}"
+  tags: always

@@ -1,0 +1,26 @@
+---
+- name: Get Server Lines for Zookeeper Cluster Mode for Single Host Deploy
+  set_fact:
+    server_lines: "{{ server_lines | default([]) + [ \"server.\" + item.0 + \"=\" + ansible_host + \":\" + item.1 ] }}"
+  with_together:
+    - "{{ zk_ids_list }}"
+    - "{{ zk_quorum_ports }}"
+  when: groups['ZookeeperNodes'] | length | int == 1
+
+- name: Get Server Lines for Zookeeper Cluster Mode for Multiple Host Deploy
+  set_fact:
+#    server_lines: "{{ server_lines | default([]) + [ \"server.\" + item.0 + \"=\" + item.1 + \":\" + zk_quorum_ports[0] | string ] }}"
+    server_lines: "{{ server_lines | default([]) + [ \"server.\" + item.0 + \"=\" + hostvars[item.1]['ansible_host'] + \":\" + zk_quorum_ports[0] | string ] }}"
+  with_together:
+    - "{{ zk_ids_list }}"
+    - "{{ groups['ZookeeperNodes'] }}"
+  when: groups['ZookeeperNodes'] | length | int > 1
+
+- name: Add Server Lines for Zookeeper Cluster Mode
+  lineinfile:
+    path: "{{ item[1] }}"
+    insertafter: 'CLUSTER MODE ON'
+    line: "{{ item[0] }}"
+  with_nested:
+    - "{{ server_lines | reverse | list }}"
+    - "{{ flist }}"

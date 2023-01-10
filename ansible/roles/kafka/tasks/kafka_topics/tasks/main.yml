@@ -1,0 +1,24 @@
+- debug:
+    msg: "{{ item.command_configs |  default() }}"
+  with_items: "{{ kafka_topics.list }}"
+  when: kafka_topics|length > 0
+
+- name: Create topics
+  shell: >
+    ./bin/kafka-topics
+    --create
+    --bootstrap-server {{ kafka_port_list }}
+    --replication-factor {{ item.replicationFactor | default(kafka_topics.replicationFactor) }}
+    --partitions {{ item.partitions | default(kafka_topics.partitions) }}
+    {{ item.configs | default([]) | ternary('--config ' + item.configs | default([]) | join(' --config '), '') }}
+    --topic {{ item.name }}
+    {{ kafka_topics.skipIfExists | ternary("--if-not-exists ", "") }}
+    {{ kafka_topics.command_configs |  default() | ternary('--command-config ' + kafka_topics.command_configs | default() , "")  }}
+  args:
+    chdir: "{{ kafka.installdir }}"
+  register: topic_done
+  failed_when: "topic_done.stdout and 'Created topic' not in topic_done.stdout and 'could collide' not in topic_done.stdout"
+  with_items: "{{ kafka_topics.list }}"
+  when: kafka_topics|length > 0
+  run_once: true # c первого хоста из inventory
+  tags: start

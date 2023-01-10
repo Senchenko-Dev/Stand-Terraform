@@ -1,0 +1,6 @@
+---
+- name: stop kibana
+  service:
+    name: kibana
+    state: stopped
+

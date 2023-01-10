@@ -28,6 +28,8 @@
     - name: Настройка AWX
       import_role:
         name: awx-config
+      vars:
+        vault_file: "{{ vault_file }}"
       environment:
         CONTROLLER_HOST: "{{ awx_url }}"
         CONTROLLER_USERNAME: "{{ awx_login }}"

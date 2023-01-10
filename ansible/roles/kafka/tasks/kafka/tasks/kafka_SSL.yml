@@ -1,0 +1,144 @@
+- block:
+  - name: Change server.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/config/server.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value|default('') }}"
+      state: "{{ item.state|default('present') }}"
+    with_items:
+      - { key: "ssl.enabled.protocols", value: "{{kafka.ssl_enabled_potocols}}" }
+      - { key: "ssl.truststore.location", value: "{{ kafka.trustStorePath }}" }
+      - { key: "ssl.truststore.password", value: "${decode:{{ kafka.trustStorePasswordEncrypted }}}" }
+      - { key: "ssl.keystore.location", value: "{{ kafka.keyStorePath }}" }
+      - { key: "ssl.keystore.password", value: "${decode:{{ kafka.keyStorePasswordEncrypted }}}" }
+      - { key: "ssl.key.password", value: "${decode:{{ kafka.keyPasswordEncrypted }}}" }
+      - { key: "ssl.client.auth", value: "{{ kafka.ssl_client_auth }}" }
+      - { key: "security.inter.broker.protocol", value: "{{ kafka.security_inter_broker_protocol}}"}
+      - { key: "listeners", value: "SSL://{{ inventory_hostname | lower }}:{{ kafka.port }}" }
+      - { key: "ssl.endpoint.identification.algorithm", value: "{{ kafka.ssl_endpoint_identification_algorithm }}" }
+      - { key: "config.providers", value: "{{ kafka.config_providers }}" }
+      - { key: "config.providers.decode.class", value: "{{ kafka.config_providers_decode_class }}" }
+      - { key: "config.providers.decode.param.security.encoding.key", value: "{{ kafka.installdir }}/config/encrypt.pass" }
+      - { key: "config.providers.decode.param.security.encoding.class", value: "{{ kafka.config_providers_decode_param_security_encoding_class }}" }
+      - { key: "config.providers.decode.param.security.encoding.salt", value: "{{ kafka.config_providers_decode_param_security_encoding_salt }}" }
+      - { key: "ssl.cipher.suites", value: "{{ kafka.ssl_cipher_suites }}"}
+    no_log: "{{ ansible_no_log }}"
+
+  - name: Change server.properties for SSL+PLAINTEXT listeners
+    ini_file:
+      path: "{{ kafka.installdir }}/config/server.properties"
+      section:
+      option: listeners
+      value: PLAINTEXT://{{ inventory_hostname | lower }}:{{ kafka.port|int - 1 }},SSL://{{ inventory_hostname | lower }}:{{ kafka.port }}
+    when: ssl_and_plaintext|default(false)
+
+  - name: Change consumer.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/config/consumer.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "security.protocol", value: "{{ kafka.security_protocol }}" }
+      - { key: "ssl.truststore.location", value: "{{ kafka.trustStorePath }}" }
+      - { key: "ssl.truststore.password", value: "${decode:{{ kafka.trustStorePasswordEncrypted }}}" }
+      - { key: "ssl.keystore.location", value: "{{ kafka.keyStorePath }}" }
+      - { key: "ssl.keystore.password", value: "${decode:{{ kafka.keyStorePasswordEncrypted }}}" }
+      - { key: "ssl.key.password", value: "${decode:{{ kafka.keyPasswordEncrypted }}}" }
+      - { key: "ssl.endpoint.identification.algorithm", value: "{{ kafka.ssl_endpoint_identification_algorithm }}" }
+      - { key: "config.providers", value: "{{ kafka.config_providers }}" }
+      - { key: "config.providers.decode.class", value: "{{ kafka.config_providers_decode_class }}" }
+      - { key: "config.providers.decode.param.security.encoding.key", value: "{{ kafka.installdir }}/config/encrypt.pass" }
+      - { key: "config.providers.decode.param.security.encoding.class", value: "{{ kafka.config_providers_decode_param_security_encoding_class }}" }
+      - { key: "config.providers.decode.param.security.encoding.salt", value: "{{ kafka.config_providers_decode_param_security_encoding_salt }}" }
+    no_log: "{{ ansible_no_log }}"
+
+  - name: Change producer.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/config/producer.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "security.protocol", value: "{{ kafka.security_protocol }}" }
+      - { key: "ssl.truststore.location", value: "{{ kafka.trustStorePath }}" }
+      - { key: "ssl.truststore.password", value: "${decode:{{ kafka.trustStorePasswordEncrypted }}}" }
+      - { key: "ssl.keystore.location", value: "{{ kafka.keyStorePath }}" }
+      - { key: "ssl.keystore.password", value: "${decode:{{ kafka.keyStorePasswordEncrypted }}}" }
+      - { key: "ssl.key.password", value: "${decode:{{ kafka.keyPasswordEncrypted }}}" }
+      - { key: "ssl.endpoint.identification.algorithm", value: "{{ kafka.ssl_endpoint_identification_algorithm }}"  }
+      - { key: "config.providers", value: "{{ kafka.config_providers }}" }
+      - { key: "config.providers.decode.class", value: "{{ kafka.config_providers_decode_class }}" }
+      - { key: "config.providers.decode.param.security.encoding.key", value: "{{ kafka.installdir }}/config/encrypt.pass" }
+      - { key: "config.providers.decode.param.security.encoding.class", value: "{{ kafka.config_providers_decode_param_security_encoding_class }}" }
+      - { key: "config.providers.decode.param.security.encoding.salt", value: "{{ kafka.config_providers_decode_param_security_encoding_salt }}" }
+    no_log: "{{ ansible_no_log }}"
+  - name: Chmod 0644 for properties
+    file:
+      path: "{{ kafka.installdir }}/config/{{ item }}"
+      mode: 0644
+    with_items:
+      - server.properties
+      - consumer.properties
+      - producer.properties
+  - include_tasks: roles/kafka-corex/tasks/helper/clean_dir.yml
+    vars:
+      dir: "{{ kafka.installdir }}/ssl"
+    when: (ZK_ALREADY_DONE is undefined and inventory_hostname not in groups['zookeeper']) or kafka.installdir != zookeeper.installdir
+  - name: Create SSL path
+    file:
+      path: "{{ kafka.installdir }}/ssl"
+      state: directory
+      mode: 0750
+  - name: Upload *.jks
+    copy:
+      src: "{{ inventory_dir }}/{{ item }}"
+      dest: "{{ kafka.installdir }}/ssl"
+      mode: 0664
+    with_items: "{{ ([kafka.trustStorePath] + [kafka.keyStorePath]) | unique }}"
+  - name: Change server.properties (add ssl to zookeeper)
+    ini_file:
+      path: "{{ kafka.installdir }}/config/server.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "config.providers", value: "{{ zookeeper.config_providers }}" }
+      - { key: "config.providers.decode.class", value: "{{ zookeeper.config_providers_decode_class }}" }
+      - { key: "config.providers.decode.param.security.encoding.key", value: "{{ kafka.installdir }}/config/encrypt.pass" }
+
+      - { key: "zookeeper.clientCnxnSocket", value: "{{ zookeeper.clientCnxnSocket }}" }
+      - { key: "zookeeper.ssl.client.enable", value: "{{ zookeeper.ssl_client_enable }}" }
+      - { key: "zookeeper.ssl.keystore.location", value: "{{ kafka.keyStorePath }}" }
+      - { key: "zookeeper.ssl.truststore.location", value: "{{ kafka.trustStorePath }}" }
+      - { key: "zookeeper.ssl.keystore.password", value: "${decode:{{kafka.keyStorePasswordEncrypted}}}" }
+      - { key: "zookeeper.ssl.truststore.password", value: "${decode:{{kafka.trustStorePasswordEncrypted}}}" }
+      - { key: "zookeeper.ssl.client.auth", value: "{{ zookeeper.ssl_client_auth }}" }
+      - { key: "zookeeper.ssl.enabled.protocols", value: "{{ zookeeper.ssl_enabled_potocols }}" }
+      - { key: "zookeeper.ssl.endpoint.identification.algorithm", value: "{{ zookeeper.zookeeper_ssl_endpoint_identification_algorithm }}" }
+    when: security | upper is search('ZK_MTLS')
+
+  - name: Create file with key for password encrypt
+    copy:
+      dest: "{{ kafka.installdir }}/config/encrypt.pass"
+      content: "{{ encrypt_key }}"
+      mode: 0400
+  - name: Read current broker DN
+    shell: >
+      echo {{ kafka.keyStorePassword }} | {{ keytool_path | default('keytool') }} -list -v -keystore {{ kafka.installdir }}/{{ kafka.keyStorePath }}
+      | grep -A3 "Entry type: PrivateKeyEntry" | grep Owner | sed "s/Owner: *//"
+    register: broker_dn
+    when: not kafka.superUser is defined
+  - name: Change super.users in server.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/config/server.properties"
+      section:
+      option: super.users
+      value: "User:{{ kafka.superUser | default(broker_dn.stdout) | regex_replace(', *', ',') }}"
+  - name: Upload password-encrypt-cli
+    copy:
+      src: "/tmp/{{ password_encoder_cli_path }}"
+      dest: "{{ kafka.installdir }}/{{ password_encoder_cli_path }}"
+      #remote_src: yes
+  tags: install

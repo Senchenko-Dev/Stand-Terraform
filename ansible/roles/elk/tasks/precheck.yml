@@ -1,0 +1,38 @@
+---
+- name: Get facts
+  setup:
+
+- name: Include OS configuration vars
+  include_vars:
+    file: os_conf.yml
+
+      
+#- set_fact:
+#    elk_login: "{{ lookup(vault_plugin, vault_params, account='elk_user', group=system_name) }}"
+#    elk_secret: "{{ pass_template }}"
+
+- set_fact:
+    elk_login: "elk"  
+    elk_secret: 'ASAPasap1234'
+
+- name: Create groups
+  include_tasks: linux/groups.yml
+  with_items: "{{ os_conf_groups }}"
+
+- name: Create users
+  include_tasks: linux/users.yml
+  with_items: "{{ os_conf_users }}"
+  # when: item.name in required_packages or item.name == elk_login
+
+- name: mount points list
+  set_fact:
+    mount_names: "{{ ansible_mounts | map(attribute='mount') | list}}"
+
+# - name: testing for required mount points
+#   assert:
+#     that:
+#       - item.path in mount_names
+#     msg: "{{ item.path }} is not a mountpoint"
+#   with_items: "{{ os_conf_lvs }}"
+
+

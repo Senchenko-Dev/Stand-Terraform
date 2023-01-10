@@ -1,0 +1,14 @@
+---
+- name: Start service kibana
+  import_tasks: ../../handlers/start-kibana.yml
+  when: action == 'start'
+
+- name: Stop service kibana
+  import_tasks: ../../handlers/stop-kibana.yml
+  when: action == 'stop'
+
+- name: Restart service kibana
+  import_tasks: ../../handlers/restart-kibana.yml
+  when: action == 'restart'
+
+

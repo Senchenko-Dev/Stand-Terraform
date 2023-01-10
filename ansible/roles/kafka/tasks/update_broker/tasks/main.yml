@@ -1,0 +1,110 @@
+- include_tasks: "{{ role_path }}/tasks/helper/distribute.yml"
+  vars:
+    original_distr: kafka
+
+- name: Check backup exists
+  stat:
+    path: "{{ update_broker.backup.path }}"
+  register: backup_file
+
+- name: Backup current version
+  archive:
+    path: "{{ kafka.installdir }}/*"
+    format: tar
+    dest: "{{ update_broker.backup.path }}"
+  when: update_broker.backup.enable and not backup_file.stat.exists
+
+- include_tasks: "{{ role_path }}/tasks/helper/unpack.yml"
+  vars:
+    original_distr: kafka
+
+- name: Chmod for *.sh
+  shell: chmod +x *.sh
+  args:
+    chdir: "{{ update_broker.installdir }}"
+
+- name: Adding {{ security }} config
+  shell: "./deploy-{{ security | lower }}.sh"
+  args:
+    chdir: "{{ update_broker.installdir }}"
+
+- name: Change server.properties
+  ini_file:
+    path: "{{ kafka.installdir }}/etc/kafka/server.properties"
+    section:
+    option: "{{ item.key }}"
+    value: "{{ item.value }}"
+  with_items:
+    - { key: "inter.broker.protocol.version", value: "0.11.0" }
+    - { key: "log.message.format.version",    value: "0.11.0" }
+
+- name: Get current controller
+  shell: ./bin/zookeeper-shell "{{ zk_port_list }}" get /controller 2>&1 | grep brokerid | sed -re 's/.*brokerid":(.*?),.*/\1/g'
+  args:
+    chdir: "{{ kafka.installdir }}"
+  register: controller_get
+  run_once: true
+
+- name: Get brokerid
+  shell: grep "broker\.id" etc/kafka/server.properties | sed -re 's/.*= *(\d*)/\1/g'
+  args:
+    chdir: "{{ kafka.installdir }}"
+  register: broker_id_get
+
+# Serial brokers restart (non controller)
+- include_tasks: each_broker_restart.yml
+  vars:
+    binary_add: true
+    each_broker: "{{ item }}"
+  with_items: "{{ groups['kafka'] | difference([inventory_hostname]) }}"
+  when: ( controller_get.stdout | trim ) == ( broker_id_get.stdout | trim )
+
+- name: Remove current controller
+  shell: ./bin/zookeeper-shell "{{ zk_port_list }}" rmr /controller
+  args:
+    chdir: "{{ kafka.installdir }}"
+  run_once: true
+
+# Controller restart
+- include_tasks: each_broker_restart.yml
+  vars:
+    binary_add: true
+    each_broker: "{{ inventory_hostname }}"
+  when: ( controller_get.stdout | trim ) == ( broker_id_get.stdout | trim )
+
+- name: Change server.properties
+  ini_file:
+    path: "{{ kafka.installdir }}/etc/kafka/server.properties"
+    section:
+    option: "{{ item.key }}"
+    value: "{{ item.value }}"
+  with_items:
+    - { key: "inter.broker.protocol.version", value: "1.1" }
+
+- name: Get new controller
+  shell: ./bin/zookeeper-shell "{{ zk_port_list }}" get /controller 2>&1 | grep brokerid | sed -re 's/.*brokerid":(.*?),.*/\1/g'
+  args:
+    chdir: "{{ kafka.installdir }}"
+  register: new_controller_get
+  run_once: true
+
+# Serial brokers restart (non controller)
+- include_tasks: each_broker_restart.yml
+  vars:
+    binary_add: false
+    each_broker: "{{ item }}"
+  with_items: "{{ groups['kafka'] | difference([inventory_hostname]) }}"
+  when: ( new_controller_get.stdout | trim ) == ( broker_id_get.stdout | trim )
+
+- name: Remove new controller
+  shell: ./bin/zookeeper-shell "{{ zk_port_list }}" rmr /controller
+  args:
+    chdir: "{{ kafka.installdir }}"
+  run_once: true
+
+# Controller restart
+- include_tasks: each_broker_restart.yml
+  vars:
+    binary_add: false
+    each_broker: "{{ inventory_hostname }}"
+  when: ( new_controller_get.stdout | trim ) == ( broker_id_get.stdout | trim )

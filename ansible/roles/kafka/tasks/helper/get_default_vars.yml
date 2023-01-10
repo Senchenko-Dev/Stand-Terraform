@@ -1,0 +1,36 @@
+- block:
+  - name: Get default vars
+    # shell: for f in ../roles/*/defaults/main.yml; do (cat "${f}"; echo); done > ../roles/defaults.yml
+    shell: for f in '{{ role_path }}'/tasks/*/defaults/main.yml; do (cat "${f}"; echo); done > '{{ role_path }}'/defaults/defaults.yml
+    delegate_to: localhost
+    run_once: true
+  - name: Include default vars in temporary variable
+    include_vars:
+      file: '{{ role_path }}/defaults/defaults.yml'
+      name: temp_default_vars
+  - name: Update string vars from defaults
+    set_fact:
+      "{{ item.key }}": "{{ hostvars[inventory_hostname][item.key] | default(item.value) }}"
+    no_log: "{{ ansible_no_log | default(false) }}"
+    when: not item.value is mapping
+    with_dict: "{{ temp_default_vars }}"
+  - name: Update dict vars from defaults
+    set_fact:
+      "{{ item.key }}": "{{ item.value | combine( hostvars[inventory_hostname][item.key] | default({}), recursive=True ) }}"
+    no_log: "{{ ansible_no_log | default(false) }}"
+    when: item.value is mapping
+    with_dict: "{{ temp_default_vars }}"
+  - set_fact:
+      kafka_port_list: "{{ groups['kafka'] | join(':' + kafka.port|string + ',') | lower }}:{{ kafka.port }}"
+      zk_port_list: "{{ groups['zookeeper'] | join(':' + zookeeper.port|string + ',') | lower }}:{{ zookeeper.port }}"
+      simple_security: "{{ security | regex_replace('^(.*?)__.*$', '\\1') }}"
+      temp_default_vars:
+  tags: always
+- name: Download local password-encrypt-cli
+  copy:
+    src: "../files/{{ password_encoder_cli_path }}"
+    dest: "/tmp/{{ password_encoder_cli_path }}"
+    mode: 0777
+  delegate_to: localhost
+  run_once: true
+  when: simple_security == 'SSL'

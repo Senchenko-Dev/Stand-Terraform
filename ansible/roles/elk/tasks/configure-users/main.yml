@@ -1,0 +1,15 @@
+- name: Check access to elasticsearch api
+  import_tasks: check.yml 
+
+- name: Change password for system users
+  import_tasks: set-passwords.yml
+  # when: es_check_health != 200
+
+
+
+
+
+
+
+
+

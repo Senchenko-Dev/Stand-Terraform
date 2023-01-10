@@ -1,0 +1,9 @@
+---
+- name: Install packages
+  yum:
+    name: "{{ item.pkg }}"
+    state: present
+    validate_certs: no
+    disable_gpg_check: true
+  with_items: "{{ os_conf_packages }}"
+# when: (item.name in required_packages and item.stack) or not item.stack

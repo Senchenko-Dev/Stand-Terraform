@@ -1,0 +1,12 @@
+- block:
+  - name: Change {{ kafka_admin_jaas }}
+    replace:
+      path: "{{ rest.installdir }}/etc/kafka/jaas/{{ kafka_admin_jaas }}"
+      regexp: "(^\\s*password).*"
+      replace: '\1="{{ zookeeper.kafkaBrokerPassword | trim }}";'
+    no_log: "{{ ansible_no_log }}"
+  - name: Chmod 0660 for {{ kafka_admin_jaas }}
+    file:
+      path: "{{ rest.installdir }}/etc/kafka/jaas/{{ kafka_admin_jaas }}"
+      mode: 0660
+  tags: install

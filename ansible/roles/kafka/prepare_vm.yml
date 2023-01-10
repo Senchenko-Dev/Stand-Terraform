@@ -1,0 +1,9 @@
+# - hosts: all
+#   gather_fact: true
+#   tasks:
+#     - name: "Install packages"
+#       package:
+#         name: "{{ item }}"
+#       loop:
+#         - net-tools
+#         - java-11-openjdk.x86_64

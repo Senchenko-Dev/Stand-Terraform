@@ -1,0 +1,20 @@
+[ req ]
+default_bits = 2048
+distinguished_name = req_distinguished_name
+req_extensions = req_ext
+prompt = no
+ 
+[ req_distinguished_name ]
+countryName = RU
+stateOrProvinceName = MOW
+localityName = MOW
+organizationName = SBT
+commonName = srv-0-22.pc.dev.sbt
+ 
+[ req_ext ]
+subjectAltName = @alt_names
+ 
+[alt_names]
+DNS.1 = srv-0-22.pc.dev.sbt
+DNS.1 = vm-flow-ift-pc-elk-149.vdc01.pc.dev.sbt
+

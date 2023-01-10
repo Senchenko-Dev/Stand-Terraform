@@ -6,8 +6,7 @@
     - name: Import secrets
       include_vars: "{{ vault_file }}"
       when: vault_file is defined
-    #      tags: always
-    #      no_log: yes todo
+#      tags: always
     #      no_log: yes todo
 
     - name: Create directory for download distrib
@@ -29,6 +28,7 @@
       when:
         - download_url is defined
         - download_url != ""
+
 
     - name: Debug
       shell: ls -a {{ download_dest }}

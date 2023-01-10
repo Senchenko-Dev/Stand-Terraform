@@ -1,0 +1,39 @@
+---
+- name: Precheck
+  import_tasks: precheck.yml
+  tags: [install, precheck]
+
+- name: Install depsendences
+  import_tasks: install-deps.yml
+  tags: [install, install-deps]
+
+- name: Generate certificates
+  import_tasks: configure-certs/main.yml
+  tags: [never, configure-certs]
+  
+- name: Configure
+  import_tasks: configure.yml
+  tags: [install, configure]
+
+- name: Configure users "{{ es_users }}" 
+  import_tasks: configure-users/main.yml
+  tags: [install, configure-users]
+
+- name: Control
+  import_tasks: control/main.yml
+  # tags: [always]
+
+- name: Remove data after ended tasks
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ remove_data }}"
+  ignore_errors: true
+  delegate_to: "{{ awx_host }}"
+  tags: [always]
+
+
+
+
+

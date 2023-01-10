@@ -1,0 +1,159 @@
+### DISTRIBUTE SECTION ###
+
+- include_tasks: "{{ role_path }}/tasks/helper/distribute.yml"
+  vars:
+    original_distr: kafka
+  tags: distribute
+  when: rest.cleanInstall
+
+### STOP SECTION ###
+
+- block:
+  - name: Check kafka-rest-proxy.service
+    shell: systemctl list-unit-files | grep "^[ ]*kafka-rest-proxy.service"
+    register: rest_service
+    failed_when: false
+    tags: always
+  - name: Check state of kafka-rest-proxy.service
+    shell: systemctl list-units --state=active | grep "^[ ]*kafka-rest-proxy.service"
+    register: rest_service_active
+    failed_when: false
+  - name: Stop as service
+    raw: sudo systemctl stop kafka-rest-proxy.service
+    when: rest_service.rc == 0 and rest_service_active.rc == 0
+  - block:
+    - name: Get realpath
+      command: realpath -m "{{ rest.installdir }}"
+      register: app_realpath
+    - include_tasks: "{{ role_path }}/tasks/helper/stop_wait.yml"
+      vars:
+        stop_command: './bin/kafka-rest-stop' # if you need run stop script, else kill PID (default)
+        pgrep_str: "{{ app_realpath.stdout }}.*KafkaRestMain"
+    when: rest_service.rc != 0 or rest_service_active.rc != 0
+  tags: stop
+
+### INSTALL SECTION ###
+
+- block:
+  - block:
+    - include_tasks: "{{ role_path }}/tasks/helper/unpack.yml"
+      vars:
+        original_distr: kafka
+    ### WORK WITH SBT DISTR FROM NEXUS (.zip with configs) ###
+    - name: Chmod for *.sh
+      shell: chmod +x *.sh
+      args:
+        chdir: "{{ rest.installdir }}"
+    - name: Adding {{ security }} config
+      shell: "./deploy-{{ security | lower }}.sh"
+      args:
+        chdir: "{{ rest.installdir }}"
+    when: rest.cleanInstall
+  - block:
+    - name: Check confluent version
+      stat:
+        path: "{{ rest.installdir }}/etc/kafka/jmx/kafka-jmx.properties"
+      register: check_confluent_config
+    - name: Set config names based on confluent version
+      set_fact:
+        kafka_jaas: "{{ check_confluent_config.stat.exists | ternary('kafka.jaas', 'kafka_s_esbmon_broker.jaas') }}"
+        zookeeper_jaas: "{{ check_confluent_config.stat.exists | ternary('zookeeper.jaas', 'kafka_s_esbmon_zookeeper.jaas') }}"
+        kafka_admin_jaas: "{{ check_confluent_config.stat.exists | ternary('kafka-admin.jaas', 'client.jaas') }}"
+        kafka_jmx_properties: "{{ check_confluent_config.stat.exists | ternary('kafka-jmx.properties', 'kafka_jmx.properties') }}"
+        zookeeper_jmx_properties: "{{ check_confluent_config.stat.exists | ternary('zookeeper-jmx.properties', 'zookeeper_jmx.properties') }}"
+        user_kafka: "{{ check_confluent_config.stat.exists | ternary('user_kafka', 'user_kafkaBroker') }}"
+    when: kafka_jaas is not defined
+  # - include_tasks: "{{ role_path }}/tasks/helper/custom_files.yml"
+  #   tags: custom_files
+  - include_tasks: "{{ role_path }}/tasks/helper/clean_dir.yml"
+    vars:
+      dir: "{{ rest.logdir }}"
+    when: rest.cleanLog
+  - name: Change kafka-rest.properties
+    ini_file:
+      path: "{{ rest.installdir }}/etc/kafka-rest/kafka-rest.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "id",                       value: "{{ rest.id }}"}
+      - { key: "listeners",                value: "{{ rest.https.enable | ternary('https', 'http') }}://{{ inventory_hostname }}:{{ rest.webport }}"}
+      - { key: "zookeeper.connect",        value: "{{ zk_port_list }}"}
+      - { key: "bootstrap.servers",        value: "{{ simple_security }}://{{ kafka_port_list.split(',') | join(',{{ simple_security }}://') }}"}
+      - { key: "client.security.protocol", value: "{{ simple_security }}"}
+      - { key: "jmx.kafka.port",           value: "{{ kafka.jmxport }}"}
+  - name: dos2unix {{ rest.installdir }}/bin
+    dos2unix:
+      path: "{{ rest.installdir }}/bin"
+  - name: Chmod for ./bin/*
+    shell: chmod +x *
+    args:
+      chdir: "{{ rest.installdir }}/bin"
+  - name: Set JDK path
+    lineinfile:
+      path: "{{ rest.installdir }}/bin/kafka-rest-run-class"
+      regexp: (.*Which java to use.*)
+      line: "{{ customJavaPath | ternary('export JAVA_HOME='+customJavaPath|string, '\\1') }}"
+      backrefs: yes
+  - name: Replacing Xmx
+    replace:
+      path: "{{ rest.installdir }}/bin/kafka-rest-run-class"
+      regexp: "{{ item.from }}"
+      replace: "{{ item.to }}"
+    with_items:
+      #- { from: "-Xms[0-9]+[kmgKMG]", to: "-Xms{{ rest.xms }}"}
+      - { from: "-Xmx[0-9]+[kmgKMG]", to: "-Xmx{{ rest.xmx }}"}
+  - name: Check kafka-rest-start
+    shell: "cat {{ rest.installdir }}/bin/kafka-rest-start"
+    register: kafka_rest_sh
+  - name: Change JMX port
+    lineinfile:
+      path: "{{ rest.installdir }}/bin/kafka-rest-start"
+      regexp: "(^exec.*$)"
+      line: 'export JMX_PORT={{ rest.jmxport }}\n\1'
+      backrefs: yes
+    when: "'JMX_PORT' not in kafka_rest_sh.stdout"
+  - name: Change logdir
+    replace:
+      path: "{{ rest.installdir }}/etc/kafka-rest/log4j.properties"
+      regexp: ' *= *logs/'
+      replace: ' = {{ rest.logdir }}/'
+  - include_tasks: rest_https.yml
+    when: rest.https.enable
+  - include_tasks: kafka_SSL.yml
+    when: simple_security == 'SSL'
+  - include_tasks: zookeeper_SASL_PLAINTEXT.yml
+    when: simple_security == 'SASL_PLAINTEXT'
+  - include_tasks: zookeeper_DIGEST_MD5.yml
+    when: security | search('ZK_SASL_DIGEST_MD5') # содержит ZK_SASL_DIGEST_MD5
+  - include_tasks: "{{ role_path }}/tasks/helper/change_ini.yml"
+    with_items: "{{ rest.iniChange }}"
+    loop_control:
+      loop_var: outer_item
+    when: rest.iniChange is defined and rest.iniChange
+  tags: install
+
+### START SECTION ###
+
+- block:
+  - block:
+    - name: Start as service kafka-rest-proxy.service
+      raw: sudo systemctl start kafka-rest-proxy.service
+    - name: Enable service kafka-rest-proxy.service
+      raw: sudo systemctl enable kafka-rest-proxy
+    when: rest_service.rc == 0
+  - include_tasks: "{{ role_path }}/tasks/helper/start_wait.yml"
+    vars:
+      start_command: nohup ./bin/kafka-rest-start etc/kafka-rest/kafka-rest.properties 2>&1 < /dev/null &
+      log: "{{ rest.logdir }}/kafka-rest.log"
+      search_line: 'Server started, listening for requests'
+    when: rest_service.rc != 0
+  - name: Wait for JMX port open
+    wait_for:
+      port: "{{ rest.jmxport }}"
+      timeout: "{{ wait_for_start }}"
+  - include_tasks: "{{ role_path }}/tasks/helper/get_status.yml"
+    vars:
+      port: "{{ rest.webport }}"
+    tags: status
+  tags: start

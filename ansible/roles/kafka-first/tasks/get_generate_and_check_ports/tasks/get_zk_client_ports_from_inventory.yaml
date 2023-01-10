@@ -1,0 +1,10 @@
+- name: Get Zookeeper Client Port of All ZookeeperNodes from Inventory
+  set_fact:
+    zk_client_ports_from_inventory: "{{ zk_client_ports_from_inventory | default([]) + hostvars[item]['ZPorts'] }}"
+  with_items: "{{ groups['ZookeeperNodes'] }}"
+
+- name: Get List of ZPorts from Inventory
+  set_fact:
+    zk_client_ports: "{{ zk_client_ports + [ item | int ] }}"
+  with_items: "{{ zk_client_ports_from_inventory }}"
+  when: ZkStartZPort is undefined

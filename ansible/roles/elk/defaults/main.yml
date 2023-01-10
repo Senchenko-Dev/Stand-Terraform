@@ -1,0 +1,48 @@
+# connection parameters
+ansible_connection: ssh
+#ansible_user: "{{ master_user }}"
+#ansible_ssh_private_key_file: "{{ master_user_private_key_path }}"
+ansible_become: true
+
+system_name: "{{ role_name }}"
+
+#master_user_private_key_name: linux
+#master_user: "{{ lookup(vault_plugin, vault_params, account='master_user', group='linux_setup') }}"
+#master_user_private_key_path: "{{ privkey_basepath }}/{{ shared_list }}/{{ master_user_private_key_name }}"
+
+distrib_user: "{{ lookup(vault_plugin, vault_params, account='username', group='distrib') }}"
+distrib_user_pass: "{{ lookup(vault_plugin, vault_params, account='password', group='distrib') }}"
+
+package_version: "{{ version | string }}"
+package_mjr_version: "{{ package_version.split('.') | first }}"
+
+
+cert_name: "elk" #"{{ inventory_hostname }}"
+cert_ext: ['key', 'crt']
+
+cert_branch: 'generated_certs'
+cert_path: "{{ tmp_repo }}/ansible/roles/elk/files/certs"
+tmp_repo: "/tmp/terra_project_prepare_silimyankin" 
+
+remove_data:
+  - "{{ tmp_repo }}"
+    
+# awx_tags:
+#   # - control-start
+#   # - control-stop
+#   # - control-restart
+#   - get-logs
+#   - cleanup-logs
+#   - health-check
+#   - configure-generate-certs
+
+#   - control-start-elasticsearch
+#   - control-restart-elasticsearch
+#   - control-stop-elasticsearch
+#   - control-start-kibana
+#   - control-restart-kibana
+#   - control-stop-kibana
+#   - control-start-logstash
+#   - control-restart-logstash
+#   - control-stop-logstash
+

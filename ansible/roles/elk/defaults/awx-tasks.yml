@@ -1,0 +1,46 @@
+---
+awx_tags:
+  - tag: get-logs
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+        awx_host: "{{ awx_host }}"
+        pod_nginx_port: "{{ pod_nginx_port }}"
+  - tag: cleanup-logs
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: health-check
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: control-start-elasticsearch
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: control-restart-elasticsearch
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: control-stop-elasticsearch
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: control-start-kibana
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: control-restart-kibana
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: control-stop-kibana
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: control-start-logstash
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: control-restart-logstash
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: control-stop-logstash
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: configure-certs
+    vars: 
+        awx_host: "{{ awx_host }}"
+        vault_file: "{{ vault_file }}" 
+        spo_role_name: "{{ spo_role_name }}"
+

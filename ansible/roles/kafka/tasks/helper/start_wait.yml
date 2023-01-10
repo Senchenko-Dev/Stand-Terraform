@@ -1,0 +1,18 @@
+- block:
+  - name: Get current log
+    shell: 'test -e {{ log }} && grep -E "{{ search_line }}" {{ log }} | tail -1 || echo -n ""'
+    register: last_line
+  - name: Start {{ app_name|default('') }}
+    shell: "{{ start_command }}"
+    args:
+      chdir: "{{ from_dir | default(hostvars[inventory_hostname][role_name].installdir) }}"
+    async: "{{ wait_for_start }}"
+    poll: 0
+  - name: Wait for correct start {{ app_name|default('') }}
+    shell: 'test -e {{ log }} && grep -E "{{ search_line }}" {{ log }} | tail -1 || echo -n ""'
+    register: new_line
+    until: last_line.stdout != new_line.stdout
+    retries: "{{ wait_for_start }}"
+    delay: 1
+    when: check_correct_start|default(true)
+  tags: always

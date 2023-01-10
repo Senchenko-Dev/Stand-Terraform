@@ -1,0 +1,23 @@
+- name: Set ACLs
+  shell: >
+    ./bin/kafka-acls
+    --bootstrap-server {{ hostvars[inventory_hostname]['ansible_default_ipv4']['address']}}:{{kafka.port}}
+    --add
+    --allow-principal 'User:{{ item.principal }}'
+    --command-config {{ item.command_config | default ('./config/producer.properties')}}
+    {{ ( item.consumer | default(false) ) | ternary('--consumer', '') }}
+    {{ ( item.producer | default(false) ) | ternary('--producer', '') }}
+    {{ ('operations' in item) | ternary('--operation ' + (item.operations|default('')).split(',') | join(' --operation '), '') }}
+    {{ '--topic ' + item.topics.split(',') | join(' --topic=') | default ('*') }}
+    {{ ('groups' in item) | ternary('--group ' + (item.groups|default('')).split(',')|join(' --group '), '') }}
+    {{ ( item.cluster | default(false) ) | ternary('--cluster', '') }}
+    {{ ( 'resource_pattern_type' in item ) | ternary("--resource-pattern-type " + item.resource_pattern_type|default(''), '') }}
+    {{ ( 'transactional_id' in item ) | ternary("--transactional-id " + item.transactional_id|default(''), '') }}
+  args:
+    chdir: "{{ kafka.installdir }}"
+  register: acl_done
+  failed_when: "'Current ACLs for resource' not in acl_done.stdout"
+  with_items: "{{ kafka_acls }}"
+  when: kafka_acls|length > 0
+  run_once: true # c первого хоста из inventory
+  tags: start

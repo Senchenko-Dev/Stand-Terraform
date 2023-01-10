@@ -1,0 +1,22 @@
+---
+# - name: Stop service elasticsearch
+#   import_tasks: ../../handlers/stop-elasticsearch.yml
+#   when: unit in required_packages and unit == 'elasticsearch'
+
+# - name: Stop service kibana
+#   import_tasks: ../../handlers/stop-kibana.yml
+#   when: unit in required_packages and unit == 'kibana'
+
+# - name: Stop service logstash
+#   import_tasks: ../../handlers/stop-logstash.yml
+#   when: unit in required_packages and unit == 'logstash'
+
+
+# - name: Stop services
+#   service:
+#     name: "{{ item.name }}"
+#     state: stoped
+#     enabled: True
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages
+

@@ -1,0 +1,115 @@
+---
+- name: Control | start elasticsearch
+  import_tasks:  control/control-elasticsearch.yml
+  vars:
+    action: start
+  tags: [never, control-start-elasticsearch]
+
+- name: Control | stop elasticsearch
+  import_tasks:  control/control-elasticsearch.yml
+  vars:
+    action: stop
+  tags: [never, control-stop-elasticsearch]
+
+- name: Control | restart elasticsearch
+  import_tasks:  control/control-elasticsearch.yml
+  vars:
+    action: restart
+  tags: [never, control-restart-elasticsearch]
+# 
+# -------------------------------------
+#
+- name: Control | start kibana
+  import_tasks:  control/control-kibana.yml
+  vars:
+    action: start
+  tags: [never, control-start-kibana]
+
+- name: Control | stop kibana
+  import_tasks:  control/control-kibana.yml
+  vars:
+    action: stop
+  tags: [never, control-stop-kibana]
+
+- name: Control | restart kibana
+  import_tasks:  control/control-kibana.yml
+  vars:
+    action: restart
+  tags: [never, control-restart-kibana]
+# 
+# -------------------------------------
+#
+- name: Control | start logstash
+  import_tasks:  control/control-logstash.yml
+  vars:
+    action: start
+  tags: [never, control-start-logstash]
+
+- name: Control | stop logstash
+  import_tasks:  control/control-logstash.yml
+  vars:
+    action: stop
+  tags: [never, control-stop-logstash]
+
+- name: Control | restart logstash
+  import_tasks:  control/control-logstash.yml
+  vars:
+    action: restart
+  tags: [never, control-restart-logstash]
+
+
+# - name: Control | start elasticsearch
+#   import_tasks:  control/control-start.yml
+#   vars:
+#     unit: elasticsearch
+#   tags: [never, control-start-elasticsearch]
+
+# - name: Control | start kibana
+#   import_tasks:  control/control-start.yml
+#   vars:
+#     unit: kibana
+#   tags: [never, control-start-kibana]
+
+# - name: Control | start logstash
+#   import_tasks:  control/control-start.yml
+#   vars:
+#     unit: logstash
+#   tags: [never, control-start-logstash]
+
+
+# - name: Control | restart elasticsearch
+#   import_tasks:  control/control-restart.yml
+#   vars:
+#     unit: elasticsearch
+#   tags: [never, control-restart-elasticsearch]
+
+# - name: Control | restart kibana
+#   import_tasks:  control/control-restart.yml
+#   vars:
+#     unit: kibana
+#   tags: [never, control-restart-kibana]
+
+# - name: Control | restart logstash
+#   import_tasks:  control/control-restart.yml
+#   vars:
+#     unit: logstash
+#   tags: [never, control-restart-logstash]
+
+
+# - name: Control | stop elasticsearch
+#   import_tasks:  control/control-stop.yml
+#   vars:
+#     unit: elasticsearch
+#   tags: [never, control-stop-elasticsearch]
+
+# - name: Control | stop kibana
+#   import_tasks:  control/control-stop.yml
+#   vars:
+#     unit: kibana
+#   tags: [never, control-stop-kibana]
+
+# - name: Control | stop logstash
+#   import_tasks:  control/control-stop.yml
+#   vars:
+#     unit: logstash
+#   tags: [never, control-stop-logstash]

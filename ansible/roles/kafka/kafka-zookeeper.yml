@@ -1,0 +1,33 @@
+---
+- hosts: all
+  gather_facts: false
+  vars:
+    ansible_user: "{{ os_user_name }}"
+    ansible_ssh_pass: "{{ os_user_pass_default }}"
+  tasks:
+  - include_tasks: "{{ role_path }}/tasks/helper/get_default_vars.yml"
+  - set_fact:
+      local_distribution_source: false
+
+- hosts: zookeeper
+  gather_facts: false
+  vars:
+    system_name: kafka
+    os_user_name: "{{ lookup('erpm', url=erpm_url, token=erpm_token, account_name='os_user_name',
+    shared_list=shared_list, system_name=system_name) }}"
+    os_user_pass_default: "{{ lookup('erpm', url=erpm_url, token=erpm_token, account_name='os_user_pass_default',
+    shared_list=shared_list, system_name=system_name) }}"
+  roles:
+  - { role: zookeeper, ansible_user: "{{ os_user_name }}", ansible_ssh_pass: "{{ os_user_pass_default }}" }
+
+- hosts: kafka
+  gather_facts: false
+  vars:
+    system_name: kafka
+    os_user_name: "{{ lookup('erpm', url=erpm_url, token=erpm_token, account_name='os_user_name',
+    shared_list=shared_list, system_name=system_name) }}"
+    os_user_pass_default: "{{ lookup('erpm', url=erpm_url, token=erpm_token, account_name='os_user_pass_default',
+    shared_list=shared_list, system_name=system_name) }}"
+  roles:
+  - { role: kafka, ansible_user: "{{ os_user_name }}", ansible_ssh_pass: "{{ os_user_pass_default }}" }
+..

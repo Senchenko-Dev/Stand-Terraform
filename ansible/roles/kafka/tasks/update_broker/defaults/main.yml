@@ -1,0 +1,6 @@
+update_broker:
+  distr: confluent.zip # путь до приложения относительно /files
+  installdir: /opt/Apache/kafka/.tmp_confluent_411 # временная директория для новых бинарных файлов
+  backup:
+    enable: true # разрешить создание бекапа Kafka (файлов из директории kafka.installdir)
+    path: /opt/Apache/kafka_backup.tar # путь до бекапа .tar (бекап создается только 1 раз)

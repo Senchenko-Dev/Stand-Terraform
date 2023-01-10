@@ -1,0 +1,25 @@
+---
+- include_vars: "{{ role_path }}/vars/info.yml"
+
+- debug: 
+    msg: "{{ terraform_team.split('\n') }}"
+
+- debug: 
+    msg: "{{ team.split('\n') }}"
+
+- debug: 
+    msg: "{{ references.split('\n') }}"
+
+- debug:
+    msg: "############################### INFO ###############################"
+
+- debug: 
+    msg: "Подтвердите pull request"
+  when: pull_request is defined
+
+- debug: 
+    msg: "Отправьте ключ key и файл запроса csr по следующей ссылке: {{ info.cert_jira_request }}"
+  when: pull_request is defined or certs_exist is defined and certs_exist == 2
+
+- debug:
+    msg: "############################### INFO ###############################"

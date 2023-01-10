@@ -1,0 +1,87 @@
+---
+- name: Modify lines in files
+  include_tasks: linux/lineinfiles.yml
+  with_items: "{{ os_conf_lineinfiles }}"
+  when: item.alias in required_packages
+
+- name: Change sysctl settings
+  include_tasks: linux/sysctls.yml
+  with_items: "{{ os_conf_sysctls }}"
+
+- name: Configure sudoers 
+  template:
+    src: sudoers.d/elk.jinja2
+    dest: /etc/sudoers.d/elk.conf
+    owner: root
+    group: root
+    mode: '0440'
+
+- name: Configure limits
+  include_tasks: linux/limits.yml
+  with_items: "{{ os_conf_limits }}"
+  when: item.domain in required_packages or item.domain == elk_login
+
+- name: Change files
+  include_tasks: linux/files.yml
+  with_items: "{{ os_conf_files }}"
+  when: item.path.split('/') | last in required_packages
+- name: Force user to change password
+  command:
+    _raw_params: "chage -d 0 {{ elk_login }}"
+  changed_when: False
+
+- name: Workaround for logstash
+  command:
+    _raw_params: "/usr/share/logstash/bin/system-install /etc/logstash/startup.options systemd"
+  when: "'logstash' in required_packages"
+
+
+- name: Elasticsearch tuning
+  block:
+  - name: Make elastic configuration
+    template:
+      src: elasticsearch.yml.jinja2
+      dest: /etc/elasticsearch/elasticsearch.yml
+      owner: root
+      group: "{{ elk_group }}"
+      mode: '0660'
+
+  - name: Workaround for memory related issues
+    lineinfile:
+      path: /usr/lib/systemd/system/elasticsearch.service
+      insertbefore: "^[# \t]*TimeoutStopSec[ \t]*=.*$"
+      line: "TimeoutStartSec=900"
+      state: present
+
+  - name: Reload daemon service
+    systemd:
+      daemon_reload: yes
+    when: "'elasticsearch' in required_packages"
+
+- name: Kibana tuning
+  template:
+    src: kibana.yml.j2
+    dest: /etc/kibana/kibana.yml
+    owner: elk
+    group: kibana
+    mode: 0660
+
+- name: Enable autostart
+  service:
+    name: "{{ item.name }}"
+    state: stopped
+    enabled: True
+  with_items: "{{ os_conf_packages }}"
+  when: item.name in required_packages
+
+- name: Prepare for /var/lib/elasticsearch cleaning
+  find:
+    paths: /var/lib/elasticsearch
+  register: files_to_delete
+
+- name: Make /var/lib/elasticsearch clear again
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ files_to_delete.files }}"
+...

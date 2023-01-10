@@ -1,0 +1,6 @@
+---
+- name: stop logstash
+  service:
+    name: logstash
+    state: stopped
+

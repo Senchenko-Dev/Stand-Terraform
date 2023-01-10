@@ -1,0 +1,13 @@
+# - name:  Установка ELK на хостах без настроек
+#   hosts: all # "{{ hosts_group_WF | default('ELK') }}"
+#   vars_files:
+#     - vars.yml
+#   vars:
+#     elk_list:
+#       - elasticsearch
+#       - kibana
+#       # - logstash become: yes
+
+#   tasks:
+#     - include_role:
+#         name: elk

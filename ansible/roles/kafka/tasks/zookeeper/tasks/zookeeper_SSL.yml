@@ -1,0 +1,122 @@
+- block:
+  - include_tasks: roles/kafka-corex/tasks/helper/clean_dir.yml
+    vars:
+      dir: "{{ zookeeper.installdir }}/ssl"
+  - name: Create SSL path
+    file:
+      path: "{{ zookeeper.installdir }}/ssl"
+      state: directory
+      mode: 0750
+  - name: Upload *.jks
+    copy:
+      src: "{{ inventory_dir }}/{{ item }}"
+      dest: "{{ zookeeper.installdir }}/ssl"
+      mode: 0664
+    with_items: "{{ ([zookeeper.trustStorePath] + [zookeeper.keyStorePath]) | unique }}"
+  - name: Read zookeeper DN
+    shell: >
+      echo {{ zookeeper.keyStorePassword }} | {{ keytool_path | default('keytool') }} -list -v -keystore {{ zookeeper.installdir }}/{{ zookeeper.keyStorePath }}
+      | grep -A3 "Entry type: PrivateKeyEntry" | grep Owner | sed "s/Owner: *//"
+    register: zk_dn
+    when: not zookeeper.superUser is defined
+
+  - name: Change zookeeper.properties for SSL
+    ini_file:
+      path: "{{ zookeeper.installdir }}/config/zookeeper.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value|default('') }}"
+      state: "{{ item.state|default('present') }}"
+    with_items:
+      - { key: "security.encoding.key", value: "{{ zookeeper.installdir }}/config/encrypt.pass" }
+      - { key: "security.encoding.class", value: "{{ zookeeper.security_encoding_class }}" }
+      - { key: "security.encoding.salt", value: "{{ zookeeper.security_encoding_salt }}" }
+
+      - { key: "sslQuorum", value: "{{ zookeeper.sslQuorum }}" }
+      - { key: "client.portUnification", value: "{{ zookeeper.ssl_client_portUnification }}"}
+      - { key: "clientPort", state: "absent" }
+      - { key: "secureClientPort", value: "{{ zookeeper.port }}" }
+      - { key: "serverCnxnFactory", value: "{{ zookeeper.serverCnxnFactory }}" }
+      - { key: "ssl.quorum.enabledProtocols", value: "{{ zookeeper.ssl_quorum_enabledProtocols }}" }
+      - { key: "ssl.quorum.ciphersuites", value: "{{ zookeeper.ssl_quorum_ciphersuites }}" }
+      - { key: "ssl.quorum.keyStore.location", value: "{{ zookeeper.keyStorePath }}" }
+      - { key: "ssl.quorum.keyStore.password.encrypted", value: "{{ zookeeper.keyStorePasswordEncrypted }}" }
+      - { key: "ssl.quorum.keyStore.password", state: "absent" }
+      - { key: "ssl.quorum.trustStore.location", value: "{{ zookeeper.trustStorePath }}" }
+      - { key: "ssl.quorum.trustStore.password.encrypted", value: "{{ zookeeper.trustStorePasswordEncrypted }}" }
+      - { key: "ssl.quorum.trustStore.password", state: "absent" }
+      - { key: "ssl.quorum.hostnameVerification", value: "{{ zookeeper.ssl_quorum_hostnameVerification }}" }
+
+      - { key: "ssl.ciphersuites", value: "{{ zookeeper.ssl_ciphersuites }}" }
+      - { key: "ssl.keyStore.location", value: "{{ zookeeper.keyStorePath }}" }
+      - { key: "ssl.keyStore.password.encrypted", value: "{{ zookeeper.keyStorePasswordEncrypted }}" }
+      - { key: "ssl.keyStore.password", state: "absent" }
+      - { key: "ssl.trustStore.location", value: "{{ zookeeper.trustStorePath }}" }
+      - { key: "ssl.trustStore.password.encrypted", value: "{{ zookeeper.trustStorePasswordEncrypted }}" }
+      - { key: "ssl.trustStore.password", state: "absent" }
+      - { key: "ssl.hostnameVerification", value: "{{ zookeeper.ssl_hostnameVerification }}"}
+
+  - name: Change zookeeper.properties for SSL with AUTH
+    ini_file:
+      path: "{{ zookeeper.installdir }}/config/zookeeper.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value|default('') }}"
+      state: "{{ item.state|default('present') }}"
+    with_items:
+      - { key: "ssl.quorum.clientAuth", value: "{{ zookeeper.ssl_quorum_clientAuth }}"}
+      - { key: "ssl.enabledProtocols", value: "{{ zookeeper.ssl_enabledProtocols }}" }
+      - { key: "X509AuthenticationProvider.superUser", value: "User:{{ zookeeper.superUser | default(zk_dn.stdout) | regex_replace(', *', ',') }}" }
+      - { key: "authProvider.x509", value: "{{ zookeeper.authProvider_x509 }}" }
+      - { key: "ssl.authProvider", value: "{{ zookeeper.ssl_authProvider }}" }
+      - { key: "ssl.clientAuth", value: "{{ zookeeper.ssl_clientAuth }}" }
+    when: security | upper is search('WITH_AUTH')
+
+  - name: Change zookeeper.properties for SSL+PLAINTEXT
+    ini_file:
+      path: "{{ zookeeper.installdir }}/config/zookeeper.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value|default('') }}"
+      state: "{{ item.state|default('present') }}"
+    with_items:
+      - { key: "client.portUnification", value: "{{ zookeeper.plaintext_client_portUnification }}" }
+      - { key: "clientPort", value: "{{ zookeeper.port }}" }
+      - { key: "secureClientPort", state: "absent" }
+    when: ssl_and_plaintext|default(false)
+
+  - name: Create zookeeper-client.properties
+    ini_file:
+      path: "{{ zookeeper.installdir }}/config/zookeeper-client.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "zookeeper.ssl.client.enable", value: "{{ zookeeper.serverCnxnFactory }}" }
+      - { key: "zookeeper.clientCnxnSocket", value: "{{ zookeeper.clientCnxnSocket }}"  }
+      - { key: "zookeeper.authProvider.x509", value: "{{ zookeeper.authProvider_x509 }}" }
+      - { key: "zookeeper.ssl.authProvider", value: "{{ zookeeper.ssl_authProvider }}" }
+      - { key: "zookeeper.ssl.enabledProtocols", value: "{{ zookeeper.ssl_enabledProtocols }}" }
+      - { key: "zookeeper.ssl.crl", value: "false" }
+      - { key: "zookeeper.ssl.clientAuth", value: "{{ zookeeper.ssl_clientAuth }}" }
+      - { key: "zookeeper.security.encoding.key", value: "{{ zookeeper.installdir }}/config/encrypt.pass" }
+      - { key: "zookeeper.ssl.keystore.location", value: "{{ zookeeper.keyStorePath }}" }
+      - { key: "zookeeper.ssl.keystore.password.encrypted", value: "{{ zookeeper.keyStorePasswordEncrypted }}" }
+      - { key: "zookeeper.ssl.truststore.location", value: "{{ zookeeper.trustStorePath }}" }
+      - { key: "zookeeper.ssl.truststore.password.encrypted", value: "{{ zookeeper.trustStorePasswordEncrypted }}" }
+      - { key: "zookeeper.ssl.endpoint.identification.algorithm", value: "{{ zookeeper.zookeeper_ssl_endpoint_identification_algorithm }}" }
+      - { key: "zookeeper.security.encoding.class", value: "{{ zookeeper.security_encoding_class }}" }
+      - { key: "zookeeper.security.encoding.salt", value: "{{ zookeeper.security_encoding_salt }}" }
+
+  - name: Create file with key for password encrypt
+    copy:
+      dest: "{{ zookeeper.installdir }}/config/encrypt.pass"
+      content: "{{ encrypt_key }}"
+      mode: 0400
+
+  - name: Upload password-encrypt-cli
+    copy:
+      src: "/tmp/{{ password_encoder_cli_path }}"
+      dest: "{{ zookeeper.installdir }}/{{ password_encoder_cli_path }}"
+      #remote_src: yes
+  tags: install

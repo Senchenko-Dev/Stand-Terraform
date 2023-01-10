@@ -1,0 +1,50 @@
+---
+- name: "Get all branches {{ cert_branch }}"
+  shell: "git branch  -r | awk '{print$1}'"
+  register: git_branches
+  args:
+    chdir: "{{ tmp_repo }}"
+
+- set_fact:
+    origin: "origin/{{ cert_branch }}"
+
+- name: Create new branch 
+  shell: | 
+    git checkout -b "{{ cert_branch }}" master
+    git push origin "{{ cert_branch }}"
+  args:
+    chdir: "{{ tmp_repo }}"
+  # ignore_errors: true
+  register: new_branch
+  when: origin not in git_branches.stdout_lines
+
+- block:
+  - name: Generate config.cnf
+    template:
+      src: config.cnf.j2
+      dest: "{{ cert_path }}/config.cnf"
+
+  - name: Generate key
+    shell: openssl genrsa -out "{{ cert_path }}/{{ cert_name }}.key" 2048
+
+  - name: Generate csr
+    shell: openssl req -out "{{ cert_path }}/{{ cert_name }}.csr" -new -key "{{ cert_path }}/{{ cert_name }}.key" -config "{{ cert_path }}/config.cnf"
+
+  when: new_branch is defined
+
+- name: Git push
+  shell: |
+    git add *
+    git commit -m "add key, csr and config.cnf"
+    git push origin "{{ cert_branch }}"
+  args:
+    chdir: "{{ tmp_repo }}"
+  when: git_clone.rc == 0
+
+
+# Утановить факт generate true если в сертификаты все на месте
+# - name: Set flag generate == true 
+#   set_fact:
+    # generate: true
+
+ 

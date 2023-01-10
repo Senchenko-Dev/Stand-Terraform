@@ -1,0 +1,24 @@
+Defaults: elk !requiretty
+
+elk ALL=(ALL) NOPASSWD: /bin/systemctl start elasticsearch, /bin/systemctl start elasticsearch.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl stop elasticsearch, /bin/systemctl stop elasticsearch.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl restart elasticsearch, /bin/systemctl restart elasticsearch.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl enable elasticsearch, /bin/systemctl enable elasticsearch.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl disable elasticsearch, /bin/systemctl disable elasticsearch.service
+elk ALL=(ALL) NOPASSWD: NOEXEC: /bin/systemctl status elasticsearch, /bin/systemctl status elasticsearch.service
+
+elk ALL=(ALL) NOPASSWD: /bin/systemctl start logstash, /bin/systemctl start logstash.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl stop logstash, /bin/systemctl stop logstash.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl restart logstash, /bin/systemctl restart logstash.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl enable logstash, /bin/systemctl enable logstash.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl disable logstash, /bin/systemctl disable logstash.service
+elk ALL=(ALL) NOPASSWD: NOEXEC: /bin/systemctl status logstash, /bin/systemctl status logstash.service
+
+elk ALL=(ALL) NOPASSWD: /bin/systemctl start kibana, /bin/systemctl start kibana.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl stop kibana, /bin/systemctl stop kibana.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl restart kibana, /bin/systemctl restart kibana.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl enable kibana, /bin/systemctl enable kibana.service
+elk ALL=(ALL) NOPASSWD: /bin/systemctl disable kibana, /bin/systemctl disable kibana.service
+elk ALL=(ALL) NOPASSWD: NOEXEC: /bin/systemctl status kibana, /bin/systemctl status kibana.service
+
+elk ALL=(ALL) NOPASSWD: /bin/systemctl daemon-reload

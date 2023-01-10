@@ -1,0 +1,46 @@
+- block:
+  - name: Change server.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/etc/kafka/server.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "security.inter.broker.protocol", value: "SASL_PLAINTEXT"}
+      - { key: "listeners", value: "SASL_PLAINTEXT://{{ inventory_hostname | lower }}:{{ kafka.port }}"}
+      - { key: "sasl.kerberos.service.name", value: "kafka"}
+      - { key: "sasl.enabled.mechanisms", value: "GSSAPI"}
+      - { key: "sasl.mechanism.inter.broker.protocol", value: "GSSAPI"}
+      - { key: "authorizer.class.name", value: "kafka.security.auth.SimpleAclAuthorizer"}
+#      - { key: "zookeeper.set.acl", value: "false"} # false when zk_no_auth, true when zk_with_auth
+      - { key: "allow.everyone.if.no.acl.found", value: "false"}
+  - name: Change consumer.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/etc/kafka/consumer.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "security.protocol", value: "SASL_PLAINTEXT"}
+      - { key: "sasl.kerberos.service.name", value: "kafka"}
+  - name: Change producer.properties
+    ini_file:
+      path: "{{ kafka.installdir }}/etc/kafka/producer.properties"
+      section:
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+    with_items:
+      - { key: "security.protocol", value: "SASL_PLAINTEXT"}
+      - { key: "sasl.kerberos.service.name", value: "kafka"}
+  - name: Find *.jaas
+    find:
+      paths: "{{ kafka.installdir }}/etc/kafka/jaas/"
+      patterns: "*.jaas"
+    register: all_jaas
+  - name: Change *.jaas files
+    replace:
+      path: "{{ item.path }}"
+      regexp: '(principal=\".*?)\/.*@.*(\";$)'
+      replace: '\1/{{ inventory_hostname | lower }}@{{ realm }}\2'
+    with_items: "{{ all_jaas.files }}"
+  tags: install

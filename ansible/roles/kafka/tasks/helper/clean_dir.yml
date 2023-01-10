@@ -1,0 +1,26 @@
+- block:
+  - name: Check path {{ dir }}
+    stat:
+      path: "{{ dir }}"
+    register: path
+  - name: Create path {{ dir }}
+    file:
+      path: "{{ dir }}"
+      state: directory
+    when: not path.stat.exists
+  - block:
+    - name: Clean path {{ dir }}
+      shell: find -mindepth 1 -maxdepth 1 -printf "'./%f'\n" | xargs -r -n 100 rm -r
+      args:
+        chdir: "{{ dir }}"
+      when: path.stat.isdir or path.stat.islnk
+    - block:
+      - name: Remove path {{ dir }}
+        shell: rm -rf {{ dir }}
+      - name: Create path {{ dir }}
+        file:
+          path: "{{ dir }}"
+          state: directory
+      when: not path.stat.isdir and not path.stat.islnk
+    when: path.stat.exists
+  tags: always

@@ -110,7 +110,7 @@ resource "local_file" "awx-inventory" {
       playbook {
         file_path = "ansible/spo_install_playbook.yml"
       }
-      inventory_file = local_file.awx-inventory[0].filename
+      inventory_file = local_file.awx-inventory.filename
       extra_vars     = {
         spo_role_name : var.spo_role_name
         vault_file : var.vault_file

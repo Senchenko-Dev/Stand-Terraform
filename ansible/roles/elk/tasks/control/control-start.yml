@@ -1,0 +1,52 @@
+---
+- name: Start service elasticsearch
+  import_tasks: ../../handlers/start-elasticsearch.yml
+  when: unit in required_packages and unit == 'elasticsearch'
+
+- name: Start service kibana
+  import_tasks: ../../handlers/start-kibana.yml
+  when: unit in required_packages and unit == 'kibana'
+
+- name: Start service logstash
+  import_tasks: ../../handlers/start-logstash.yml
+  when: unit in required_packages and unit == 'logstash'
+
+# - name: Stop service elasticsearch
+#   import_tasks: ../../handlers/stop-elasticsearch.yml
+# - name: Stop service kibana
+#   import_tasks: ../../handlers/stop-kibana.yml
+# - name: Stop service logstash
+#   import_tasks: ../../handlers/stop-logstash.yml
+
+# - name: Restart service elasticsearch
+#   import_tasks: ../../handlers/restart-elasticsearch.yml
+# - name: Restart service kibana
+#   import_tasks: ../../handlers/restart-kibana.yml
+# - name: Restart service logstash
+#   import_tasks: ../../handlers/restart-logstash.yml
+
+
+# - name: Start services
+#   service:
+#     name: "{{ item.name }}"
+#     state: started
+#     enabled: True
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages and item.name == 'elasticsearch' and unit == 'elasticsearch'
+
+
+# - name: Start services
+#   service:
+#     name: "{{ item.name }}"
+#     state: started
+#     enabled: True
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages and item.name == 'kibana' and unit == 'kibana'
+    
+# - name: Start services
+#   service:
+#     name: "{{ item.name }}"
+#     state: started
+#     enabled: True
+#   with_items: "{{ os_conf_packages }}"
+#   when: item.name in required_packages and item.name == 'logstash' and unit == 'logstash'

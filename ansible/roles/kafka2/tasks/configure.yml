@@ -1,0 +1,30 @@
+---
+#  ├─set_zookeeper_props           # копирование конфигов и установка кластера или стандалон
+#  ├─set_zookeeper_jmx_props       # настройка jmx zookeeper
+#  ├─start_zookeeper_systemd       # установка systemd
+#  ├─set_kafka_props               # конфигрурация server.properties
+#  ├─set_kafka_jmx_props           # настройка jmx kafka
+#  ├─set_kafka_cert
+#
+
+- include_role:
+    name: ../kafka/roles/set_zookeeper_props
+
+- include_role:
+    name: ../kafka/roles/set_zookeeper_jmx_props
+
+- include_role:
+    name: ../kafka/roles/start_zookeeper_systemd
+
+- include_role:
+    name: ../kafka/roles/set_kafka_props
+
+- include_role:
+    name: ../kafka/roles/set_kafka_jmx_props
+
+- include_role:
+    name: ../kafka/roles/set_kafka_cert
+
+#- include_role:
+#    name: ../kafka/roles/
+

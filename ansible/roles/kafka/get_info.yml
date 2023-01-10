@@ -1,0 +1,8 @@
+- hosts: all
+  pre_tasks:
+    - import_tasks: "{{ role_path }}/tasks/helper/get_default_vars.yml"
+      tags: always
+
+- hosts: all
+  roles:
+    - get_info
