@@ -28,14 +28,9 @@ variable "force_ansible_run" {
   default = false
   description = "Для принудительного запуска ансибл изменить значение"
 }
-variable "spo_role_name" {
-  default = "nginx_iag"
-}
 variable "nginx_iag_url" {
 //  default = ""
 }
-
-variable "vault_file" {}
 
 variable "awx_props" {
   default = {}
