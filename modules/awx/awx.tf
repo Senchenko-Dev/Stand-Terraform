@@ -75,7 +75,7 @@ resource "vcd_vm" "VM-awx" {
 
 // создание инвентори для одной группы (модуля)
 resource "local_file" "awx-inventory" {
-  count = "${ var.vm_count != 0 ? 1 : 0 }"
+  # count = "${ var.vm_count != 0 ? 1 : 0 }"
   filename = "ansible/inventory/awx_${var.inventory_group_name}.ini"
   content  = templatefile("tf_templates/awx-inventory.tpl",
     {
@@ -110,7 +110,7 @@ resource "local_file" "awx-inventory" {
       playbook {
         file_path = "ansible/spo_install_playbook.yml"
       }
-      inventory_file = local_file.awx-inventory.filename
+      inventory_file = local_file.awx-inventory[0].filename
       extra_vars     = {
         spo_role_name : var.spo_role_name
         vault_file : var.vault_file
