@@ -75,7 +75,7 @@ resource "vcd_vm" "VM-awx" {
 
 // создание инвентори для одной группы (модуля)
 resource "local_file" "awx-inventory" {
-  count = "${ var.vm_count != 0 ? 1 : 0 }"
+  # count = "${ var.vm_count != 0 ? 1 : 0 }"
   filename = "ansible/inventory/awx_${var.inventory_group_name}.ini"
   content  = templatefile("tf_templates/awx-inventory.tpl",
     {
