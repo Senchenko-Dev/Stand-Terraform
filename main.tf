@@ -1,6 +1,5 @@
 locals {
 
-
   stand_name = "" # TODO Имя стенда
   network_name = "main_VDC02"
 
