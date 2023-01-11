@@ -43,5 +43,5 @@ variable "awx_props" {
 
 variable "spo_role_name" {
   description = "Переменная для использования альтернативной роли (например, для тестирования обновленной версии.)"
-  default = "kafka"
+  # default = ""
 }
