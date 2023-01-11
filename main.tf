@@ -1,6 +1,6 @@
 locals {
 
-  stand_name = "" # TODO Имя стенда
+  stand_name = "silim-premerge" # TODO Имя стенда
   network_name = "main_VDC02"
 
   vault_file = "secrets.yml"
