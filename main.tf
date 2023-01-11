@@ -1,6 +1,5 @@
 locals {
 
-
   stand_name = "silim-premerge" # TODO Имя стенда
   network_name = "main_VDC02"
 
