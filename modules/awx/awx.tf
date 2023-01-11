@@ -99,7 +99,7 @@ resource "local_file" "awx-inventory" {
       playbook {
         file_path = "ansible/prepare_host_playbook.yml"
       }
-      inventory_file = local_file.awx-inventory[0].filename
+      inventory_file = local_file.awx-inventory.filename
       extra_vars     = {
         ssh_keys_list : jsonencode(var.vm_props.ssh_keys_list)
         disks = jsonencode(var.vm_disk_data)
