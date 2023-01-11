@@ -103,7 +103,7 @@ locals {
 module "NginxG1" {
   source = "./modules/spo_nginx"
 # VM properties
-  vm_count = 0
+  vm_count = 1
   memory = 512
   cpu = 1
   vm_disk_data = [
@@ -122,7 +122,7 @@ module "NginxG1" {
 
 module "Nginx_iag" {
   source = "./modules/spo_nginx_iag"
-  count = 0
+  count = 1
   ## VM properties
   vm_props = local.vm_props_default
 
@@ -133,7 +133,7 @@ module "Nginx_iag" {
 }
 
 
- module "KAFKA_standalone1" {
+ module "KAFKA_standalone2" {
    # depends_on = [module.AWX]
    count = 1
    # TF module properties
@@ -153,7 +153,7 @@ module "Nginx_iag" {
    kafka_url = "http://10.42.4.125/mirror/docker/images/kafka/KFK-6.zip"
 
    # VM properties
-   vm_count = 3
+   vm_count = 1
    memory = 4024 #16*1024
    cpu = 4
 #   vm_disk_data = [
