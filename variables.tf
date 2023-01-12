@@ -1,16 +1,16 @@
 // Статические
 // Динамические
-variable "scm_username" {}
+# variable "scm_username" {}
 
-variable "scm_password" {}
+# variable "scm_password" {}
 
-variable "scm_url" {
+# variable "scm_url" {
 //default = "ssh://git@base.sw.sbc.space:7999/corepltfrm/spo_terraform.git"
-}
+# }
 
-variable "scm_branch" {
+# variable "scm_branch" {
 //  default = "master"
-}
+# }
 
 //variable "nexususer" {
 //    description = "Имя пользователя для аутентификации при скачивании дистрибутивов"

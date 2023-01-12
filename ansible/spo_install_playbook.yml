@@ -7,9 +7,16 @@
   tasks:
 
     - debug:
-        var: "{{ vault_file }}"
+        var: vault_file 
 
-    - name: Import secrets
+    - shell: ls -la "{{ vault_file }}"
+      delegate_to: localhost
+      register: ll
+
+    - debug:
+        var: ll.stdout_lines
+
+    - name: "{{ spo_role_name | upper }} Import secrets" 
       include_vars: "{{ vault_file }}"
       tags: always
       delegate_to: localhost
@@ -22,6 +29,7 @@
 
     - import_role:
         name: "{{ spo_role_name }}"
+      become: yes
 
     - name: Copy additional files
       copy:

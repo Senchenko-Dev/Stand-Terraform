@@ -46,9 +46,9 @@ locals {
     vault_file = local.vault_file
 #    awx_login = local.secrets.awx.awx_login # "admin"
 #    awx_password = local.secrets.awx.awx_password
-    scm_cred_name = "${local.stand_name} SCM Credential"
-    scm_username = var.scm_username
-    scm_password = var.scm_password
+    # scm_cred_name = "${local.stand_name} SCM Credential"
+    # scm_username = var.scm_username
+    # scm_password = var.scm_password
 #    machine_cred_name = "${local.stand_name} Machine Credential"
     machine_cred_username = "ansible"
 #    machine_cred_ssh_key_data = local.secrets.awx.machine_cred_ssh_key_data
@@ -58,8 +58,8 @@ locals {
 
     stand_admin_email = "{{ '' | default('email@default.com', true) }}"
     org_name = local.stand_name
-    scm_url = var.scm_url
-    scm_branch = var.scm_branch
+    # scm_url = var.scm_url
+    # scm_branch = var.scm_branch
   }
 }
 
@@ -116,7 +116,7 @@ module "NginxG1" {
 # Ansible properties
   force_ansible_run = "0"
   inventory_group_name = "nginx_ssl" // для связи с group_vars/group_name.yml
-  spo_role_name = "spo_nginx"
+  spo_role_name = "nginx"
   vault_file = local.vault_file
 }
 
