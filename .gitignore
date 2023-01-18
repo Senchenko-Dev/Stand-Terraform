@@ -4,10 +4,10 @@
 *.swo
 ansible/vault_password.txt
 terraform.tfstate.d
-start.sh
 ansible/oc_kubeconfig
 ansible/secrets.yml
 .terraform.lock.hcl
 .terraform
 ansible/project_vars/*
 ansible/inventory/*
+scripts/

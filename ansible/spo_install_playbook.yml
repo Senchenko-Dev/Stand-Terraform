@@ -40,6 +40,7 @@
         group: "{{item.group }}"
       loop: "{{ list_maps_custom_files | default([]) }}"
       notify: restart_service
+      become: yes
 
     - name: Copy additional templated files
       template:
@@ -51,6 +52,7 @@
         group: "{{ item.group }}"
       loop: "{{ list_maps_custom_templates | default([]) }}"
       notify: restart_service
+      become: yes
 
     - name: Execute destination file if requested
       shell: "{{item.dest}}"
@@ -58,6 +60,7 @@
       when:
         - item.execute is defined
         - item.execute|bool
+      become: yes
 
 
   # post_tasks:
@@ -77,6 +80,7 @@
       when:
         - item.execute is defined
         - item.execute|bool
+      become: yes
 
 
 

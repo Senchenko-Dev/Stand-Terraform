@@ -1,9 +1,0 @@
-- name: service_start kafka
-  service:
-    name: kafka
-    state: started
-
-- name: service_start zookeeper
-  service:
-    name: zookeeper
-    state: started

@@ -46,9 +46,9 @@ locals {
     vault_file = local.vault_file
 #    awx_login = local.secrets.awx.awx_login # "admin"
 #    awx_password = local.secrets.awx.awx_password
-    # scm_cred_name = "${local.stand_name} SCM Credential"
-    # scm_username = var.scm_username
-    # scm_password = var.scm_password
+    scm_cred_name = "${local.stand_name} SCM Credential"
+    scm_username = var.scm_username
+    scm_password = var.scm_password
 #    machine_cred_name = "${local.stand_name} Machine Credential"
     machine_cred_username = "ansible"
 #    machine_cred_ssh_key_data = local.secrets.awx.machine_cred_ssh_key_data
@@ -58,10 +58,11 @@ locals {
 
     stand_admin_email = "{{ '' | default('email@default.com', true) }}"
     org_name = local.stand_name
-    # scm_url = var.scm_url
-    # scm_branch = var.scm_branch
+    scm_url = var.scm_url
+    scm_branch = var.scm_branch
   }
 }
+
 
 module "AWX" {
 //  count = 0
@@ -98,12 +99,12 @@ locals {
   )
 }
 
-
 # NGINX
 module "NginxG1" {
   source = "./modules/spo_nginx"
 # VM properties
-  vm_count = 1
+  vm_count = 0
+  count = 0
   memory = 512
   cpu = 1
   vm_disk_data = [
@@ -122,7 +123,8 @@ module "NginxG1" {
 
 module "Nginx_iag" {
   source = "./modules/spo_nginx_iag"
-  count = 1
+  count = 0
+  vm_count = 0
   ## VM properties
   vm_props = local.vm_props_default
 
@@ -136,7 +138,8 @@ module "Nginx_iag" {
 
  module "KAFKA_standalone2" {
    # depends_on = [module.AWX]
-   count = 1
+   count = 0
+   vm_count = 0
    # TF module properties
    source = "./modules/kafka_corex"
 
@@ -154,7 +157,6 @@ module "Nginx_iag" {
    kafka_url = "http://10.42.4.125/mirror/docker/images/kafka/KFK-6.zip"
 
    # VM properties
-   vm_count = 1
    memory = 4024 #16*1024
    cpu = 4
 #   vm_disk_data = [
@@ -262,6 +264,7 @@ module "ELK_standalone1" {
 
 
   count = 0
+  vm_count = 0
   # TF module properties
   source = "./modules/elk"
 
@@ -270,7 +273,6 @@ module "ELK_standalone1" {
   force_ansible_run = ""
 
   # VM properties
-  vm_count = 1
   memory = 6 * 1024 #16*1024
   cpu = 6
 

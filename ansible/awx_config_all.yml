@@ -25,6 +25,10 @@
       delay: 10
       tags: always
 
+    - debug:
+        var: scm_branch
+      tags: always
+
     - name: Настройка AWX
       import_role:
         name: awx-config

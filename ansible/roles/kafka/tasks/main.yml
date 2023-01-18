@@ -13,16 +13,16 @@
   become: yes
 
     
-- import_tasks: zookeeper/tasks/main.yml
+- import_tasks: "{{ role_path }}/tasks/zookeeper/tasks/main.yml"
   become: yes
   tags: [install]
-- import_tasks: kafka/tasks/main.yml
+- import_tasks: "{{ role_path }}/tasks/kafka/tasks/main.yml"
   become: yes
   tags: [install]
-- import_tasks: kafka_acls/tasks/main.yml
+- import_tasks: "{{ role_path }}/tasks/kafka_acls/tasks/main.yml"
   become: yes
   tags: [install]
-- import_tasks: kafka_topics/tasks/main.yml
+- import_tasks: "{{ role_path }}/tasks/kafka_topics/tasks/main.yml"
   become: yes
   tags: [install]
 
