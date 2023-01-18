@@ -230,6 +230,7 @@ resource "local_file" "pangolin-inventory" {
         download_url: var.pangolin_url # filename
         download_dest: "${abspath(path.root)}/ansible/ext-pangolin/distr/${basename(var.pangolin_url)}" # filename
         unpack_dest: "${abspath(path.root)}/ansible/ext-pangolin/"
+        unpack_exclude: jsonencode(var.unpack_exclude)
         //       unarchive:
         //        src: "{{ download_dest }}"
         //        dest: "{{ unpack_dest }}"
@@ -275,4 +276,15 @@ resource "local_file" "pangolin-inventory" {
       insecure_no_strict_host_key_checking = true
     }
   }
+}
+
+
+resource "local_file" "efs-inventory" {
+  depends_on = [local_file.pangolin-inventory]
+  content = templatefile("tf_templates/pangolin/efs_inv_pg.ini",
+  {
+    inventory_group_name = var.inventory_group_name
+    vm_instances_postgres_nodes = vcd_vm.Pangolin-postgres,
+  })
+  filename = "ansible/inventory/efs/efs_inv_${var.inventory_group_name}.ini"
 }

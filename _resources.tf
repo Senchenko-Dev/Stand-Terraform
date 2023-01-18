@@ -34,12 +34,6 @@ locals {
           userName = "sentsov.a.a"
         },
         {
-          roleType = "ClusterRole"
-          roleName = "admin"
-          userKind = "User"
-          userName = "aigorebelyaev"
-        },
-        {
           roleType  = "ClusterRole"
           roleName  = local.devopsSaRole
           userKind  = "ServiceAccount"
@@ -88,19 +82,19 @@ locals {
 # Рабочие проекты
 locals {
   empty = {}
-  group1 = {
+  common_projects = {
     diOpenshiftSessionSector = {
       projects = {
-        dyncontent  = {
-          fpi_name = "dyncontent"
+        coreplatform  = {
+          fpi_name = "coreplatform"
           values   = {
             quota    = {
-              cpu = 2
-              mem = 4
+              cpu = 20
+              mem = 30
             }
             labels     = {
-              id_fp = "UFTM",
-              fpname = "dyncontent",
+              id_fp = "coreplatform",
+              fpname = "coreplatform",
               segment = "${local.globals.solution}",
               stand = "${local.globals.stand}"
             }
@@ -114,6 +108,53 @@ locals {
             ]
           }
         },
+        sentsov  = {
+          fpi_name = "sentsov"
+          values   = {
+            quota    = {
+              cpu = 30
+              mem = 40
+            }
+            labels     = {
+              id_fp = "sentsov",
+              fpname = "sentsov",
+              segment = "${local.globals.solution}",
+              stand = "${local.globals.stand}"
+            }
+            bindings = [
+              {
+                roleType = "ClusterRole"
+                roleName = "view"
+                userKind = "Group"
+                userName = "ose-trb-db"
+              }
+            ]
+          }
+        },
+//
+//        entrance  = {
+//          fpi_name = "entrance"
+//          values   = {
+//            quota    = {
+//              cpu = 2
+//              mem = 4
+//            }
+//            labels     = {
+//              id_fp = "entrance",
+//              fpname = "entrance",
+//              segment = "${local.globals.solution}",
+//              stand = "${local.globals.stand}"
+//            }
+//            bindings = [
+//              {
+//                roleType = "ClusterRole"
+//                roleName = "view"
+//                userKind = "Group"
+//                userName = "ose-trb-db"
+//              }
+//            ]
+//          }
+//        },
       }
       vars = {
         sector = "ses"
@@ -138,7 +179,7 @@ locals {
 
 module "diOpenshiftServiceCore"  {
   source = "./modules/ansible_project_init"
-  //  count = 0
+//  for_each = {}
   for_each = local.diOpenshiftServiceCore_projects
   managment_system_type = var.managment_system_type
   project_name = each.value.oseProjectName
@@ -154,8 +195,8 @@ module "diOpenshiftServiceCore"  {
 module "diOpenshiftgroup1" {
   source = "./modules/ansible_group_project_init"
   depends_on = [module.diOpenshiftServiceCore]
-//  count = 0
-  for_each = local.group1
+//    for_each = {}
+  for_each = local.common_projects
   managment_system_type = var.managment_system_type
 #  awx_props = local.awx_props
   kubeconfig = local.oc_kubeconfig

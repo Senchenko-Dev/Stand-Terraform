@@ -72,6 +72,9 @@ variable "installation_subtype" {
 variable "pangolin_url" {
   default = ""
 } 
+variable "unpack_exclude" {
+  default = []
+}
 
 variable "vault_file" {
   description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"

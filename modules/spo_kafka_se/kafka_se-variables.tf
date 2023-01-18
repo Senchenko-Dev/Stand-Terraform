@@ -13,13 +13,13 @@ variable "vm_disk_data" {
 variable "memory" {
   description = "RAM of Virtual Machine"
   type = number
-  default = 1024
+  default = 8*1024
 }
 
 variable "cpu" {
   description = "CPU of Virtual Machine"
   type = number
-  default = 1
+  default = 4
 }
 
 //variable "nexus_cred" {}
@@ -35,7 +35,6 @@ variable "force_ansible_run" {
 }
 
 locals {
-#  playbook_path = "${abspath(path.root)}/ansible/ext-kafka/kafka-ansible-deploy-3.0.3"
   playbook_path = "${abspath(path.root)}/ansible/roles/kafka/"
 }
 
@@ -51,8 +50,9 @@ variable "kafka_url" {
   default = ""
 }
 
-variable "vault_file" {}
-
+variable "vault_file" {
+  description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
+}
 variable "awx_props" {
   default = {}
 }

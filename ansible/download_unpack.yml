@@ -9,11 +9,9 @@
 #      tags: always
     #      no_log: yes todo
 
-    - shell: id jenkins 2&> /dev/null; if [ $? == 1 ]; then id -u && id -g ; fi
+    - shell: id -u && id -g ; fi
       register: user_uid_gid
 
-    - debug:
-        var: user_uid_gid
     - set_fact:
         user: user_uid_gid.stdout_lines
 
@@ -45,6 +43,7 @@
       unarchive:
         src: "{{ download_dest }}"
         dest: "{{ unpack_dest }}"
+        exclude: "{{ unpack_exclude }}"
       when:
         - unpack_dest is defined
 

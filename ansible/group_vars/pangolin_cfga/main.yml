@@ -1,0 +1,23 @@
+### PANGOLIN ###
+is_recovery_test_mode: false
+pgse_clean_all: true
+#custom_config: inventory/group_vars/Pangolin_alone-1/custom_config.yml
+
+#default_db
+tablespace_name: "{{ 'cfga_bf1' | default('tbl_t', true) }}"
+tablespace_location: "{{ '' | default('/pgdata/' + pg_major_version + '/tablespaces', true) }}"
+db_name: "{{ 'cfga_bf1' | default('first_db', true) }}"
+schema_name: "{{ 'cfga_bf1' | default('sch1', true) }}"
+sec_officer: "{{ '' | default('17644673', true) }}" #strictly 1 login
+support: "{{ ['sentsovaa'] | default([13289436, 13289437], true) }}" #list of logins
+as_admins: "{{ ['sentsovaa', '14540224'] | default(['12345678'], true) }}" #list of logins
+as_TUZ: "{{ ['sa-r4c-devops-spo', 'cfga_bf1'] | default(['test_tuz', 'test_tuz_devops'], true) }}" #list of logins
+control_name: "{{ '' | default('RLM', true) }}"
+
+#PGDATA: "{{ '' | default('/pgdata/' + pg_major_version + '/data', true) }}"
+#PGLOGS: /pgerrorlogs/{{ ansible_hostname }}
+#PGUSERHOME: /home/postgres
+#PGHOME: /usr/pgsql-se-{{ pg_major_version }}
+
+list_maps_custom_files:
+  - { src:  "additional/pg_create_user.sh", dest : "/tmp/pg_create_user.sh", mode : "0777", owner: "postgres", group: "postgres", execute: "true" }

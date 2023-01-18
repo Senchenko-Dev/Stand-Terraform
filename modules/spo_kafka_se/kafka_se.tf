@@ -152,13 +152,11 @@ resource "local_file" "kafka-inventory" {
     // Установка СПО
     plays {
       playbook {
-#        file_path = "${abspath(path.root)}/ansible/kafka.yml"
         file_path = "ansible/spo_install_playbook.yml"
       }
       inventory_file = local_file.kafka-inventory.filename
       extra_vars = {
         vault_file: var.vault_file
-#        playbook: "${local.playbook_path}/kafka.yml"
         spo_role_name: var.spo_role_name
       }
       verbose = true
@@ -192,4 +190,14 @@ module "config_awx_ansible" {
   awx_props = var.awx_props
   vault_file = var.vault_file
   hosts = vcd_vm.kafka
+}
+
+resource "local_file" "efs-inventory" {
+  depends_on = [local_file.kafka-inventory]
+  content = templatefile("tf_templates/kafka_se/efs_inv_kafka.ini",
+  {
+    vm_instances_kafka_nodes = vcd_vm.kafka,
+    inventory_group_name = var.inventory_group_name
+  })
+  filename = "ansible/inventory/efs/efs_inv_${var.inventory_group_name}.ini"
 }

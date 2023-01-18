@@ -1,7 +1,0 @@
----
-- name: restart_service
-  service:
-    name: kafka.service
-    state: restarted
-  tags: always
-
