@@ -59,11 +59,11 @@ locals {
 
 
 module "AWX" {
-  count = 0
+  # count = 1
+  # vm_count = 0
   # TF path to the module
   source = "./modules/awx"
   # VM settings
-  vm_count = 1
 //  cpu = 6
 //  memory = 12288
   # VM properties
@@ -75,17 +75,15 @@ module "AWX" {
 }
 
 locals {
-  awx_props = {}  #  При использовании внешнего AWX прописать хост и урл в явном виде.
-/*
-  awx_props = merge(local.install_awx_props,
-    { #  При использовании внешнего AWX прописать хост и урл в явном виде.
-      awx_host = module.AWX.awx_host_ip
-      awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
-      awx_k8s_sa_name = local.globals.devopsSaName
-      awx_k8s_sa_project = local.globals.devopsProject
-    }
-  )
-  */
+  //  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
+   awx_props = merge(local.install_awx_props,
+        { 
+          awx_host = module.AWX.awx_host_ip
+          awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
+          awx_k8s_sa_name = local.globals.devopsSaName
+          awx_k8s_sa_project = local.globals.devopsProject
+         }
+    )
 }
 
 # NGINX
@@ -158,42 +156,37 @@ module "Nginx_iag" {
    awx_props = local.awx_props
 
  }
-
+ 
+ 
  module "KAFKA_SSL1" {
    count = 0
+   vm_count = 0
    # TF module properties
-   source = "./modules/spo_pangolin"
+   source = "./modules/spo_kafka_se"
 
    # Ansible properties
-   inventory_group_name = "pangolin_cfga" # заполнить group_vars
-   force_ansible_run = "1"
+   inventory_group_name = "KafkaSSL"
+ //  spo_role_name = ""
+   force_ansible_run = ""
+   #000_${timestamp()}" #  "_${timestamp()}"
 
-   # Download and unpack
-   pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"
-   unpack_exclude = ["installer"]
-   # Install
-   installation_type = "standalone"
-   installation_subtype = "standalone-postgresql-only"
+   # Download
+   # kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
+
    # VM properties
-   vm_count = 0
    memory = 2*1024
-   # только для postgres nodes
    cpu = 2
-   memory = 3048 #8*1024
-   vm_pg_disk_data = [
-     { size : "200G", mnt_dir : "/pgdata" },  # только для postgres nodes
+   vm_disk_data = [
+ //    { size: "350G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
    ]
-
- //  vm_etcd_disk_data = [
- //    { size : "2G", mnt_dir : local.pgdata_dir },  # только для postgres nodes
- //  ]
-
-   vm_props = local.vm_props_default
    vault_file = local.vault_file
+   vm_props = local.vm_props_default
  }
-#
+  
+ 
+ #
 module "PGSE_standalone_test" {
-//   count = 0
+   count = 1
    # TF module properties
    source = "./modules/spo_pangolin"
 
@@ -224,45 +217,44 @@ module "PGSE_standalone_test" {
  }
 #
 
-module "CORAX_Kafka1" {
-  count = 0
-  source = "./modules/spo_kafka_se"
+# module "CORAX_Kafka1" {
+#   count = 0
+#   source = "./modules/spo_kafka_se"
 
-  kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000065_kfka/KFK/6.272.0-11/KFK-6.272.0-11-distrib.zip"
+#   kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000065_kfka/KFK/6.272.0-11/KFK-6.272.0-11-distrib.zip"
 
-  inventory_group_name = "global_kafka"
-  vm_count = 1
-  memory = 12*1024
-  cpu = 8
-  vm_props = local.vm_props_default
-  vault_file = local.vault_file
-//  spo_role_name = "corax"
-}
+#   inventory_group_name = "global_kafka"
+#   vm_count = 1
+#   memory = 12*1024
+#   cpu = 8
+#   vm_props = local.vm_props_default
+#   vault_file = local.vault_file
+# //  spo_role_name = "corax"
+# }
 
-module "Kafka303" {
-//  count = 0
+# module "Kafka303" {
+#   count = 0
+#   vm_count = 0
 
-  # TF module properties
-  source = "./modules/spo_kafka_se"
+#   # TF module properties
+#   source = "./modules/spo_kafka_se"
 
-  # Ansible properties
-  inventory_group_name = "Kafka1"
-  force_ansible_run = ""
+#   # Ansible properties
+#   inventory_group_name = "Kafka1"
+#   force_ansible_run = ""
 
-  kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
+#   kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
 
-  # VM properties
-  vm_count = 1
-  memory = 8*1024
-  cpu = 4
-  vm_disk_data = [
-    {size: "35G", mnt_dir: "/KAFKA", owner: "kafka", group: "kafka", mode: "0755"}
-  ]
+#   # VM properties
+#   memory = 8*1024
+#   cpu = 4
+#   vm_disk_data = [
+#     {size: "35G", mnt_dir: "/KAFKA", owner: "kafka", group: "kafka", mode: "0755"}
+#   ]
 
-  vm_props = local.vm_props_default
-  vault_file = local.vault_file
-}
-*/
+#   vm_props = local.vm_props_default
+#   vault_file = local.vault_file
+# }
 
 module "ELK_standalone1" {
 

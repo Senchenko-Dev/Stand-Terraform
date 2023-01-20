@@ -33,10 +33,9 @@ variable "force_ansible_run" {
   description = "Для принудительного запуска ансибл изменить значение"
 }
 
-locals {
-#  playbook_path = "${abspath(path.root)}/ansible/ext-kafka/kafka-ansible-deploy-3.0.3"
-  playbook_path = "${abspath(path.root)}/ansible/rolelkk/"
-}
+# locals {
+#   playbook_path = "${abspath(path.root)}/ansible/roles/"
+# }
 
 variable "force_reinstall" {
   default = false

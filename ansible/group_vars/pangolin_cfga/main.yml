@@ -14,10 +14,11 @@ as_admins: "{{ ['sentsovaa', '14540224'] | default(['12345678'], true) }}" #list
 as_TUZ: "{{ ['sa-r4c-devops-spo', 'cfga_bf1'] | default(['test_tuz', 'test_tuz_devops'], true) }}" #list of logins
 control_name: "{{ '' | default('RLM', true) }}"
 
-#PGDATA: "{{ '' | default('/pgdata/' + pg_major_version + '/data', true) }}"
-#PGLOGS: /pgerrorlogs/{{ ansible_hostname }}
-#PGUSERHOME: /home/postgres
-#PGHOME: /usr/pgsql-se-{{ pg_major_version }}
+PGDATA: "{{ '' | default('/pgdata/' + pg_major_version + '/data', true) }}"
+PGLOGS: /pgerrorlogs/{{ ansible_hostname }}
+PGUSERHOME: /home/postgres
+PGHOME: /usr/pgsql-se-{{ pg_major_version }}
+PGBACKUP: /home/postgres_backup
 
 list_maps_custom_files:
   - { src:  "additional/pg_create_user.sh", dest : "/tmp/pg_create_user.sh", mode : "0777", owner: "postgres", group: "postgres", execute: "true" }

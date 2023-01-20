@@ -77,11 +77,11 @@ resource "null_resource" "copy_group_vars" {
   triggers = {
     always = timestamp(),
   }
-  provisioner "local-exec" {
-    interpreter = ["bash", "-c"]
-    //    command = "cp -rf ${abspath(path.root)}/inventory/group_vars ${abspath(path.root)}/inventory/"
-    command = "cp -rf ${abspath(path.root)}/ansible/group_vars ${local.playbook_path}/"
-  }
+  # provisioner "local-exec" {
+  #   interpreter = ["bash", "-c"]
+  #   //    command = "cp -rf ${abspath(path.root)}/inventory/group_vars ${abspath(path.root)}/inventory/"
+  #   command = "cp -rf ${abspath(path.root)}/ansible/group_vars ${local.playbook_path}/"
+  # }
 }
 
 // создание инвентори для одной группы (модуля)

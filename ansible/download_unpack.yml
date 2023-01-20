@@ -9,7 +9,7 @@
 #      tags: always
     #      no_log: yes todo
 
-    - shell: id -u && id -g ; fi
+    - shell: id -u && id -g 
       register: user_uid_gid
 
     - set_fact:

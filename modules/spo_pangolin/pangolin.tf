@@ -242,7 +242,8 @@ resource "local_file" "pangolin-inventory" {
     // Установка СПО
     plays {
       playbook {
-        file_path = "${abspath(path.root)}/ansible/pangolin.yml"
+        # file_path = "${abspath(path.root)}/ansible/pangolin.yml"
+        file_path = "${abspath(path.root)}/ansible/ext-pangolin/installer/playbook.yaml"
 //        tags = []
         tags = ["always", var.installation_subtype]
       }

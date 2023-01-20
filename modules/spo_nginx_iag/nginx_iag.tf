@@ -126,12 +126,13 @@ resource "local_file" "nginx_iag-inventory" {
       playbook {
         file_path = "ansible/spo_install_playbook.yml"
       }
-      inventory_file = local_file.nginx_iag-inventory.filename
       extra_vars = {
         download_url: var.nginx_iag_url
         spo_role_name: var.spo_role_name
         vault_file: var.vault_file
       }
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
+      inventory_file = local_file.nginx_iag-inventory.filename
     }
 
     ansible_ssh_settings {

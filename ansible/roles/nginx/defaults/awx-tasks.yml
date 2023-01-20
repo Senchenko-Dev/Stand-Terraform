@@ -1,0 +1,15 @@
+---
+awx_tags:
+  - tag: get-logs
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+        awx_host: "{{ awx_host }}"
+        pod_nginx_port: "{{ pod_nginx_port }}"
+  - tag: cleanup-logs
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+  - tag: health-check
+    vars: 
+        spo_role_name: "{{ spo_role_name }}"
+
+
