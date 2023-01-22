@@ -117,22 +117,6 @@ resource "local_file" "kafka-inventory" {
       inventory_file = local_file.kafka-inventory.filename
     }
 
-#    // Настройка install-deps
-#    plays {
-#      playbook {
-##        file_path = "${abspath(path.root)}/ansible/kafka.yml"
-#        file_path = "ansible/spo_install_playbook.yml"
-#      }
-#      extra_vars = {
-#        vault_file: var.vault_file
-#        playbook: "${local.playbook_path}/install_deps.yaml"
-##        playbook: "${abspath(path.root)}/ansible/kafka/install_deps.yaml"
-#      }
-#      inventory_file = local_file.kafka-inventory.filename
-#      become = true
-#      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
-#
-#    }
 
     // Скачивание дистрибутива СПО
     plays {

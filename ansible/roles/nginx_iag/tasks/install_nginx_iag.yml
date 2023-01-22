@@ -1,4 +1,20 @@
 ---
+# TODO пакеты нужны?
+- name: Install libunwind
+  yum:
+    name: libunwind
+    state: latest
+
+- name: Install ldconfig
+  yum:
+    name: ldconfig
+    state: latest
+
+- name: Install Unzip
+  yum:
+    name: unzip
+    state: latest
+
 - name: Create Group
   group:
     name: "{{ nginx_iag_group }}"
@@ -11,69 +27,38 @@
     shell: /bin/bash
     group: "{{ nginx_iag_group }}"
 
-- name: Create Folder nginx-sgw
+- name: Create Folder nginx-iag
   file:
-    path: /opt/nginx-sgw
+    path: /opt/nginx-iag
     state: directory
     owner: "{{ nginx_iag_user }}"
     group: "{{ nginx_iag_group }}"
     mode: '0644'
 
-- name: Create Folder nginx-sgw-install
+- name: Create Folder nginx-iag-install
   file:
-    path: /tmp/nginx-sgw-install
+    path: /tmp/nginx-iag-install
     state: directory
-
-#- name: Download distrib
-#  get_url:
-#    url: "{{ download_url }}"
-#    dest: /tmp
-#    validate_certs: no
-#    username: "{{ nexus_user }}"
-#    password: "{{ nexus_pass }}"
-#    mode: '0755'
-
-#- name: Copy to host
-#  copy:
-#    src: "{{ download_url | basename }}"
-#    dest: /tmp
-
-#- find:
-#    paths: /tmp
-#    patterns: '*-distrib.zip'
-#  register: found
-
-#- debug:
-#    msg: "{{found.files.0.path}}"
-- yum:   # todo убрать в install deps
-    name: "{{item}}"
-    state: present
-  loop:
-#    - zipinfo
-    - unzip
 
 - name: unarchive
   unarchive:
     src: "{{ download_url | basename }}"
-    dest: /tmp/nginx-sgw-install
-#    remote_src: yes
+    dest: /tmp/nginx-iag-install
 
-
-
-- name: Unarchive nginx-sgw.tar.gz
+- name: Unarchive nginx-iag.tar.gz
   unarchive:
-    src: /tmp/nginx-sgw-install/package/tar/nginx-iag.tar.gz
-    dest: /tmp/nginx-sgw-install
+    src: /tmp/nginx-iag-install/package/tar/nginx-iag.tar.gz
+    dest: /tmp/nginx-iag-install
     remote_src: yes
 
 - name: Change install dir
   lineinfile:
-    dest: /tmp/nginx-sgw-install/install.options
+    dest: /tmp/nginx-iag-install/install.options
     regexp: '^NGINXDIR'
-    line: 'NGINXDIR="/opt/nginx-sgw"'
+    line: 'NGINXDIR="/opt/nginx-iag"'
 
 - name: Install.sh nginx-iag
   shell: ./install.sh
   args:
-    chdir: /tmp/nginx-sgw-install
+    chdir: /tmp/nginx-iag-install
 

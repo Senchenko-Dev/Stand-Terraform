@@ -18,7 +18,7 @@ variable "cpu" {
 }
 
 variable "inventory_group_name" {
-  description = "Имя группы в инвентаре Ansible"
+  description = "inventory_group_name"
   type = string
 }
 variable "vault_file" {
@@ -28,15 +28,9 @@ variable "force_ansible_run" {
   default = false
   description = "Для принудительного запуска ансибл изменить значение"
 }
+variable "spo_role_name" {
+  default = "nginx_iag"
+}
 variable "nginx_iag_url" {
 //  default = ""
-}
-
-variable "awx_props" {
-  default = {}
-}
-
-variable "spo_role_name" {
-  description = "Переменная для использования альтернативной роли (например, для тестирования обновленной версии.)"
-  # default = ""
 }

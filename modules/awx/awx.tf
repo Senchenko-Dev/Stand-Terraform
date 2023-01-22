@@ -99,6 +99,7 @@ resource "local_file" "awx-inventory" {
       playbook {
         file_path = "ansible/prepare_host_playbook.yml"
       }
+      # inventory_file = local_file.awx-inventory[0].filename
       inventory_file = local_file.awx-inventory.filename
       extra_vars     = {
         ssh_keys_list : jsonencode(var.vm_props.ssh_keys_list)
@@ -111,6 +112,7 @@ resource "local_file" "awx-inventory" {
         file_path = "ansible/spo_install_playbook.yml"
       }
       inventory_file = local_file.awx-inventory.filename
+      # inventory_file = local_file.awx-inventory[0].filename
       extra_vars     = {
         spo_role_name : var.spo_role_name
         vault_file : var.vault_file

@@ -60,30 +60,26 @@
 
 - name: Download k3s
   get_url:
-    url: http://10.42.4.125/mirror/docker/images/k3s/k3s
+    url: "http://10.42.4.125/mirror/docker/images/k3s/k3s"
     dest: /usr/bin
     mode: '0777'
-
 
 - name: Download k3s-selinux
   get_url:
-    url: http://10.42.4.125/mirror/docker/images/k3s/k3s-selinux-0.4-1.el7.noarch.rpm
+    url: "http://10.42.4.125/mirror/docker/images/k3s/k3s-selinux-0.4-1.el7.noarch.rpm"
     dest: /usr/bin
     mode: '0777'
-
 
 - name: Install k3s-selinux
   shell: rpm -ivh --nodeps --force k3s-selinux-0.4-1.el7.noarch.rpm
   args:
     chdir: /usr/bin
 
-
 - name: Download install.sh
   get_url:
-    url: http://10.42.4.125/mirror/docker/images/k3s/install.sh
+    url: "http://10.42.4.125/mirror/docker/images/k3s/install.sh"
     dest: /usr/bin
     mode: '0777'
-
 
 - name: INSTALL k3s
   shell: ./install.sh
@@ -92,7 +88,6 @@
   environment:
     INSTALL_K3S_BIN_DIR: /usr/bin
     INSTALL_K3S_SKIP_DOWNLOAD: "true"
-
 
 - name: delete string
   lineinfile:
@@ -105,8 +100,8 @@
     path: /etc/docker/daemon.json
     block: |
       {
-        "insecure-registries" : ["10.42.4.125:5000"],
-        "registry-mirrors": ["10.42.4.125:5000"]
+        "insecure-registries" : ["{{ socket }}"],
+        "registry-mirrors": ["{{ socket }}"]
       }
 
 - name: delete string
@@ -160,7 +155,7 @@
 
 - name: Download AWX
   get_url:
-    url: http://10.42.4.125/mirror/docker/images/awx/other/awx-operator.zip
+    url: "http://10.42.4.125/mirror/docker/images/awx/other/awx-operator.zip"
     dest: /root
 
 - name: unzip awx-operator
@@ -170,13 +165,13 @@
     remote_src: yes
 
 - name: replace all quay.io
-  shell: grep -Rl quay.io * | xargs sed -i "s|quay.io|10.42.4.125:5000|g"
+  shell: grep -Rl quay.io * | xargs sed -i "s|quay.io|{{ socket }}|g"
   args:
     chdir: /root/awx-operator
 
 - name: Download kustomize
   get_url:
-    url: http://10.42.4.125/mirror/docker/images/k3s/kustomize
+    url: "http://10.42.4.125/mirror/docker/images/k3s/kustomize"
     dest: /usr/bin
     mode: '0777'
 

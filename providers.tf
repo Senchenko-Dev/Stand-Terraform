@@ -1,6 +1,23 @@
 terraform {
-  # backend "pg" {}
+#  backend "pg" {}
+  backend "kubernetes" {
+    secret_suffix    = "state"
+    host             = "api.stands-vdc03.solution.sbt:6443"
+    config_path      = "ansible/dummy"
+    insecure         = true
+    namespace        = "tfstate-team-polyakov1" #создается проект руками в openshift
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command = "./ansible/login.sh"
+      args = ["--token", "none", "--username","sbt-frontend-std", "--password", "Qwerty!2021", "--host", "https://10.255.8.50:6443", "--kubeconfig", "ansible/oc_kubeconfig"]
+    }
+  }
+
   required_providers {
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 1.1.0"
+    }
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = "~> 2.8.0"
@@ -38,6 +55,22 @@ locals {
   # secrets = sensitive(yamldecode(data.ansiblevault_path.path.value))
   oc_kubeconfig = "${abspath(path.root)}/ansible/oc_kubeconfig"
   k8s_kubeconfig = "${abspath(path.root)}/ansible/k8s_kubeconfig"
+}
+
+
+
+provider "helm" {
+  kubernetes {
+    host = "api.stands-vdc03.solution.sbt:6443"
+    #cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
+    config_path      = "ansible/dummy"
+    insecure         = true
+    exec {
+      api_version = "client.authentication.k8s.io/v1alpha1"
+      command     = "./ansible/login.sh"
+      args = ["--token", try(local.secrets.token, "none"), "--username", local.secrets.os.username, "--password", local.secrets.os.password, "--host", var.host, "--kubeconfig", local.oc_kubeconfig]
+    }
+  }
 }
 
 provider "openshift" {

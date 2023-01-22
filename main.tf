@@ -95,7 +95,7 @@ module "NginxG1" {
   memory = 512
   cpu = 1
   vm_disk_data = [
-//   { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
+ //  { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
 //   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
   ]
   vm_props = local.vm_props_default
@@ -132,15 +132,9 @@ module "Nginx_iag" {
 
    # Ansible properties
    inventory_group_name = "kafka-corex"
- //  spo_role_name = ""
    force_ansible_run = ""
    #000_${timestamp()}" #  "_${timestamp()}"
 
-   # Download
- //  nexus_cred = {
- //    nexususer = local.secrets.nexususer,
- //    nexuspass = local.secrets.nexuspass,
- //  }
    kafka_url = "http://10.42.4.125/mirror/docker/images/kafka/KFK-6.zip"
 
    # VM properties
@@ -152,26 +146,53 @@ module "Nginx_iag" {
 
    vm_props = local.vm_props_default
    vault_file = local.vault_file
-   spo_role_name = "kafka"
+   spo_role_name = "kafka" # На самом деле эта роль KAFKA COREX из за зависимости от имени роли пришлось оставить по умолчанию kafka
    awx_props = local.awx_props
 
  }
  
  
- module "KAFKA_SSL1" {
-   count = 0
-   vm_count = 0
-   # TF module properties
-   source = "./modules/spo_kafka_se"
+ # module "KAFKA_SSL1" {
+ #   count = 0
+ #   vm_count = 0
+ #   # TF module properties
+ #   source = "./modules/spo_kafka_se"
 
-   # Ansible properties
-   inventory_group_name = "KafkaSSL"
- //  spo_role_name = ""
-   force_ansible_run = ""
-   #000_${timestamp()}" #  "_${timestamp()}"
 
-   # Download
-   # kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
+# NGINX_IAG
+module "Nginx_IAG" {
+  source = "./modules/spo_nginx_iag"
+
+  count = 0
+
+  vm_count = 1
+  ## VM properties
+  vm_props = local.vm_props_default
+
+  # Ansible properties
+  nginx_iag_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI01536898_APIGATE/D-02.020.00-1390_iag_release_19_4_rhel7.x86_64/CI01536898_APIGATE-D-02.020.00-1390_iag_release_19_4_rhel7.x86_64-distrib.zip"
+  inventory_group_name = "nginx_iag" // для связи с group_vars/group_name.yml
+  vault_file = local.vault_file
+}
+
+
+
+# NGINX_SGW
+module "Nginx_SGW" {
+  source = "./modules/spo_nginx_sgw"
+
+  count = 0
+
+  vm_count = 1
+
+  ## VM properties
+  vm_props = local.vm_props_default
+
+  # Ansible properties
+  nginx_sgw_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000178_sgwx/D-02.021.03-11_release_19_5_1_sgw_nginx_1_20_1_dzo_rhel7.x86_64/CI90000178_sgwx-D-02.021.03-11_release_19_5_1_sgw_nginx_1_20_1_dzo_rhel7.x86_64-distrib.zip"
+  inventory_group_name = "nginx_sgw" // для связи с group_vars/group_name.yml
+  vault_file = local.vault_file
+}
 
    # VM properties
    memory = 2*1024
@@ -200,13 +221,32 @@ module "PGSE_standalone_test" {
    # Install
    installation_type = "standalone"
    installation_subtype = "standalone-postgresql-only"
+
+
+
+
+
+
+
+
+
+
+/*
+# KAFKA
+module "KAFKA1" {
+   count = 0
+   source = "./modules/spo_kafka_se"
    # VM properties
-   # только для postgres nodes
    cpu = 2
-   memory = 3048 #8*1024
-   vm_pg_disk_data = [
-     { size : "200G", mnt_dir : "/pgdata" },  # только для postgres nodes
+   memory = 1024*3
+   vm_count = 1
+   vm_props = local.vm_props_default
+   vm_disk_data = [
+//     { size: "50G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
    ]
+   # Ansible properties
+   inventory_group_name = "Kafka1"
+   vault_file = local.vault_file
 
  //  vm_etcd_disk_data = [
  //    { size : "2G", mnt_dir : local.pgdata_dir },  # только для postgres nodes
@@ -214,6 +254,8 @@ module "PGSE_standalone_test" {
 
    vm_props = local.vm_props_default
    vault_file = local.vault_file
+   # Download
+    kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
  }
 #
 
@@ -282,3 +324,28 @@ module "ELK_standalone1" {
   awx_props = local.awx_props
 
 }
+# PG
+module "PGSE_standalone01" {
+  count = 0
+  source = "./modules/spo_pangolin"
+  # VM properties
+  vm_props = local.vm_props_default
+  # для postgres nodes:
+  cpu = 2
+  memory = 4*1024
+  vm_pg_disk_data = [
+//        { size : "20G", mnt_dir : "/pgdata" },
+  ]
+  # Ansible properties
+  inventory_group_name = "Pangolin_alone-1"
+  vault_file = local.vault_file
+  force_ansible_run = "master"
+
+  # Download
+  pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"
+
+  # Install
+  installation_type = "standalone"
+  installation_subtype = "standalone-postgresql-only"
+ }
+//*/

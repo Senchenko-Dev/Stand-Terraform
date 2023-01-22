@@ -1,22 +1,14 @@
 ---
-# install_nginx default variables
-install_dir: "/opt/nginx"
-nginx_conf_dir: "/etc/nginx"
-nginx_http_port: "8888"
-nginx_user: "nginx"
-nginx_group: "nginx"
-# nginx_user_pwd: "nginx"
-nginx_log_dir: "/var/log/nginx"
-# nginx_os_user_pwd: "nginx"
-nginx_docroot: "{{ install_dir }}/html"
-
+share: "http://10.42.4.125"
+socket: "10.42.4.125:5000"
+image_nginx: "10.42.4.125:5000/nginx"
+docker_registry: "http://10.42.4.125:5000"
+image_awx_operator: "10.42.4.125:5000/ansible/awx-operator"
+version_awx_operator: "0.21.0"
 service_state_k3s: started
-
-# password: #"123qwe123"
+#password: #"123qwe123"
 pod_nginx_port: "30900"
-
-
-#awx_port: "30800"
+awx_port: "30800"
 
 
 version_awx: 21.0.0
