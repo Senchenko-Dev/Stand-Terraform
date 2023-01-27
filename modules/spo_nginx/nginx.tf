@@ -132,12 +132,12 @@ resource "local_file" "nginx-inventory" {
 #}
 
 
-resource "helm_release" "test-charts" {
-  depends_on = [vcd_vm.VM-nginx]
-  name       = "my-local-chart"
-  chart      = "./charts/my-awsome-chart-0.1.0.tgz"
-  namespace   = "tfstate-team-polyakov1"
-}
+# resource "helm_release" "test-charts" {
+#   depends_on = [vcd_vm.VM-nginx]
+#   name       = "my-local-chart"
+#   chart      = "./charts/my-awsome-chart-0.1.0.tgz"
+#   namespace   = "tfstate-team-polyakov1"
+# }
 
 module "config_awx_ansible" {
   count = "${length(var.awx_props) != 0 ? 1 : 0}"

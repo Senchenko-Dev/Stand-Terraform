@@ -145,11 +145,12 @@ resource "null_resource" "copy_group_vars" {
   triggers = {
     always = timestamp(),
   }
-  provisioner "local-exec" {
-    interpreter = ["bash", "-c"]
-    //    command = "cp -rf ${abspath(path.root)}/inventory/group_vars ${abspath(path.root)}/inventory/"
-    command = "cp -rf ${abspath(path.root)}/ansible/group_vars ${local.playbook_path}/"
-  }
+  // Использует основные group_vars копировать в директорию с плейбуком не обязательно
+  # provisioner "local-exec" {
+  #   interpreter = ["bash", "-c"]
+  #   //    command = "cp -rf ${abspath(path.root)}/inventory/group_vars ${abspath(path.root)}/inventory/"
+  #   command = "cp -rf ${abspath(path.root)}/ansible/group_vars ${local.playbook_path}/"
+  # }
 
 }
 
@@ -221,24 +222,25 @@ resource "local_file" "pangolin-inventory" {
       become = true
     }
     // Скачивание дистрибутива СПО
-    plays {
-      playbook {
-        file_path = "ansible/download_unpack.yml"
-      }
-      verbose = true
-      extra_vars = {
-        download_url: var.pangolin_url # filename
-        download_dest: "${abspath(path.root)}/ansible/ext-pangolin/distr/${basename(var.pangolin_url)}" # filename
-        unpack_dest: "${abspath(path.root)}/ansible/ext-pangolin/"
-        unpack_exclude: jsonencode(var.unpack_exclude)
-        //       unarchive:
-        //        src: "{{ download_dest }}"
-        //        dest: "{{ unpack_dest }}"
-        vault_file: var.vault_file
-      }
-      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
-      inventory_file = local_file.pangolin-inventory.filename
-    }
+    // Закоментировал так как роль не по стандарту std11 и затирает изменения по получению серкетов из валта
+    # plays {
+    #   playbook {
+    #     file_path = "ansible/download_unpack.yml"
+    #   }
+    #   verbose = true
+    #   extra_vars = {
+    #     download_url: var.pangolin_url # filename
+    #     download_dest: "${abspath(path.root)}/ansible/ext-pangolin/distr/${basename(var.pangolin_url)}" # filename
+    #     unpack_dest: "${abspath(path.root)}/ansible/ext-pangolin/"
+    #     unpack_exclude: jsonencode(var.unpack_exclude)
+    #     //       unarchive:
+    #     //        src: "{{ download_dest }}"
+    #     //        dest: "{{ unpack_dest }}"
+    #     vault_file: var.vault_file
+    #   }
+    #   vault_id = ["${abspath(path.root)}/ansible/login.sh"]
+    #   inventory_file = local_file.pangolin-inventory.filename
+    # }
     // Установка СПО
     plays {
       playbook {

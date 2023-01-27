@@ -10,7 +10,7 @@
   wait_for:
     host: "{{ ansible_default_ipv4.address }}"
     port: 9200
-    delay: 10
+    delay: 20
     connect_timeout: 5
 
 - set_fact:

@@ -6,10 +6,10 @@ locals {
   vault_file = "secrets.yml" # todo внимание, хардкод в Jenkinsfile!
   # Для setup_vm. Публичные ключи для входа на хосты.
   ssh_keys_list = [
-    { username: "user", ssh_key: local.secrets.ssh.user},
-    { username: "provuser", ssh_key: local.secrets.ssh.provuser, sudo: true},
-    { username: "sentsov", ssh_key: local.secrets.ssh.sentsov, sudo: true},
-    { username: "root", ssh_key: local.secrets.ssh.root},
+    { username = "user", ssh_key = local.secrets.ssh.user},
+    { username = "provuser", ssh_key = local.secrets.ssh.provuser, sudo = true},
+    { username = "sentsov", ssh_key = local.secrets.ssh.sentsov, sudo = true},
+    { username = "root", ssh_key = local.secrets.ssh.root},
   ]
   # параметры для VCD_VM
   vm_props_default = {
@@ -41,8 +41,6 @@ locals {
     awx_port = 30800
     pod_nginx_port = 30900
     vault_file = local.vault_file
-#    awx_login = local.secrets.awx.awx_login # "admin"
-#    awx_password = local.secrets.awx.awx_password
     scm_cred_name = "${local.stand_name} SCM Credential"
     scm_username = var.scm_username
     scm_password = var.scm_password
@@ -59,7 +57,7 @@ locals {
 
 
 module "AWX" {
-  # count = 1
+  # count = 0
   # vm_count = 0
   # TF path to the module
   source = "./modules/awx"
@@ -90,10 +88,10 @@ locals {
 module "NginxG1" {
   source = "./modules/spo_nginx"
 # VM properties
-  vm_count = 0
   count = 0
-  memory = 512
+  vm_count = 0
   cpu = 1
+  memory = 512
   vm_disk_data = [
  //  { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
 //   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
@@ -110,9 +108,9 @@ module "NginxG1" {
 
 module "Nginx_iag" {
   source = "./modules/spo_nginx_iag"
+  ## VM properties
   count = 0
   vm_count = 0
-  ## VM properties
   vm_props = local.vm_props_default
 
   # Ansible properties
@@ -123,7 +121,7 @@ module "Nginx_iag" {
 }
 
 
- module "KAFKA_standalone2" {
+ module "KAFKA_Corex_standalone" {
    # depends_on = [module.AWX]
    count = 0
    vm_count = 0
@@ -151,21 +149,13 @@ module "Nginx_iag" {
 
  }
  
- 
- # module "KAFKA_SSL1" {
- #   count = 0
- #   vm_count = 0
- #   # TF module properties
- #   source = "./modules/spo_kafka_se"
-
-
 # NGINX_IAG
 module "Nginx_IAG" {
   source = "./modules/spo_nginx_iag"
 
   count = 0
+  vm_count = 0
 
-  vm_count = 1
   ## VM properties
   vm_props = local.vm_props_default
 
@@ -182,8 +172,7 @@ module "Nginx_SGW" {
   source = "./modules/spo_nginx_sgw"
 
   count = 0
-
-  vm_count = 1
+  vm_count = 0
 
   ## VM properties
   vm_props = local.vm_props_default
@@ -192,7 +181,6 @@ module "Nginx_SGW" {
   nginx_sgw_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000178_sgwx/D-02.021.03-11_release_19_5_1_sgw_nginx_1_20_1_dzo_rhel7.x86_64/CI90000178_sgwx-D-02.021.03-11_release_19_5_1_sgw_nginx_1_20_1_dzo_rhel7.x86_64-distrib.zip"
   inventory_group_name = "nginx_sgw" // для связи с group_vars/group_name.yml
   vault_file = local.vault_file
-}
 
    # VM properties
    memory = 2*1024
@@ -200,19 +188,18 @@ module "Nginx_SGW" {
    vm_disk_data = [
  //    { size: "350G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
    ]
-   vault_file = local.vault_file
-   vm_props = local.vm_props_default
- }
+}
   
  
  #
 module "PGSE_standalone_test" {
-   count = 1
+   count = 0
    # TF module properties
    source = "./modules/spo_pangolin"
 
    # Ansible properties
-   inventory_group_name = "pangolin_test" # заполнить group_vars
+   # inventory_group_name = "pangolin_test" # заполнить group_vars
+   inventory_group_name = "Pangolin_alone-1" # заполнить group_vars
    force_ansible_run = "0"
 
    # Download and unpack
@@ -221,17 +208,12 @@ module "PGSE_standalone_test" {
    # Install
    installation_type = "standalone"
    installation_subtype = "standalone-postgresql-only"
+   vault_file = local.vault_file
+   vm_props = local.vm_props_default
+
+} 
 
 
-
-
-
-
-
-
-
-
-/*
 # KAFKA
 module "KAFKA1" {
    count = 0
@@ -239,7 +221,7 @@ module "KAFKA1" {
    # VM properties
    cpu = 2
    memory = 1024*3
-   vm_count = 1
+   vm_count = 0
    vm_props = local.vm_props_default
    vm_disk_data = [
 //     { size: "50G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
@@ -252,51 +234,34 @@ module "KAFKA1" {
  //    { size : "2G", mnt_dir : local.pgdata_dir },  # только для postgres nodes
  //  ]
 
-   vm_props = local.vm_props_default
-   vault_file = local.vault_file
    # Download
     kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
  }
-#
 
-# module "CORAX_Kafka1" {
-#   count = 0
-#   source = "./modules/spo_kafka_se"
 
-#   kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000065_kfka/KFK/6.272.0-11/KFK-6.272.0-11-distrib.zip"
+module "Kafka303" {
+  count = 0
+  vm_count = 0
 
-#   inventory_group_name = "global_kafka"
-#   vm_count = 1
-#   memory = 12*1024
-#   cpu = 8
-#   vm_props = local.vm_props_default
-#   vault_file = local.vault_file
-# //  spo_role_name = "corax"
-# }
+  # TF module properties
+  source = "./modules/spo_kafka_se"
 
-# module "Kafka303" {
-#   count = 0
-#   vm_count = 0
+  # Ansible properties
+  inventory_group_name = "Kafka1"
+  force_ansible_run = ""
 
-#   # TF module properties
-#   source = "./modules/spo_kafka_se"
+  kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
 
-#   # Ansible properties
-#   inventory_group_name = "Kafka1"
-#   force_ansible_run = ""
+  # VM properties
+  memory = 8*1024
+  cpu = 4
+  vm_disk_data = [
+    {size: "35G", mnt_dir: "/KAFKA", owner: "kafka", group: "kafka", mode: "0755"}
+  ]
 
-#   kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
-
-#   # VM properties
-#   memory = 8*1024
-#   cpu = 4
-#   vm_disk_data = [
-#     {size: "35G", mnt_dir: "/KAFKA", owner: "kafka", group: "kafka", mode: "0755"}
-#   ]
-
-#   vm_props = local.vm_props_default
-#   vault_file = local.vault_file
-# }
+  vm_props = local.vm_props_default
+  vault_file = local.vault_file
+}
 
 module "ELK_standalone1" {
 
@@ -348,4 +313,3 @@ module "PGSE_standalone01" {
   installation_type = "standalone"
   installation_subtype = "standalone-postgresql-only"
  }
-//*/

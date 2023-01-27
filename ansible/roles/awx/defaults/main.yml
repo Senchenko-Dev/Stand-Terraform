@@ -1,9 +1,9 @@
 ---
-share: "http://10.42.4.125"
-socket: "10.42.4.125:5000"
-image_nginx: "10.42.4.125:5000/nginx"
-docker_registry: "http://10.42.4.125:5000"
-image_awx_operator: "10.42.4.125:5000/ansible/awx-operator"
+share: "http://{{ docker_registry_host }}"
+socket: "{{ docker_registry_host }}:5000"
+image_nginx: "{{ docker_registry }}:5000/nginx"
+docker_registry: "http://{{ docker_registry_host }}:5000"
+image_awx_operator: "{{ docker_registry_host }}:5000/ansible/awx-operator"
 version_awx_operator: "0.21.0"
 service_state_k3s: started
 #password: #"123qwe123"

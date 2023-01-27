@@ -1,10 +1,10 @@
 ####################################################### PRESETUP (mandatory) ##################################################################
-segment: "{{ 'pd10' | default('sigma', true) }}" # in case alpha/delta fill it like - segment: "{{ 'alpha' | default('sigma', true) }}"
+segment: "{{ 'sbercloud' | default('sigma', true) }}" # in case alpha/delta fill it like - segment: "{{ 'alpha' | default('sigma', true) }}"
 min_space_pgdata: 0                          # minimal free disk space on the pgdata (GB)
 min_space_pgarclogs: 0                       # minimal free disk space on the pgarclogs (GB)
 min_space_pgerrorlogs: 0                     # minimal free disk space on the pgerrorlogs (GB)
 sos_file_size: 0                           # volume of the sos file will be created in /pgdata (MB)
-monitoring_ldap_servers: '^solution.sbt$'
+# monitoring_ldap_servers: '^solution.sbt$'
 ####################################################### CONNECTION SETTINGS (mandatory) #######################################################
 # pg_hba settings for users as_admin/as_admin_read, all-sa-pam-group and other rules (you can write multiple lines separated by "\n")
 ldap_bind_tuz_name: 'SBT-SA-PGPSxxx' # name TUZ for ldap
@@ -48,7 +48,7 @@ manage_backup_bin: /opt/omni/lbin
 ##################################################### ENVIRONMENT SETTINGS (mandatory) ########################################################
 pip_repository: "{% if   segment == 'alpha' %}{ 'index_url': 'http://mirror.ca.sbrf.ru/pypi/simple/',    'trusted_host': 'mirror.ca.sbrf.ru'}\
                  {% elif segment == 'sigma' %}{ 'index_url': 'http://mirror.sigma.sbrf.ru/pypi/simple/', 'trusted_host': 'mirror.sigma.sbrf.ru'}\
-                 {% elif segment == 'pd10' %}{ 'index_url': 'https://spo.solution.sbt/python/simple/ ', 'trusted_host': 'spo.solution.sbt'}\
+                 {% elif segment == 'sbercloud' %}{ 'index_url': 'https://spo.solution.sbt/python/simple/ ', 'trusted_host': 'spo.solution.sbt'}\
                  {% else                    %}{ 'index_url': 'https://pypi.org/simple',                  'trusted_host': 'pypi.org'}\
                  {% endif %}"
 
@@ -66,12 +66,12 @@ linux_repos: # см файл ansible/additional/vdc04.repo или можно б�
   - name:     rhel-server-rhscl-7-rpms
     file:     D10
     baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-server-rhscl-7-rpms/
-    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'pd10' }}"
+    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
 
   - name:     rhel-7-server-extras-rpms
     file:     D10
     baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-extras-rpms/
-    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'pd10' }}"
+    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
 
 ######################################################## MONITORING ZABBIX (optional) ########################################################
 monitoring_zabbix: false                     # whether to switch Zabbix monitoring, usually used in PROM.

@@ -35,7 +35,7 @@ variable "force_ansible_run" {
 }
 
 locals {
-  playbook_path = "${abspath(path.root)}/ansible/roles/kafka/"
+  playbook_path = "${abspath(path.root)}/ansible/roles/kafka-first/"
 }
 
 variable "force_reinstall" {
@@ -59,5 +59,5 @@ variable "awx_props" {
 
 variable "spo_role_name" {
   description = "Переменная для использования альтернативной роли (например, для тестирования обновленной версии.)"
-  default = "kafka"
+  default = "kafka-first"
 }

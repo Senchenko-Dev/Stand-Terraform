@@ -1,0 +1,37 @@
+net_zone: INSTEIP
+java_version: 1.8.0
+
+elastic_pkg: "http://10.42.4.125/mirror/docker/images/awx/other/elk/elasticsearch-8.4.3-x86_64.rpm"
+kibana_pkg: "http://10.42.4.125/mirror/docker/images/awx/other/elk/kibana-8.4.3-x86_64.rpm"
+logstash_pkg: "http://10.42.4.125/mirror/docker/images/awx/other/elk/logstash-8.4.3-x86_64.rpm"
+
+required_packages: 
+  - "elasticsearch"
+  - "kibana"
+  # - "logstash"
+
+
+ES_HOME: /usr/share/elasticsearch
+ES_PATH_CONF:  /etc/elasticsearch
+
+# Формируется список сертификатов certs hostname.key hostname.crt
+# Сертификат CA должен иметь имя hostname-ca.crt
+cert_name: "elk" #"{{ inventory_hostname }}"
+cert_ext: ['key', 'crt']
+
+es_users:
+  # - name: "elastic"
+  #   password: "elastic"
+
+# apm_system,kibana,kibana_system,logstash_system,beats_system,remote_monitoring_user
+
+  - { name: "elastic", password: "elastic"  } 
+  - { name: "apm_system", password: "apm_system"  } 
+  - { name: "kibana", password: "kibana"  } 
+  - { name: "kibana_system", password: "kibana_system"  } 
+  - { name: "logstash_system", password: "logstash_system"  } 
+  - { name: "beats_system", password: "beats_system"  } 
+  - { name: "remote_monitoring_user", password: "remote_monitoring_user"  } 
+
+    
+

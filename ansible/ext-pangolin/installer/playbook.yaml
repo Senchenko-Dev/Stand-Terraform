@@ -4,7 +4,7 @@
     - name: Import secrets
       include_vars: "../../{{ vault_file }}"
       when: vault_file is defined
-      tags: always
+  tags: always
 
 - name: Get ping response and gather packages info
   hosts: localhost:all

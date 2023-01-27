@@ -89,26 +89,11 @@
     INSTALL_K3S_BIN_DIR: /usr/bin
     INSTALL_K3S_SKIP_DOWNLOAD: "true"
 
-- name: delete string
-  lineinfile:
-    dest: /etc/docker/daemon.json
-    state: absent
-    regexp: '{}'
-
 - name: settings docker
-  blockinfile:
-    path: /etc/docker/daemon.json
-    block: |
-      {
-        "insecure-registries" : ["{{ socket }}"],
-        "registry-mirrors": ["{{ socket }}"]
-      }
-
-- name: delete string
-  lineinfile:
+  template:
+    src: daemon.json.j2
     dest: /etc/docker/daemon.json
-    state: absent
-    regexp: "#"
+
 
 - name: Create file register.yaml
   file:
@@ -122,16 +107,16 @@
       mirrors:
         docker.io:
           endpoint:
-            - "http://10.42.4.125:5000"
-        "10.42.4.125:5000":
+            - "http://{{ socket }}"
+        "{{ socket }}":
           endpoint:
-            - "http://10.42.4.125:5000"
+            - "http://{{ socket }}"
         quay.io:
           endpoint:
-            - "http://10.42.4.125:5000"
+            - "http://{{ socket }}"
         gcr.io:
           endpoint:
-            - "http://10.42.4.125:5000"
+            - "http://{{ socket }}"
 
 - name: Restart Docker
   systemd:
