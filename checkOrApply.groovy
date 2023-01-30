@@ -2,6 +2,7 @@
 node(env.NODE) {
     def gitUrl = scm.userRemoteConfigs[0].url
 //    def ocHome = tool(name: 'oc-4.5.0', type: 'oc')
+    def uniq_job_name_md5=sh(returnStdout: true, script: 'echo  "$JOB_NAME" | md5sum | awk \'{print $1}\' ').trim()
 
     cleanWs()
     ansiColor('xterm') {
@@ -40,7 +41,7 @@ node(env.NODE) {
 
                             try {
                                 sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
-                                sh("set +x; ./terraform workspace new ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
+                                sh("set +x; ./terraform workspace new ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
                                 sh("set +x; ./terraform apply -no-color -var-file=ansible/values.tfvars -var=\"vault_password=${ANSIBLE_VAULT_PASSWORD}\" -auto-approve")
                                 sh("set +x; rm -rf .terraform* comment.json ansible/*_kubeconfig")
                                 sh("set +x; find . -name '*.pyc' -delete")
@@ -72,7 +73,7 @@ node(env.NODE) {
                             sh("git merge -s ours origin/master --no-edit")
                             try {
                                 sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
-                                sh("set +x; ./terraform workspace new ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
+                                sh("set +x; ./terraform workspace new ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
                                 sh("set +x; ./terraform plan -no-color -var-file=ansible/values.tfvars -var=\"vault_password=${ANSIBLE_VAULT_PASSWORD}\" > plan")
                                 sh("set +x; cat plan | sed 's/\"//g' | sed 's/#//g' | sed 's/  //g' > form_plan; rm -f plan")
                             } catch (e) {
@@ -119,7 +120,7 @@ node(env.NODE) {
                         echo "Применение конфигурации без события"
                         try {
                             sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
-                            sh("set +x; ./terraform workspace new ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
+                            sh("set +x; ./terraform workspace new ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
                             //sh("set +x; terraform apply -no-color -var-file=ansible/values.tfvars -var=\"vault_password=${ANSIBLE_VAULT_PASSWORD}\" -var=\"nexususer=${GIT_NAME}\" -var=\"nexuspass=${GIT_PASSWORD}\" -auto-approve" )
                             sh("set +x; ./terraform destroy -no-color -var-file=ansible/values.tfvars -var=\"vault_password=${ANSIBLE_VAULT_PASSWORD}\" -auto-approve")
                             sh("set +x; rm -rf .terraform* ansible/*_kubeconfig")
