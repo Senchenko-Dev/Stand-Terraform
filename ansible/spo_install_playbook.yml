@@ -9,12 +9,12 @@
     - debug:
         var: vault_file 
 
-    - shell: ls -la "{{ vault_file }}"
-      delegate_to: localhost
-      register: ll
+    # - shell: ls -la "{{ vault_file }}"
+    #   delegate_to: localhost
+    #   register: ll
 
-    - debug:
-        var: ll.stdout_lines
+    # - debug:
+    #     var: ll.stdout_lines
 
     - name: "{{ spo_role_name | upper }} Import secrets" 
       include_vars: "{{ vault_file }}"
