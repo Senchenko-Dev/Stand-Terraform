@@ -1,6 +1,6 @@
 ---
 - import_tasks: "{{ role_path }}/tasks/helper/get_default_vars.yml"
-  delegate_to: localhost
+  # delegate_to: localhost
 
 - name: "Install packages"
   package:
