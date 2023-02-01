@@ -46,21 +46,27 @@
   tags: [install]
 
 - import_tasks: set_zookeeper_props/tasks/main.yaml
+  become: yes
   tags: [install, configure]
 
 - import_tasks: set_zookeeper_jmx_props/tasks/main.yaml
+  become: yes
   tags: [ install, configure ]
 
 - import_tasks: start_zookeeper_systemd/tasks/main.yaml
+  become: yes
   tags: [install, configure, control-start, control-restart]
 
 - import_tasks: set_kafka_props/tasks/main.yaml
+  become: yes
   tags: [install, configure]
 
 - import_tasks: set_kafka_jmx_props/tasks/main.yaml
+  become: yes
   tags: [install, configure]
 
 - import_tasks: set_kafka_cert/tasks/main.yaml
+  become: yes
   tags: [install, configure]
 
 - import_tasks: generate_keys_for_ssl_configs/tasks/main.yaml
@@ -68,19 +74,24 @@
   tags: [install, configure]
 
 - import_tasks: set_security_configs_for_ssl/tasks/main.yaml
+  become: yes
   tags: [install, configure]
 
 - import_tasks: start_kafka_systemd/tasks/main.yaml
+  become: yes
   tags: [install, configure]
 
 - import_tasks: summary_information/tasks/main.yaml
   tags: [install, configure]
 
 - import_tasks: control-start.yml
+  become: yes
   tags: [never, control-start]
 
 - import_tasks: control-stop.yml
+  become: yes
   tags: [never, control-stop]
 
 - import_tasks: control-restart.yml
+  become: yes
   tags: [never, control-restart]
