@@ -33,6 +33,7 @@
   tags: [install, precheck]
 
 - import_tasks: cleanup_work_dirs/tasks/main.yaml
+  become: yes
   tags: [install]
 
 - import_tasks: copy_distro_to_server/tasks/main.yaml
