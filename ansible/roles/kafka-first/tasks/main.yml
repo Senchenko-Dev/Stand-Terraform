@@ -36,6 +36,7 @@
   tags: [install]
 
 - import_tasks: copy_distro_to_server/tasks/main.yaml
+  become: yes
   tags: [install]
 
 - import_tasks: deploy_config/tasks/main.yaml
