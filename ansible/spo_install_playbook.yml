@@ -29,7 +29,7 @@
 
     - import_role:
         name: "{{ spo_role_name }}"
-      become: yes
+      # become: yes
 
     - name: Copy additional files
       copy:
