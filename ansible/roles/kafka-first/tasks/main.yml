@@ -10,6 +10,7 @@
     - java
 #        - python-setuptools
 #        - libffi-devel
+  become: yes
   tags: [install]
 
 - debug:
