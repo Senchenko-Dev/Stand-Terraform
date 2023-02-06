@@ -215,53 +215,53 @@ module "PGSE_standalone_test" {
 
 
 # KAFKA
-module "KAFKA1" {
-   count = 0
-   source = "./modules/spo_kafka_se"
-   # VM properties
-   cpu = 2
-   memory = 1024*3
-   vm_count = 0
-   vm_props = local.vm_props_default
-   vm_disk_data = [
-//     { size: "50G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
-   ]
-   # Ansible properties
-   inventory_group_name = "Kafka1"
-   vault_file = local.vault_file
+# module "KAFKA1" {
+#    count = 0
+#    source = "./modules/spo_kafka_se"
+#    # VM properties
+#    cpu = 2
+#    memory = 1024*3
+#    vm_count = 0
+#    vm_props = local.vm_props_default
+#    vm_disk_data = [
+# //     { size: "50G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
+#    ]
+#    # Ansible properties
+#    inventory_group_name = "Kafka1"
+#    vault_file = local.vault_file
 
- //  vm_etcd_disk_data = [
- //    { size : "2G", mnt_dir : local.pgdata_dir },  # только для postgres nodes
- //  ]
+#  //  vm_etcd_disk_data = [
+#  //    { size : "2G", mnt_dir : local.pgdata_dir },  # только для postgres nodes
+#  //  ]
 
-   # Download
-    kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
- }
+#    # Download
+#     kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
+#  }
 
 
-module "Kafka303" {
-  count = 0
-  vm_count = 0
+# module "Kafka303" {
+#   count = 0
+#   vm_count = 0
 
-  # TF module properties
-  source = "./modules/spo_kafka_se"
+#   # TF module properties
+#   source = "./modules/spo_kafka_se"
 
-  # Ansible properties
-  inventory_group_name = "Kafka1"
-  force_ansible_run = ""
+#   # Ansible properties
+#   inventory_group_name = "Kafka1"
+#   force_ansible_run = ""
 
-  kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
+#   kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
 
-  # VM properties
-  memory = 8*1024
-  cpu = 4
-  vm_disk_data = [
-    {size: "35G", mnt_dir: "/KAFKA", owner: "kafka", group: "kafka", mode: "0755"}
-  ]
+#   # VM properties
+#   memory = 8*1024
+#   cpu = 4
+#   vm_disk_data = [
+#     {size: "35G", mnt_dir: "/KAFKA", owner: "kafka", group: "kafka", mode: "0755"}
+#   ]
 
-  vm_props = local.vm_props_default
-  vault_file = local.vault_file
-}
+#   vm_props = local.vm_props_default
+#   vault_file = local.vault_file
+# }
 
 module "ELK_standalone1" {
 
