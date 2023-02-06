@@ -1,7 +1,9 @@
 ---
 - name: restart_service
   include_tasks: control/restart.yaml
-  become: yes
+  args:
+    apply:
+      become: yes
   tags: always
 
 #- service:
