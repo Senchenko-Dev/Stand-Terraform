@@ -2,6 +2,7 @@
   stat:
     path: "{{ custom_config }}"
   register: stat_custom_config
+  become: no
   delegate_to: localhost
 
 - name: Assert if custom config file not found
