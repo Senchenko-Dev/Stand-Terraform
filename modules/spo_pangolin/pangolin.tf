@@ -146,11 +146,11 @@ resource "null_resource" "copy_group_vars" {
     always = timestamp(),
   }
   // Использует основные group_vars копировать в директорию с плейбуком не обязательно
-  # provisioner "local-exec" {
-  #   interpreter = ["bash", "-c"]
-  #   //    command = "cp -rf ${abspath(path.root)}/inventory/group_vars ${abspath(path.root)}/inventory/"
-  #   command = "cp -rf ${abspath(path.root)}/ansible/group_vars ${local.playbook_path}/"
-  # }
+  provisioner "local-exec" {
+    interpreter = ["bash", "-c"]
+    //    command = "cp -rf ${abspath(path.root)}/inventory/group_vars ${abspath(path.root)}/inventory/"
+    command = "cp -rf ${abspath(path.root)}/ansible/group_vars ${local.playbook_path}/"
+  }
 
 }
 
