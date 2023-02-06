@@ -6,5 +6,6 @@
 
 - name: import download_nginx_iag
   import_tasks: install_nginx_iag.yml
+  become: yes
   tags:
     - install

@@ -6,5 +6,6 @@
 
 - name: import download_nginx_sgw
   import_tasks: install_nginx_sgw.yml
+  become: yes
   tags:
     - install
