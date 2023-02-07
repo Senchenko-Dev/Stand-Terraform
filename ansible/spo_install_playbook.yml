@@ -1,6 +1,6 @@
 ---
 - hosts: all
-  become: no
+  become: yes
   serial: "{{ rolling_update_serial | default('100%') }}"
   gather_facts: no
 
@@ -20,6 +20,7 @@
       include_vars: "{{ vault_file }}"
       tags: always
       delegate_to: localhost
+      become: no
       #no_log: yes # todo !!!!!!
       when: vault_file is defined
 

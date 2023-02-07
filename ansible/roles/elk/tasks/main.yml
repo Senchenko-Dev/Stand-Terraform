@@ -30,6 +30,7 @@
   loop:
     - "{{ remove_data }}"
   ignore_errors: true
+  become: no
   delegate_to: "{{ awx_host }}"
   tags: [always]
 
