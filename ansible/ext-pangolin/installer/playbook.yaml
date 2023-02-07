@@ -1,6 +1,5 @@
 - name: Vault secrets
   hosts: all
-  become: yes
   tasks:
     - name: Import secrets
       include_vars: "../../{{ vault_file }}"
@@ -16,7 +15,6 @@
 
 # standalone-postgresql-only
 - hosts: master
-  become: yes
   roles:
     - { role: checkup, tags: standalone-postgresql-only }
     - { role: rsyslog, tags: standalone-postgresql-only, when: rsyslog is defined and rsyslog }
@@ -34,7 +32,6 @@
 
 # standalone-postgresql-pgbouncer
 - hosts: master
-  become: yes
   roles:
     - { role: checkup, tags: standalone-postgresql-pgbouncer }
     - { role: rsyslog, tags: standalone-postgresql-pgbouncer, when: rsyslog is defined and rsyslog }
@@ -53,12 +50,10 @@
 
 # standalone-patroni-etcd-pgbouncer
 - hosts: master
-  become: yes
   roles:
     - { role: checkup, tags: standalone-patroni-etcd-pgbouncer }
     - { role: etcd, tags: standalone-patroni-etcd-pgbouncer }
 - hosts: master
-  become: yes
   roles:
     - { role: rsyslog, tags: standalone-patroni-etcd-pgbouncer, when: rsyslog is defined and rsyslog }
     - { role: postgresql, tags: standalone-patroni-etcd-pgbouncer, vars: {master: true, patroni: true} }
@@ -78,18 +73,15 @@
 
 #cluster-patroni-etcd-pgbouncer
 - hosts: master:replica:etcd
-  become: yes
   roles:
     - { role: checkup, tags: cluster-patroni-etcd-pgbouncer }
     - { role: etcd, tags: cluster-patroni-etcd-pgbouncer }
 - hosts: master
-  become: yes
   roles:
     - { role: rsyslog, tags: cluster-patroni-etcd-pgbouncer, when: rsyslog is defined and rsyslog }
     - { role: postgresql, tags: cluster-patroni-etcd-pgbouncer, vars: {master: true, patroni: true} }
     - { role: patroni, tags: cluster-patroni-etcd-pgbouncer, vars: {master: true} }
 - hosts: master:replica
-  become: yes
   tasks:
     - name: save patroni_user_pass at replica
       set_fact:
@@ -98,13 +90,11 @@
       run_once: true
   tags: cluster-patroni-etcd-pgbouncer
 - hosts: replica
-  become: yes
   roles:
     - { role: rsyslog, tags: cluster-patroni-etcd-pgbouncer }
     - { role: postgresql, tags: cluster-patroni-etcd-pgbouncer, vars: {patroni: true} }
     - { role: patroni, tags: cluster-patroni-etcd-pgbouncer }
 - hosts: postgres_nodes
-  become: yes
   roles:
     - { role: pgbouncer, tags: cluster-patroni-etcd-pgbouncer }
     - { role: confd, tags: cluster-patroni-etcd-pgbouncer }
@@ -118,25 +108,21 @@
     - { role: finally, tags: cluster-patroni-etcd-pgbouncer, operation_type: turn_on_pp, vars: {patroni: true }}
     - { role: tests, tags: cluster-patroni-etcd-pgbouncer, vars: {postgres: true, cluster: true, confd: true, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
 - hosts: master:replica:etcd
-  become: yes
   roles:
     - { role: tests, tags: cluster-patroni-etcd-pgbouncer, vars: {postgres: false, cluster: false, confd: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
     - { role: finally, tags: cluster-patroni-etcd-pgbouncer, operation_type: change_linux_password }
 
 #cluster-patroni-etcd-pgbouncer-haproxy
 - hosts:  master:replica:etcd
-  become: yes
   roles:
     - { role: checkup, tags: cluster-patroni-etcd-pgbouncer-haproxy }
     - { role: etcd, tags: cluster-patroni-etcd-pgbouncer-haproxy }
 - hosts: master
-  become: yes
   roles:
     - { role: rsyslog, tags: cluster-patroni-etcd-pgbouncer-haproxy, when: rsyslog is defined and rsyslog }
     - { role: postgresql, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {master: true, patroni: true} }
     - { role: patroni, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {master: true} }
 - hosts: master:replica
-  become: yes
   tasks:
     - name: save patroni_user_pass at replica
       set_fact:
@@ -145,13 +131,11 @@
       run_once: true
   tags: cluster-patroni-etcd-pgbouncer-haproxy
 - hosts: replica
-  become: yes
   roles:
     - { role: rsyslog, tags: cluster-patroni-etcd-pgbouncer-haproxy }
     - { role: postgresql, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {patroni: true} }
     - { role: patroni, tags: cluster-patroni-etcd-pgbouncer-haproxy }
 - hosts: postgres_nodes
-  become: yes
   roles:
     - { role: pgbouncer, tags: cluster-patroni-etcd-pgbouncer-haproxy }
     - { role: HAProxy, tags: cluster-patroni-etcd-pgbouncer-haproxy }
@@ -165,14 +149,12 @@
     - { role: finally, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: turn_on_pp, vars: {patroni: true }}
     - { role: tests, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {postgres: true, cluster: true, confd: false, haproxy: true}, when: run_smoke_test is defined and run_smoke_test }
 - hosts: master:replica:etcd
-  become: yes
   roles:
     - { role: tests, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {postgres: false, cluster: false, confd: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
     - { role: finally, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: change_linux_password }
 
 - name: Finish playbook for cluster
   hosts: master:replica
-  become: yes
   tasks:
 
     - name: write to process status work that installation process finished
@@ -185,7 +167,6 @@
   tags: cluster-patroni-etcd-pgbouncer,cluster-patroni-etcd-pgbouncer-haproxy
 
 - name: Finish playbook for standalone
-  become: yes
   hosts: master
   tasks:
 
