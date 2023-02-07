@@ -29,5 +29,6 @@
       with_items: "{{ postgresql_package['files'] }}"    
 
   delegate_to: localhost
+  become: no
   run_once: true
   when: pg_version is undefined
