@@ -2,12 +2,6 @@
 *.iml
 *.swp
 *.swo
-ansible/vault_password.txt
-terraform.tfstate.d
-ansible/oc_kubeconfig
-ansible/secrets.yml
-.terraform.lock.hcl
-.terraform
-ansible/project_vars/*
-ansible/inventory/*
+*.swn
+*.swx
 scripts/
