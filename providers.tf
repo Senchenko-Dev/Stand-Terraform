@@ -95,10 +95,6 @@ provider "kubernetes" {
 }
 
 provider "vcd" {
-#  user                 = "sbertech_r4_developer"
-#  password             = "EOrvX0BSNPCrAXj3fDM_4FGnAspioCqO"
-#  user                 = var.vcd_username
-#  password             = var.vcd_password
 
 #   ------------------------ R4 ---------------------------------
 
