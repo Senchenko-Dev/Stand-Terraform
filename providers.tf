@@ -100,8 +100,8 @@ provider "vcd" {
 
   user                 = local.secrets.vcd.vcd_username
   # password             = local.secrets.vcd.vcd_password
-  auth_type            = “api_token”
-  api_token            = local.secrets.vcd.token_silim
+  auth_type            = "token"
+  token                = local.secrets.vcd.token_silim
   org                  = "SBERTECH_R4"
   vdc                  = "SBERTECH_R4_VDC02"
 
