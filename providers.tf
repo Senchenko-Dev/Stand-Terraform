@@ -96,7 +96,9 @@ provider "kubernetes" {
 
 provider "vcd" {
 
-  user                 = local.secrets.vcd.silim_user
+  user = "none"
+  password = "none"
+  # user                 = local.secrets.vcd.silim_user
   api_token                = local.secrets.vcd.silim_api_token
   auth_type            = "api_token"
   org                  = "SBERTECH_R4"
