@@ -98,10 +98,9 @@ provider "vcd" {
 
 #   ------------------------ R4 ---------------------------------
 
-  user                 = local.secrets.vcd.vcd_username
-  # password             = local.secrets.vcd.vcd_password
+  user                 = local.secrets.vcd.silim_user
+  token                = local.secrets.vcd.silim_token
   auth_type            = "token"
-  token                = local.secrets.vcd.token_silim
   org                  = "SBERTECH_R4"
   vdc                  = "SBERTECH_R4_VDC02"
 
