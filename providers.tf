@@ -104,11 +104,11 @@ provider "vcd" {
 
 #   ------------------------ R4 ---------------------------------
 
-  user                 = local.secrets.vcd.silim_user
-  token                = local.secrets.vcd.silim_token
-  auth_type            = "token"
-  org                  = "SBERTECH_R4"
-  vdc                  = "SBERTECH_R4_VDC02"
+  # user                 = local.secrets.vcd.silim_user
+  # token                = local.secrets.vcd.silim_token
+  # auth_type            = "token"
+  # org                  = "SBERTECH_R4"
+  # vdc                  = "SBERTECH_R4_VDC02"
 
 #   ------------------------ UI ---------------------------------
 
