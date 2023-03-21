@@ -89,10 +89,10 @@
     INSTALL_K3S_BIN_DIR: /usr/bin
     INSTALL_K3S_SKIP_DOWNLOAD: "true"
 
-- name: settings docker
-  template:
-    src: daemon.json.j2
-    dest: /etc/docker/daemon.json
+# - name: settings docker
+#   template:
+#     src: daemon.json.j2
+#     dest: /etc/docker/daemon.json
 
 
 - name: Create file register.yaml
