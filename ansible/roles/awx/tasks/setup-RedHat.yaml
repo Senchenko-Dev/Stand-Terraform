@@ -118,10 +118,10 @@
           endpoint:
             - "http://{{ socket }}"
 
-- name: Restart Docker
-  systemd:
-    name: docker
-    state: restarted
+# - name: Restart Docker
+#   systemd:
+#     name: docker
+#     state: restarted
 
 - name: Restart k3s
   systemd:
