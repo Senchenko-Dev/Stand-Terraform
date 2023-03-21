@@ -13,8 +13,8 @@ locals {
   ]
   # параметры для VCD_VM
   vm_props_default = {
-    template_name = "CentOS7_64-bit_custom2"
-    catalog_name = "Custom"
+    template_name = "altlinux-sp8-5.4.145.c9f1.old"
+    catalog_name = "ALTLINUX"
     network_type = "org"
     ip_allocation_mode = "POOL"
 
