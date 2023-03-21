@@ -1,4 +1,0 @@
-
-#installation_type
-KDeployConf: "deploy-plaintext__zk_plain_no_auth__kafka_plaintext_no_auth.sh"
-kafka_default_password: "{{ secrets.kafka.kafka_default_password }}"
