@@ -8,9 +8,10 @@
 #    - name: disable all yum mirrors
 
 
-    # - name: setup mirror for yum
-    #   include_role:
-    #     name: setup_yum_repos
+    - name: setup mirror for yum
+      include_role:
+        name: setup_yum_repos
+      when: setup_yum_repos | bool | default(false)
 
     - name: Add iptables ACCEPT TCP
       iptables:
