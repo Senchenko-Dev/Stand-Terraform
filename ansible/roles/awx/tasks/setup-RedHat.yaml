@@ -48,10 +48,10 @@
       - selinux-policy-base
     state: present
 
-- name: Enable Docker
-  systemd:
-    name: docker
-    enabled: yes
+# - name: Enable Docker
+#   systemd:
+#     name: docker
+#     enabled: yes
 
 - name: Start Docker
   systemd:
