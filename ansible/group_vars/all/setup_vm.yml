@@ -7,6 +7,6 @@ yum:
 #baseurl_epel: "{{ yum.baseurl_epel_sbercloud }}"
 #baseurl_centos: "{{ yum.baseurl_rhel7rpms }}"
 
-setup_yum_repos: true
+setup_yum_repos: false
 yum_move_old_repos: true
 yum_repos_custom_file: "additional/vdc04.repo"
