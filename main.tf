@@ -18,8 +18,8 @@ locals {
     catalog_name = "SBT_CREATOR_TEMPLATES"
 
     #--------AltLinux--------#
-    # template_name = "altlinux-sp8-5.4.145.c9f1.old"
-    # catalog_name = "ALTLINUX"
+    template_name = "altlinux-sp8-5.4.145.c9f1.old"
+    catalog_name = "ALTLINUX"
 
     #--------SberLinux-------#
     #template_name = "SBT-SPO-SBEL86-latest"
@@ -65,8 +65,8 @@ locals {
 }
 
 module "AWX" {
-  count = 0
-  vm_count = 0
+  # count = 0
+  # vm_count = 0
   # TF path to the module
   source = "./modules/awx"
   # VM settings
