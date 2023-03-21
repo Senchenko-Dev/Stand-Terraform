@@ -53,10 +53,10 @@
 #     name: docker
 #     enabled: yes
 
-- name: Start Docker
-  systemd:
-    name: docker
-    state: started
+# - name: Start Docker
+#   systemd:
+#     name: docker
+#     state: started
 
 - name: Download k3s
   get_url:
