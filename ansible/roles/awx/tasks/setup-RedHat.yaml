@@ -92,7 +92,9 @@
 - name: create /etc/docker
   file:
     path: /etc/docker
-    state: present
+    state: directory
+    owner: root
+    group: root
 
 - name: settings docker
   template:
