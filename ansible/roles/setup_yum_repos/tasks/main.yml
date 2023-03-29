@@ -1,20 +1,14 @@
-- name: Удаление repo файлов (с бэкапом)
+
+- name: remove old repos setting
   shell: mkdir -p backup && mv -f * backup/ || echo 'backup dir exists or no files to backup'
   args:
     chdir: /etc/yum.repos.d/
-  when: yum_move_old_repos | default("false") | bool
-#      ignore_errors: yes
 
-- name: Установка пользовательского repo файла
+- name: Add custom repository
   copy:
-    src: "{{ yum_repos_custom_file }}"
-    dest: /etc/yum.repos.d/
-  when: yum_repos_custom_file is defined and yum_repos_custom_file != ''
+    src: custom.repo
+    dest: /etc/yum.repos.d/custom.repo
+    mode: 0644
+    owner: root
+    group: root
 
-
-
-- name: list repos
-  shell: cat *.repo
-  args:
-    chdir: /etc/yum.repos.d/
-  ignore_errors: yes

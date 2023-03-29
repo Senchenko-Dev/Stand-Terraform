@@ -46,7 +46,8 @@ resource "vcd_vm" "kafka" {
     ip_allocation_mode = var.vm_props.ip_allocation_mode
   }
 
-  customization { #Кастомизация ОС
+  // Кастомизация ОС
+  customization {
     force                      = true        #Применить параметры кастомизации
     allow_local_admin_password = true        #Наличие локального пароля админа
     auto_generate_password     = false       #Отмена автогенерации пароля
