@@ -98,7 +98,7 @@ hba_rules: ['host all +all-sa-pam-group 0.0.0.0/0 ldap {{ ldap_pam_parameters }}
            ]                                                                            # Example ['rule 1', 'rule 2']
 
 ####################################################### 3.2. SECURITY SETTINGS (SSL) ##################################################
-ssl_mode: true                                                                          # Turn on SSL mode between cluster components
+ssl_mode: false                                                                         # Turn on SSL mode between cluster components
 
 generate_cert_conf: "{% if   ansible_os_family == 'RedHat'   %}/etc/pki/tls/openssl.cnf\
              	     {% elif ansible_os_family == 'Altlinux' %}/etc/openssl/openssl.cnf\
