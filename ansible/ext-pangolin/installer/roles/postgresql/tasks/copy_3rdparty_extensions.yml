@@ -1,30 +1,40 @@
-- name: Find 3rdparty extensions
+- name: Find 3rdparty packages
   block:
 
-    - name: find 3rdparty extensions
+    - name: create default list packages
       set_fact:
-        extensions: []
+        packages: []
 
-    - name: check if postgis exists
+    - name: check if package exists
       stat:
-        path: "{{ local_distr_path }}/3rdparty/postgis.tar.gz"
-      register: check_postgis
+        path: "{{ local_distr_path }}/3rdparty/{{ item }}.tar.gz"
+      with_items:
+        - "GDAL-src"
+        - "GDAL"
+        - "PROJ-src"
+        - "PROJ"
+        - "SFCGAL-src"
+        - "SFCGAL"
+        - "cgal-src"
+        - "cgal"
+        - "geos-src"
+        - "geos"
+        - "postgis-src"
+        - "postgis"
+        - "pgrouting"
+        - "pgrouting-src"
+      register: check_targz
 
-    - name: found postgis
+    - name: create list with exists packages
       set_fact:
-        extensions: "{{ extensions + ['postgis'] }}"
-      when: check_postgis.stat.exists
+        packages: "{{ packages + [check_targz.results[index].item] }}"
+      with_items: "{{ check_targz.results }}"
+      loop_control:
+        index_var: index
+        label: "{{ check_targz.results[index].item }}"
+      when: check_targz.results[index].stat.exists
 
-    - name: check if pgrouting exists
-      stat:
-        path: "{{ local_distr_path }}/3rdparty/pgrouting.tar.gz"
-      register: check_pgrouting
-
-    - name: found pgrouting
-      set_fact:
-        extensions: "{{ extensions + ['pgrouting'] }}"
-      when: check_pgrouting.stat.exists
-
+  become: false
   delegate_to: localhost
 
 - name: Copy cracklib, postgis and pgroutin in {{ PGHOME }}/3rdparty
@@ -43,25 +53,25 @@
         - { src: '{{ local_distr_path }}/3rdparty/cracklib/pw_dict.pwd', mode: 600 }
         - { src: '{{ local_distr_path }}/3rdparty/cracklib/pw_dict.pwi', mode: 600 }
 
-    - name: copy other extensions
+    - name: copy other packages
       block:
 
-        - name: create dirs for extensions
+        - name: create dirs for packages
           file:
             path: "{{ PGHOME }}/3rdparty/{{ item }}"
             state: directory
             owner: postgres
             group: postgres
             mode: 0700
-          with_items: "{{ extensions }}"
+          with_items: "{{ packages }}"
 
-        - name: copy extensions in {{ PGHOME }}
+        - name: copy packages in {{ PGHOME }}
           copy:
             src: "{{ local_distr_path }}/3rdparty/{{ item }}.tar.gz"
             dest: "{{ PGHOME }}/3rdparty"
-          with_items: "{{ extensions }}"
+          with_items: "{{ packages }}"
 
-        - name: unarchive extensions
+        - name: unarchive packages
           unarchive:
             src:  "{{ PGHOME }}/3rdparty/{{ item }}.tar.gz"
             dest: "{{ PGHOME }}/3rdparty"
@@ -69,15 +79,15 @@
             owner: postgres
             group: postgres
             mode: 0700
-          with_items: "{{ extensions }}"
+          with_items: "{{ packages }}"
 
         - name: remove archives
           file:
             state: absent
             path: "{{ PGHOME }}/3rdparty/{{ item }}.tar.gz"
-          with_items: "{{ extensions }}"
+          with_items: "{{ packages }}"
 
-      when: extensions | length > 0
+      when: packages
 
   become: true
 

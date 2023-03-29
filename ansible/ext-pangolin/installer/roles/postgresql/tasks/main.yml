@@ -2,6 +2,16 @@
   import_tasks: install.yml
   when: action_type == 'install'
 
-- name: Import minor update
-  import_tasks: update_minor.yml
+- name: Include minor update
+  include_tasks: update_minor.yml
   when: action_type == 'update_minor'
+
+- name: Include major update
+  include_tasks: "{% if pre_update and not post_update %}\
+                        update_pre_major.yml\
+                  {% elif not pre_update and not post_update %}\
+                        update_major.yml\
+                  {% elif not pre_update and post_update %}\
+                        update_post_major.yml\
+                  {% endif %}"
+  when: action_type == 'update_major'

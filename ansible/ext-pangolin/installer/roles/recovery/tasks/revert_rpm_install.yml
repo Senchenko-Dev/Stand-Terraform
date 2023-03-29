@@ -1,0 +1,6 @@
+- name: Recovery in SRC rpm install role
+  include_role:
+    name: SRC
+    tasks_from: revert_rpm_install.yml
+  when: "inventory_hostname != 'etcd' \
+         and is_recovery_rpm_install"

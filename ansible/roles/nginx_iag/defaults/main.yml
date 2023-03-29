@@ -1,4 +1,0 @@
----
-#download_url: "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI01536898_APIGATE/D-02.020.00-1390_iag_release_19_4_rhel7.x86_64/CI01536898_APIGATE-D-02.020.00-1390_iag_release_19_4_rhel7.x86_64-distrib.zip"
-nginx_iag_user: "nginx-iag"
-nginx_iag_group: "nginx-iag"

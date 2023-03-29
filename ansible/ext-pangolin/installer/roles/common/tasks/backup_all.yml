@@ -1,14 +1,47 @@
-- name: Ensure {{ backup_root_dir }}
-  file:
-    path: "{{ item.src }}"
-    state: "{{ item.state }}"
-    owner: postgres
-    group: postgres
-    mode: 0700
-  with_items:
-    - { src: "{{ backup_root_dir }}",                         state: absent }
-    - { src: "{{ backup_root_dir }}/{{ service_path_dir }}",  state: directory }
+- name: Сreate OS user and group postgres for all nodes
+  block:
+
+    - name: create postgres group
+      group:
+        name: postgres
+        state: present
+
+    - name: create postgres user on etcd host
+      user:
+        name: postgres
+        group: postgres
+        comment: User for PostgreSQL database
+  
   become: true
+        
+- name: Delete previous backups and ensure {{ backup_root_dir }}
+  block:
+
+    - name: get list folders to remove
+      find:
+        path: "{{ backup_main_dir }}"
+        file_type: directory
+        excludes: "{{ pg_current_version }}"
+      register: del_old_folders
+
+    - name: delete previous backup folders
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ del_old_folders.files }}"
+
+    - name: ensure {{ backup_root_dir }}
+      file:
+        path: "{{ backup_root_dir }}/{{ service_path_dir }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: 0700
+
+  become: true
+
+- name: Backup common files
+  include_tasks: backup.yml
 
 - name: Backup all
   block:
@@ -23,7 +56,7 @@
       include_role:
         name: patroni
         tasks_from: backup
-      when: patroni
+      when: is_patroni_exists
 
     - name: backup HAProxy
       include_role:
@@ -48,6 +81,17 @@
         name: SRC
         tasks_from: backup
       when: SRC
+
+    - name: backup rsyslog config
+      include_role:
+        name: rsyslog
+        tasks_from: backup
+      when: rsyslog
+
+    - name: backup pg_auth_reencrypt
+      include_role:
+        name: pg_auth_reencrypt
+        tasks_from: backup
 
   become: true
   when: inventory_hostname != 'etcd'

@@ -1,16 +1,16 @@
 - name: Wait cluster synchronization
   block:
 
-    - name: get current patroni configuration via patroni api
-      uri:
-        url: "http://{{ ansible_fqdn }}:{{ ports.patroni }}/config"
-        return_content: yes
-      register: current_dcs_configuration
-
     #TODO вынести функционал проверки БД(заимствовать из patroni) в ansible module
     - name: wait when patroni update cluster status
       pause:
         seconds: "{{ patroni_wait_seconds }}"
+
+    - name: get current patroni configuration via patroni api
+      uri:
+        url: "{{ protocol }}://{{ ansible_fqdn }}:{{ ports.patroni }}/config"
+        return_content: yes
+      register: current_dcs_configuration
 
     - name: turn on synchronous mode if it is disable
       include_role:
@@ -20,7 +20,7 @@
         change_params: "{{ item }}"
       with_items:
         - "synchronous_mode: true"
-        - "synchronous_mode_strict: false"
+        - "synchronous_mode_strict: true"
       when: not current_dcs_configuration.json.synchronous_mode
 
     - name: define roles of cluster members
@@ -37,11 +37,11 @@
         #TODO после переноса функционала можно будет убрать использование api patroni
         - name: get cluster status via patroni api
           uri:
-            url: "http://{{ ansible_fqdn }}:{{ ports.patroni }}/cluster"
+            url: "{{ protocol }}://{{ ansible_fqdn }}:{{ ports.patroni }}/cluster"
             return_content: yes
           register: cluster_status
           until: current_replica | define_lag(cluster_status.json.members) == 0
-          retries: 6
+          retries: 30
           delay: "{{ patroni_wait_seconds }}"
 
   become: true

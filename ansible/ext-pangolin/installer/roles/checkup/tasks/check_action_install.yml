@@ -1,0 +1,17 @@
+- name: To do it when defined action only installation
+  block:
+
+    - name: setup PGPORT if it's define by user  
+      import_tasks: redefine_variables.yml
+      vars:
+        _redefinevars_pgport: "{{ PGPORT }}"
+      when: PGPORT is defined
+
+    - name: check physical space on directories/mount points
+      import_tasks: check_physical_space_on_directories_or_mount_points.yml
+
+    - name: import ssl components checkup
+      import_tasks: check_exist_certificates.yml
+      when: ssl_mode
+
+  when: action_type == 'install'

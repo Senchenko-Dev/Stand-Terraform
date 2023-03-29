@@ -1,0 +1,336 @@
+- name: Major post update of PG SE
+  block:
+
+    - name: gather packages info
+      package_facts:
+        manager: "auto"
+      no_log: "{{ nolog }}"
+
+    - name: change owner for {{ PGDATA }}
+      file:
+        path: /pgdata
+        owner: postgres
+        recurse: true
+        follow: no
+      when: inventory_hostname == 'replica'
+
+    - name: restart new version Pangolin by patroni.service
+      block:
+
+        - name: stop Pangolin by pg_ctl
+          block:
+            - name: stop Pangolin by pg_ctl
+              shell: "{{ PGHOME }}/bin/pg_ctl stop -D {{ PGDATA }}"
+
+            - name: check that postgresql is stopped
+              shell: '{{ PGHOME }}/bin/pg_ctl status -D {{ PGDATA }}'
+              register: result
+              until: result.stdout.find("no server running") != -1
+              retries: 60
+              delay: 1
+              failed_when: result.rc != 3
+
+          become_user: postgres
+          when: inventory_hostname == 'master'
+
+        - name: stop patroni service with pause mode, Pangolin stopped
+          systemd:
+            name: patroni
+            state: stopped
+            enabled: yes
+            daemon_reload: yes
+          become_user: root
+          when: inventory_hostname == 'master'
+
+        - name: copy merged patroni config
+          copy:
+            src: "{% if patroni %}\
+                       {{ merge_cfg.result_pgse_patroni }}\
+                  {% else %}\
+                       {{ merge_cfg.result_pgse }}\
+                  {% endif %}/postgres.yml"
+            dest: "{{ patroni_files.conf_dir }}/postgres.yml"
+            owner: postgres
+            group: postgres
+            mode: 0600
+            remote_src: yes
+
+        - name: turn off cron jobs by postgres.yml
+          reciter:
+            ANSIBLE_MODULE_ARGS:
+              src: "{{ patroni_files.conf_dir }}/postgres.yml"
+              action: set
+              parameter: "postgresql.parameters"
+              inner_parameter: "cron.database_name"
+              new_val: "template1"
+          environment:
+            - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
+
+        - name: remove depricated parameter from config
+          lineinfile:
+            path: "{{ patroni_files.conf_dir }}/postgres.yml"
+            regexp: "wal_keep_segments.*"
+            state: absent
+
+        - name: get current patroni venv
+          set_fact:
+            _updtpgsepmjr_patroni_venv: "{% if not patroni or not patronictl_file.stat.exists %}{{ PYTHON_VENV_OLD }}{% else %}{{ python.patroni_venv }}{% endif %}"
+
+        - name: clear cluster id
+          shell: |
+            spawn {{ _updtpgsepmjr_patroni_venv }}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml remove {{ clustername }}
+            expect "Please confirm the cluster name to remove:"
+            send  "{{ clustername }}\r"
+            expect "You are about to remove all information in DCS for standalone, please type: \"Yes I am aware\":"
+            send  "Yes I am aware\r"
+            expect eof
+          register: _updtpgsepmjrb_clear_dcs_cluster
+          args:
+            executable: "expect"
+          environment:
+            PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
+            LD_LIBRARY_PATH: "{{ PGHOME }}/lib"
+          when: inventory_hostname == 'master'
+
+        - name: check clear cluster result code
+          assert:
+            that: _updtpgsepmjrb_clear_dcs_cluster.rc == 0
+            fail_msg: "patronictl remove has error: {{ _updtpgsepmjrb_clear_dcs_cluster }}"
+            success_msg: "DCS DB was successfuly cleared"
+          when: inventory_hostname == 'master'
+
+        - name: start new version Pangolin by patroni service
+          systemd:
+            name: patroni
+            state: started
+            enabled: yes
+            daemon_reload: yes
+          become_user: root
+
+        - name: start Pangolin by pg_ctl
+          shell: "{{ PGHOME }}/bin/pg_ctl start -D {{ PGDATA }}"
+          become_user: postgres
+          when: inventory_hostname == 'master'
+
+        - name: wait for patroni
+          pause:
+            seconds: 20
+
+        - name: wait when pgsql open port
+          shell: '{{ PGHOME }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ ports.pg }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 60
+          delay: 1
+
+        - debug: msg="{{ update_error_types_breakpoint_msg }}"
+          when: is_recovery_test_mode and postgresql_error_um008m and inventory_hostname == 'master'
+        - debug: msg="{{ update_error_types_breakpoint_msg }}"
+          when: is_recovery_test_mode and postgresql_error_um008r and inventory_hostname == 'replica'
+
+        - name: turn off pause mode after patroni nodes updated
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: false"
+          when: inventory_hostname == 'master'
+
+        - name: send reload command to patroni
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            endpoint_name: reload
+
+      become_user: postgres
+      when: is_patroni_exists
+
+    - set_fact: reindex_time_started="{{ lookup('pipe','date \"+%Y-%m-%d %H:%M:%S\"') }}"
+
+    - name: reindex all db
+      shell: "{{ PGHOME }}/bin/reindexdb -j {{ proc_cpu_for_ansible_used }} --all --concurrently"
+      environment:
+        - LD_LIBRARY_PATH: "{{ PGHOME }}/lib"
+        - PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
+        - PGPORT: "{{ ports.pg }}"
+        - "{{ db_connection_args }}"
+      become_user: postgres
+      when: inventory_hostname == 'master'
+    
+    - set_fact: reindex_time_finished="{{ lookup('pipe','date \"+%Y-%m-%d %H:%M:%S\"') }}"
+    - set_fact: reindex_time_work="{{ ((reindex_time_finished | to_datetime) - (reindex_time_started | to_datetime)).total_seconds() / 60 | int  }}"
+
+    - set_fact: update_statistic_time_started="{{ lookup('pipe','date \"+%Y-%m-%d %H:%M:%S\"') }}"
+
+    - name: get new statistics
+      shell: "{{ PGHOME }}/bin/vacuumdb -j {{ proc_cpu_for_ansible_used }} --analyze-in-stages --all"
+      environment:
+        - LD_LIBRARY_PATH: "{{ PGHOME }}/lib"
+        - PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
+        - PGHOST: "{{ ansible_fqdn }}"
+        - PGPORT: "{{ ports.pg }}"
+        - PGSSLCERT: "{{ pg_certs_pwd.postgres_cert }}"
+        - PGSSLKEY: "{{ pg_certs_pwd.postgres_key }}"
+        - PGSSLROOTCERT: "{{ pg_certs_pwd.root_ca }}"
+      become_user: postgres
+      when: inventory_hostname == 'master'
+
+    - set_fact: update_statistic_time_finished="{{ lookup('pipe','date \"+%Y-%m-%d %H:%M:%S\"') }}"
+    - set_fact: update_statistic_time_work="{{ ((update_statistic_time_finished | to_datetime) - (update_statistic_time_started | to_datetime)).total_seconds() / 60 | int  }}"
+
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and postgresql_error_um009m and inventory_hostname == 'master'
+
+    - name: turn on autovacuum
+      block:
+
+        - name: remove 'off' for autovacuum from cfgs
+          lineinfile:
+            path: "{{ item.cfg }}"
+            regexp: "{{ item.line }}"
+            state: absent
+          with_items:
+            - {cfg: "{{ PGDATA }}/postgresql.conf",              line: "autovacuum = 'off'" }
+            - {cfg: "{{ patroni_files.conf_dir }}/postgres.yml", line: "autovacuum: 'off'" }
+          become_user: postgres
+
+        - name: restart new version Pangolin by postgresql.service
+          systemd:
+            name: postgresql
+            state: restarted
+            enabled: yes
+            daemon_reload: yes
+          become_user: root
+          when: not is_patroni_exists
+
+        - name: restart new version Pangolin by patroni.service
+          systemd:
+            name: patroni
+            state: restarted
+            enabled: yes
+            daemon_reload: yes
+          become_user: root
+          when: is_patroni_exists
+
+        - name: wait when pgsql open port
+          shell: '{{ PGHOME }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ ports.pg }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 60
+          delay: 1
+
+      when: inventory_hostname == 'master'
+
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and postgresql_error_um010m and inventory_hostname == 'master'
+
+    - name: removes cron job
+      cron:
+        name: "a job for postgresql clean logs"
+        state: absent
+      become_user: postgres
+      ignore_errors: yes
+
+    - name: setup delete and compress old logs
+      template:
+        src: postgresql_clean_logs.j2
+        dest: "{{ global_scripts }}/postgresql_clean_logs"
+        owner: postgres
+        group: postgres
+        mode: 0751
+
+    - name: creates cron job
+      cron:
+        name: "a job for postgresql clean logs"
+        special_time: daily
+        job: "{{ global_scripts }}/postgresql_clean_logs"
+      become_user: postgres
+
+    - name: set permission files protect
+      import_tasks: set_permission_files_protect.yml
+
+    - name: update bootstrap
+      import_tasks: update_bootstrap.yml
+      when: inventory_hostname == 'master' and is_patroni_exists
+
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and postgresql_error_um011m and inventory_hostname == 'master'
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and postgresql_error_um011r and inventory_hostname == 'replica'
+
+    - name: wait for patroni
+      pause:
+        seconds: 20
+
+    - name: get current PGHOME
+      set_fact:
+        _updpremjr_pghome: "{{ PGHOME }}"
+
+    - name: send reload command to patroni
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        endpoint_name: reload
+        PGHOME: "{{ _updpremjr_pghome }}"
+
+    - name: send restart command to patroni
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        endpoint_name: restart
+        PGHOME: "{{ _updpremjr_pghome }}"
+
+    - name: wait cluster synchronization
+      include_role:
+        name: patroni
+        tasks_from: update_wait_cluster_synchronization.yml
+      vars:
+        PGHOME: "{{ _updpremjr_pghome }}"
+      when: inventory_hostname == 'replica'
+
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            pg: true
+          types:
+            pg: 
+              major_post: true
+      run_once: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            pg: true
+          types:
+            pg: 
+              major_post: true
+      run_once: true
+      when: inventory_hostname == 'master'
+
+  always:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+  become: true

@@ -1,6 +1,17 @@
 - name: Prepare linux host
   block:
 
+    - name: Check if /{{ PGDATA.split('/')[1] }} exists
+      stat:
+        path: "/{{ PGDATA.split('/')[1] }}"
+      register: pgdata_exists
+
+    - name: update package lists
+      command:
+        cmd: "apt-get update"
+      become: true
+      when: ansible_os_family == 'Altlinux'
+
     # When deploing on clean machine ansible "package" module not available, because python-module-rpm no installed. Install it manually.
     - name: install required packages on new machine Alt
       command:
@@ -39,6 +50,7 @@
         state: present
         name: "{{ item }}"
       with_items: "{{ required_packages }}"
+      register: result_install_list
 
     - name: allow loading modules from custom directories
       file:
@@ -49,26 +61,7 @@
         - "{{ alt_security_dir }}/perl-trust"
       when: ansible_os_family == "Altlinux"
 
-    - name: create reserve storage of free space
-      shell:
-        cmd: "dd if=/dev/zero of=/{{ PGDATA.replace('/', ' ').split().0 }}/sos bs=1M count={{ sos_file_size }}"
-      when: "pgdata_exists.stat.exists and sos_file_size > 0 and inventory_hostname != 'etcd'"
-
-    - name: clear remote tmp directory
-      file:
-        path: "{{ REMOTE_TMP }}"
-        state: absent
-
-    - name: create remote tmp directory
-      file:
-        path: "{{ REMOTE_TMP }}"
-        state: directory
-        mode: '0777'
-        owner: '{{ ansible_user }}'
-        group: '{{ ansible_user }}'
-        recurse: yes
-
-    - name: create new group and user
+    - name: create OS user and group postgres for all nodes
       block:
 
         - name: create postgres group
@@ -81,5 +74,19 @@
             name: postgres
             group: postgres
             comment: User for PostgreSQL database
+
+    - name: clear remote tmp directory
+      file:
+        path: "{{ REMOTE_TMP }}"
+        state: absent
+
+    - name: create remote tmp directory
+      file:
+        path: "{{ REMOTE_TMP }}"
+        state: directory
+        mode: '0700'
+        owner: postgres
+        group: postgres
+        recurse: yes
 
   become: true

@@ -3,42 +3,16 @@
 
     - name: check python version
       assert:
-        that: hostvars['127.0.0.1'].ansible_python_version|version == 2.7
-        fail_msg: "Current python version: {{ hostvars['127.0.0.1'].ansible_python_version }}. Needed python version: 2.7"
-        success_msg: "Version of python interpretator is correct"
+        that: ansible_python_version|version == 2.7
+        fail_msg: "{{ message_installer.fails.python_version }}"
+        success_msg: "{{ message_installer.info.python_version }}"
       when: ansible_os_family == "RedHat"
 
     - name: check ansible version
       assert:
-        that: hostvars['127.0.0.1'].ansible_version.full is version('2.9','>=')
-        fail_msg: "Current ansible version: {{ hostvars['127.0.0.1'].ansible_version.full }}. Needed ansible version: 2.9 or higher"
-        success_msg: "Ansible version is correct"
-
-    - name: check current user and install requared
-      block:
-
-        - name: check current user
-          shell: if sudo -S -p '' echo -n < /dev/null 2> /dev/null ; then echo 'OK' ; else echo 'ERROR' ; fi
-          register: check_linux_user
-
-        - assert:
-            that: "'OK' in check_linux_user.stdout"
-            fail_msg: "User doesn't have sudo permissions"
-            success_msg: "Correct. User has sudo permissions"
-
-        - name: install packages
-          package:
-            state: present
-            name: "{% if ansible_os_family == 'RedHat' %}\
-                    python-netaddr\
-                  {% elif ansible_os_family == 'Altlinux' %}\
-                    python-module-netaddr\
-                  {% elif ansible_os_family == 'Debian' %}\
-                    python3-netaddr\
-                  {% endif %}"
-
-      when: manual_run is undefined
-      become: true
+        that: hostvars['127.0.0.1'].ansible_version.full is version('{{ ansible_ver }}','>=')
+        fail_msg: "{{ message_installer.fails.ansible_version }}"
+        success_msg: "{{ message_installer.info.ansible_version }}"
 
     # - name: Gather packages info
     #   package_facts:

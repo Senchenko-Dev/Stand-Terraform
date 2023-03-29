@@ -1,0 +1,18 @@
+- name: Backup rsyslog config
+  block:
+
+    - name: ensure {{ backup.rsyslog }} directory exist
+      file:
+        path: "{{ item.src }}"
+        state: "{{ item.state }}"
+      with_items:
+        - { src: "{{ backup.rsyslog }}",                                                     state: "absent" }
+        - { src: "{{ backup.rsyslog }}/{{ SOC_config_file.split('/')[0:-1] | join ('/') }}", state: "directory" }
+
+    - name: backup {{ SOC_config_file }}
+      synchronize:
+        src: "{{ SOC_config_file }}"
+        dest: "{{ backup.rsyslog }}{{ SOC_config_file }}"
+      delegate_to: "{{ inventory_hostname }}"
+
+  become: true

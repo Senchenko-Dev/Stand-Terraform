@@ -7,16 +7,13 @@
         ETCDCTL_API: 3
 
     - name: stop service etcd, if started
-      service:
+      systemd:
         name: etcd
         state: stopped
-
-    - name: loop wait for etcd stopped
-      shell: "systemctl show -p ActiveState etcd | cut -d'=' -f2"
       register: result
-      until: result.stdout in ('inactive','failed')
-      retries: 60
-      delay: 1
+      until: result.status.ActiveState != 'active'
+      retries: 6
+      delay: 10
 
     - name: remove etcd package
       package:
@@ -62,17 +59,20 @@
       template:
         src: etcd.service.j2
         dest: "{{ service_path_dir }}/etcd.service"
-        owner: root
-        group: root
+        owner: postgres
+        group: postgres
         mode: 0640
 
-    - name: change permissions for etcd directory
+    - name: change permissions for etcd directories
       file:
-        path: "{{ etcd_files.conf_dir }}"
+        path: "{{ item }}"
         recurse: yes
         owner: postgres
         group: postgres
         mode: 0700
+      with_items:
+        - "{{ etcd_files.conf_dir }}"
+        - "{{ etcd_files.data_dir }}"
 
     - name: reload systemd and start service
       systemd:
@@ -81,28 +81,46 @@
         daemon_reload: yes
         enabled: yes
 
-    - name: loop wait for etcd started
-      shell: etcdctl --cluster=true endpoint health 2>&1
+    - name: loop wait for etcd start
+      shell: "etcdctl {{ endpoints_v3 }} {% if ssl_mode %}{{ etcdv3_ssl_connect }}{% endif %} endpoint health 2>&1"
       environment:
         ETCDCTL_API: 3
       register: result
-      until: result.stdout.find(" is healthy") != -1
-      retries: 10
-      delay: 1
+      until: result.stdout.find("is healthy") != -1
+      retries: 4
+      delay: 3
+      run_once: true
 
     - name: added roles and users in etcd
       command:
-        cmd: '{{ item }}'
+        cmd: 'etcdctl {{ endpoints_v3 }} {% if ssl_mode %}{{ etcdv3_ssl_connect }}{% endif %} {{ item }}'
       with_items:
-        - "etcdctl user add root:'{{ etcd_root_pass }}'"
-        - "etcdctl user add patronietcd:'{{ patroni_etcd_pass }}'"
-        - "etcdctl --user=root:'{{ etcd_root_pass }}' role add patroni"
-        - "etcdctl role grant-permission patroni readwrite --prefix=true /service/"
-        - "etcdctl --user=root:'{{ etcd_root_pass }}' user grant-role patronietcd patroni"
-        - "etcdctl --user=root:'{{ etcd_root_pass }}' auth enable"
+        - "user add root:'{{ etcd_root_pass }}'"
+        - "user add patronietcd:'{{ patroni_etcd_pass }}'"
+        - "--user=root:'{{ etcd_root_pass }}' role add patroni"
+        - "role grant-permission patroni readwrite --prefix=true /service/"
+        - "--user=root:'{{ etcd_root_pass }}' user grant-role patronietcd patroni"
+        - "--user=root:'{{ etcd_root_pass }}' auth enable"
       run_once: true
       environment:
         ETCDCTL_API: 3
+      no_log: "{{ nolog }}"
+
+    #TODO remove after switching to etcd v3
+    - name: added roles and users in etcd for api v2
+      command:
+        cmd: 'etcdctl {{ endpoints_v2 }} {% if ssl_mode %}{{ etcdv2_ssl_connect }}{% endif %} {{ item }}'
+      with_items:
+        - "user add root:'{{ etcd_root_pass }}'"
+        - "user add patronietcd:'{{ patroni_etcd_pass }}'"
+        - "-u root:'{{ etcd_root_pass }}' role add patroni"
+        - "role grant patroni -path '/service/*' -readwrite"
+        - "-u root:'{{ etcd_root_pass }}' user grant patronietcd -roles patroni"
+        - "-u root:'{{ etcd_root_pass }}' auth enable"
+        - "-u root:'{{ etcd_root_pass }}' role revoke guest -path '/*' --readwrite"
+      run_once: true
+      environment:
+        ETCDCTL_API: 2
       no_log: "{{ nolog }}"
 
   become: true

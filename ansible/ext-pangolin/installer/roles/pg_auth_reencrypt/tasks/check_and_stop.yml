@@ -1,0 +1,133 @@
+- name: Stopping the pg_auth_reencrypt utility
+  block:
+
+    - name: check pangolin_reencrypt@.service exists
+      stat:
+        path: "{{ service_path_dir }}/pangolin_reencrypt@.service"
+      register: pangolin_reencrypt_service_exists
+
+    - name: check if pangolin_reencrypt@.service exists
+      block:
+
+        - name: get status {{ pg_auth_reencrypt_files.service_file_name_postgres }}
+          systemd:
+            name: "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+          register: pangolin_reencrypt_postgres
+
+        - name: get status {{ pg_auth_reencrypt_files.service_file_name_postgres }}
+          systemd:
+            name: "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+          register: pangolin_reencrypt_kmadmin_pg
+
+        - name: set activestate
+          set_fact:
+            pangolin_reencrypt_postgres_activestate: "{% if pangolin_reencrypt_postgres.status.ActiveState == 'active' %}true{% else %}false{% endif %}"
+            pangolin_reencrypt_kmadmin_pg_activestate: "{% if pangolin_reencrypt_kmadmin_pg.status.ActiveState == 'active' %}true{% else %}false{% endif %}"
+
+      when: pangolin_reencrypt_service_exists.stat.exists
+
+    - name: stop service pg_auth_reencrypt if pangolin_reencrypt@.service exists
+      block:
+
+        - name: stop {{ pg_auth_reencrypt_files.service_file_name_postgres }} if active
+          block:
+
+            - name: stop {{ pg_auth_reencrypt_files.service_file_name_postgres }} service
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+                state: stopped
+
+            - name: loop wait for {{ pg_auth_reencrypt_files.service_file_name_postgres }} stopped
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+              register: result
+              until: result.status.ActiveState != 'active'
+              retries: 6
+              delay: 1
+
+          when: pangolin_reencrypt_postgres_activestate
+
+        - name: stop {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }} if active
+          block:
+
+            - name: stop {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }} service
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+                state: stopped
+
+            - name: loop wait for {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }} stopped
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+              register: result
+              until: result.status.ActiveState != 'active'
+              retries: 30
+              delay: 1
+
+          when: pangolin_reencrypt_kmadmin_pg_activestate
+
+      when: pangolin_reencrypt_service_exists.stat.exists
+
+    - name: check the running utility pg_auth_reencrypt
+      shell: "ps aux | grep {{ PGETCDIR }}/pg_auth_reencrypt | grep -v grep"
+      failed_when: false
+      changed_when: false
+      register: result_ps
+
+    - name: kill process pg_auth_reencrypt
+      shell: "kill -9 {{ item.split()[1] }}"
+      with_items: "{{ result_ps.stdout_lines }}"
+      when: result_ps is defined and result_ps.rc == 0 and result_ps|length > 0
+
+    - name: re-check the running utility pg_auth_reencrypt
+      shell: "ps aux | grep {{ PGETCDIR }}/pg_auth_reencrypt | grep -v grep"
+      failed_when: false
+      changed_when: false
+      register: re_result_ps
+      until: re_result_ps.stdout.find("pg_auth_reencrypt") == -1
+      retries: 6
+      delay: 1
+
+    - name: print message if the pg_auth_reencrypt utility is still running
+      assert:
+        that: "'pg_auth_reencrypt' not in re_result_ps.stdout"
+        fail_msg: "{{ update_control_msgs.fails.stop_pg_auth_reencrypt }}"
+
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            pg_auth_reencrypt: true
+          types:
+            pg_auth_reencrypt:
+              check_and_stop: true
+      run_once: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            pg_auth_reencrypt: true
+          types:
+            pg_auth_reencrypt:
+              check_and_stop: true
+      run_once: true
+      when: inventory_hostname == 'master'
+
+  become: true
+  become_user: root
+  when: inventory_hostname != 'etcd'

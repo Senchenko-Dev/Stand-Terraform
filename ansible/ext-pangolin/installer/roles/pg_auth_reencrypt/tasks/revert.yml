@@ -1,0 +1,189 @@
+- name: Restore pg_auth_reencrypt
+  block:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+    - name: stopping services if they were started during the update process
+      block:
+
+        - name: get status {{ pg_auth_reencrypt_files.service_file_name_postgres }}
+          systemd:
+            name: "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+          register: pangolin_reencrypt_postgres
+
+        - name: get status {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}
+          systemd:
+            name: "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+          register: pangolin_reencrypt_kmadmin_pg
+
+        - name: stop service {{ pg_auth_reencrypt_files.service_file_name_postgres }}, if started
+          block:
+
+            - name: stop {{ pg_auth_reencrypt_files.service_file_name_postgres }} service
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+                state: stopped
+
+            - name: loop wait for {{ pg_auth_reencrypt_files.service_file_name_postgres }} stopped
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+              register: result
+              until: result.status.ActiveState != 'active'
+              retries: 6
+              delay: 1
+
+          when: pangolin_reencrypt_postgres.status.ActiveState == 'active'
+
+        - name: stop service {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}, if started
+          block:
+
+            - name: stop {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }} service
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+                state: stopped
+
+            - name: loop wait for {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }} stopped
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+              register: result
+              until: result.status.ActiveState != 'active'
+              retries: 6
+              delay: 1
+
+          when: pangolin_reencrypt_kmadmin_pg.status.ActiveState == 'active'
+
+    - name: remove and recovery pg_auth_reencrypt files
+      block:
+
+        - name: disable service pangolin_reencrypt@.service
+          systemd:
+            name: "{{ item }}"
+            daemon_reload: yes
+            enabled: no
+          with_items:
+            - "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+            - "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+          ignore_errors: yes
+          when: not auth_reencrypt
+
+        - name: remove pg_auth_reencrypt files
+          file:
+            path: "{{ item }}"
+            state: absent
+          with_items:
+            - "{{ service_path_dir }}/pangolin_reencrypt@.service"
+            - "{{ PGETCDIR }}/enc_util.cfg"
+            - "{{ PGETCDIR }}/pg_auth_reencrypt"
+            - "{{ pg_auth_reencrypt_files.bin_path }}"
+            - "{{ PGETCDIR }}/start_reencrypt.sh"
+            - "{{ pg_auth_reencrypt_files.pid_dir }}"
+            - "{{ PGETCDIR }}/enc_params.cfg.kmadmin_pg"
+            - "{{ PGETCDIR }}/enc_params.cfg.postgres"
+            - "{{ PGETCDIR }}/enc_params.cfg"
+
+        - name: recovery pg_auth_reencrypt files
+          copy:
+            src:    "{{ item.src }}"
+            dest:   "{{ item.dest }}"
+            owner:  "{{ item.owner }}"
+            group:  "{{ item.group }}"
+            mode:   "{{ item.mode }}"
+            remote_src: yes
+          with_items:
+            - { src: "{{ backup.pg_auth_reencrypt }}{{ service_path_dir }}/pangolin_reencrypt@.service",
+                dest: "{{ service_path_dir }}/pangolin_reencrypt@.service",
+                owner: root,
+                group: root,
+                mode: '0644',
+                condition: backup_pangolin_reencrypt_service_exists.stat.exists }
+            - { src: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/enc_util.cfg",
+                dest: "{{ PGETCDIR }}/enc_util.cfg",
+                owner: root,
+                group: root,
+                mode: '0644',
+                condition: backup_pg_encrypt_cfg_exists.stat.exists }
+            - { src: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/start_reencrypt.sh",
+                dest: "{{ PGETCDIR }}/start_reencrypt.sh",
+                owner: root,
+                group: root,
+                mode: '0750',
+                condition: backup_start_reencrypt_sh_exists.stat.exists }
+            - { src: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/pg_auth_reencrypt",
+                dest: "{{ PGETCDIR }}/pg_auth_reencrypt",
+                owner: root,
+                group: root,
+                mode: '0755',
+                condition: backup_old_pg_auth_reencrypt_exists.stat.exists }
+            - { src: "{{ backup.pg_auth_reencrypt }}{{ pg_auth_reencrypt_files.bin_path }}",
+                dest: "{{ pg_auth_reencrypt_files.bin_path }}",
+                owner: root,
+                group: root,
+                mode: '0755',
+                condition: backup_pg_auth_reencrypt_exists.stat.exists }
+            - { src: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/enc_params.cfg.kmadmin_pg",
+                dest: "{{ PGETCDIR }}/enc_params.cfg.kmadmin_pg",
+                owner: kmadmin_pg,
+                group: kmadmin_pg,
+                mode: '0644',
+                condition: backup_enc_params_cfg_kmadmin_pg_exists.stat.exists }
+            - { src: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/enc_params.cfg.postgres",
+                dest: "{{ PGETCDIR }}/enc_params.cfg.postgres",
+                owner: postgres,
+                group: postgres,
+                mode: '0644',
+                condition: backup_enc_params_cfg_postgres_exists.stat.exists }
+            - { src: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/enc_params.cfg",
+                dest: "{{ PGETCDIR }}/enc_params.cfg",
+                owner: postgres,
+                group: postgres,
+                mode: '0644',
+                condition: backup_enc_params_cfg_exists.stat.exists }
+          when: "{{ item.condition }}"
+
+      when: not update_errors.types.pg_auth_reencrypt.check_and_stop
+
+    - name: start {{ pg_auth_reencrypt_files.service_file_name_postgres }} service
+      block:
+
+        - name: start {{ pg_auth_reencrypt_files.service_file_name_postgres }} service
+          systemd:
+            name: "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+            state: started
+            daemon_reload: yes
+            enabled: yes
+
+        - name: loop wait for {{ pg_auth_reencrypt_files.service_file_name_postgres }} started
+          systemd:
+            name: "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+          register: result
+          until: result.status.ActiveState == 'active'
+          retries: 6
+          delay: 1
+
+      when: pangolin_reencrypt_postgres_activestate is defined and pangolin_reencrypt_postgres_activestate
+
+    - name: start {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }} service
+      block:
+
+        - name: start {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }} service
+          systemd:
+            name: "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+            state: started
+            daemon_reload: yes
+            enabled: yes
+
+        - name: loop wait for {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }} started
+          systemd:
+            name: "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+          register: result
+          until: result.status.ActiveState == 'active'
+          retries: 6
+          delay: 1
+
+      when: pangolin_reencrypt_kmadmin_pg_activestate is defined and pangolin_reencrypt_kmadmin_pg_activestate
+
+  become: true
+  become_user: root
+  when: inventory_hostname != 'etcd' and ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int != 0

@@ -1,13 +1,13 @@
 - name: create encrypt space for {{ username }}
   shell: |
-    spawn {{ PGHOME }}/bin/pg_auth_config  add -s -h {{ address }} -p {{ ports.pg }} -U {{ username }} -d {{ database }}
+    spawn {{ curr_pghome }}/bin/pg_auth_config  add -s -h {{ address }} -p {{ ports.pg }} -U {{ username }} -d {{ database }}
     expect "enter password:"
     send  "{{ password | escape_string }}\r"
     expect eof
   args:
     executable: expect
   environment:
-    PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
+    PG_PLUGINS_PATH: "{{ curr_pghome }}/lib"
   no_log: "{{ nolog }}"
   become: true
   become_user: postgres

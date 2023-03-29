@@ -1,6 +1,39 @@
 import re
 import string
 
+def get_cert_path(str, cert_name):
+    if not len(str) or not len(cert_name):
+        return ""
+    cert = cert_name.split('|')
+    if len(cert) == 2:
+        if cert[0] in str:
+            cert_name = cert[0]
+        elif cert[1] in str:
+            cert_name = cert[1]
+        else:
+            return ""
+    elif len(cert) == 1:
+        if cert[0] in str:
+            cert_name = cert[0]
+        else:
+            return ""
+
+    list_of_strs = str.split(cert_name)
+    if len(list_of_strs) < 2:
+        return ""
+    list_of_strs = list_of_strs[-1].split('=')
+    if len(list_of_strs) < 2:
+        return ""
+    list_of_strs = list_of_strs[1].split(' ')
+    if not len(list_of_strs):
+        return ""
+    res_str = ""
+    for idx, x in enumerate(list_of_strs):
+        if len(x):
+            res_str = re.sub(r"[\"\'=\ ]", "", list_of_strs[idx])
+            break
+
+    return res_str
 
 def strip(string, position):
 	if position == 'beginning':
@@ -52,6 +85,39 @@ def bcompare(list, comp_type):
         if comp_type == "AND": return True
         if comp_type == "OR": return False
 
+def compare_pangolin_versions( operator_name,versions, idx=0):
+    """
+    example:
+    versions = ['4.3.1', '4.2.1']
+    compare_versions('l_less_r', versions)
+    """
+    first = versions[0]
+    second = versions[1]
+    if idx == 0:
+        first = first.split('.')
+        second = second.split('.')
+
+    if int(first[idx]) < int(second[idx]):
+        if operator_name == 'l_less_r':
+            return True # left less right
+        else:
+            return False
+    elif int(first[idx]) > int(second[idx]):
+        if operator_name == 'l_more_r':
+            return True # left more right
+        else:
+            return False
+    else:
+        idx += 1
+        if idx < len(first):
+            vrs = [first, second]
+            print(first)
+            return compare_versions(operator_name, vrs, idx)
+        if operator_name == 'l_equal_r':
+            return True # left equal right
+        else:
+            return False
+
 def escape_string(instr):
     outres = list(instr)
     insert_count = 0
@@ -63,6 +129,34 @@ def escape_string(instr):
     outres = "".join(outres)
     return outres
 
+def get_password_from_pg_auth_path(list_res):
+    for el in list_res:
+        if '$enc' in el:
+            return el
+    else:
+        raise ValueError('There is no encrypted password in the received list')
+
+def check_configs_on_unsupported_symbols(filename):
+    with open(filename, 'rb') as config_file:
+        read_conf = config_file.readlines()
+    check_result = True
+    for line in read_conf:
+        if not re.search(r"^[#;]",str(line)):
+            try:
+                line.decode('ascii')
+            except UnicodeDecodeError:
+                check_result = False
+                break
+    return check_result
+
+
+def filter_all(comparison):
+    return all(comparison)
+
+
+def filter_any(comparison):
+    return any(comparison)
+
 class FilterModule(object):
     def filters(self):
         return {
@@ -72,4 +166,12 @@ class FilterModule(object):
             'compare_pgbouncer_configs': compare_pgbouncer_configs,
             'bcompare': bcompare,
             'escape_string': escape_string,
+            'get_cert_path': get_cert_path,
+            'get_password_from_pg_auth_path': get_password_from_pg_auth_path,
+            'check_configs_on_unsupported_symbols': check_configs_on_unsupported_symbols,
+            'filter_any': filter_any,
+            'filer_all': filter_all,
         }
+
+# if __name__ == "__main__":
+#     print(check_configs_on_unsupported_symbols("pg_hba.conf"))

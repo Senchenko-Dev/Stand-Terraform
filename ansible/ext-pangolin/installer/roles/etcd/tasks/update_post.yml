@@ -1,0 +1,177 @@
+- name: Post update etcd
+  block:
+
+    - name: trigger revert check
+      block:
+
+        - name: touch trigger
+          file:
+            path: "{{ update_status_files.dir }}/.trigger_stop_update"
+            state: touch
+          become: true
+          when: is_recovery_test_mode and trigger_stop02m
+
+        - name: trigger stop updated
+          include_role:
+            name: common
+            tasks_from: trigger_stop_update
+
+      when: inventory_hostname == 'master'
+
+    - name: start new version of etcd
+      block:
+
+        - name: reload systemd and start service
+          systemd:
+            name: etcd
+            state: restarted
+            daemon_reload: yes
+            enabled: yes
+
+        - name: loop wait for etcd started after update
+          shell: "etcdctl {{ endpoints_v3 }} {% if ssl_mode %}{{ etcdv3_ssl_connect }}{% endif %} endpoint health 2>&1"
+          environment:
+            ETCDCTL_API: 3
+          register: result
+          until: result.stdout.find("is healthy") != -1
+          retries: 4
+          delay: 3
+          run_once: true
+
+        - debug: msg="{{ update_error_types_breakpoint_msg }}"
+          when: is_recovery_test_mode and etcd_error_um003m and inventory_hostname == 'master'
+        - debug: msg="{{ update_error_types_breakpoint_msg }}"
+          when: is_recovery_test_mode and etcd_error_um003r and inventory_hostname == 'replica'
+        - debug: msg="{{ update_error_types_breakpoint_msg }}"
+          when: is_recovery_test_mode and etcd_error_um003e and inventory_hostname == 'etcd'
+
+        - name: wait when patroni recovery dcs db with the help load patroni.dynamic.json file
+          uri:
+            url: "{{ protocol }}://{{ ansible_fqdn }}:{{ ports.patroni }}/cluster"
+            timeout: 5
+            return_content: yes
+          register: result
+          until: result.status != -1
+          retries: 5
+          delay: 4
+          when: inventory_hostname != 'etcd'
+
+      become: true
+
+    - name: update auth params for etcd service
+      block:
+
+        - name: added roles and users in etcd
+          command:
+            cmd: 'etcdctl {{ endpoints_v3 }} {% if ssl_mode %}{{ etcdv3_ssl_connect }}{% endif %} {{ item }}'
+          with_items:
+            - "user add root:'{{ etcd_root_pass }}'"
+            - "user add patronietcd:'{{ patroni_etcd_pass }}'"
+            - "--user=root:'{{ etcd_root_pass }}' role add patroni"
+            - "role grant-permission patroni readwrite --prefix=true /service/"
+            - "--user=root:'{{ etcd_root_pass }}' user grant-role patronietcd patroni"
+            - "--user=root:'{{ etcd_root_pass }}' auth enable"
+          run_once: true
+          environment:
+            ETCDCTL_API: 3
+          no_log: "{{ nolog }}"
+
+        - name: added roles and users in etcd for api v2
+          command:
+            cmd: 'etcdctl {{ endpoints_v2 }} {% if ssl_mode %}{{ etcdv2_ssl_connect }}{% endif %} {{ item }}'
+          with_items:
+            - "user add root:'{{ etcd_root_pass }}'"
+            - "user add patronietcd:'{{ patroni_etcd_pass }}'"
+            - "-u root:'{{ etcd_root_pass }}' role add patroni"
+            - "role grant patroni -path '/service/*' -readwrite"
+            - "-u root:'{{ etcd_root_pass }}' user grant patronietcd -roles patroni"
+            - "-u root:'{{ etcd_root_pass }}' auth enable"
+            - "-u root:'{{ etcd_root_pass }}' role revoke guest -path '/*' --readwrite"
+          run_once: true
+          environment:
+            ETCDCTL_API: 2
+          no_log: "{{ nolog }}"
+
+        - name: check that etcd cluster is healthy after adding roles and users
+          shell: "etcdctl {{ endpoints_v3 }} {% if ssl_mode %}{{ etcdv3_ssl_connect }}{% endif %} --user=root:'{{ etcd_root_pass }}' --cluster=true endpoint health 2>&1"
+          environment:
+            ETCDCTL_API: 3
+          register: result
+          until: result.stdout.find(" is healthy") != -1
+          retries: 10
+          delay: 1
+          no_log: "{{ nolog }}"
+          
+      become: true
+      when: inventory_hostname == 'master'
+
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and etcd_error_um004m and inventory_hostname == 'master'
+
+    - name: turn off pause mode
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        change_params: "pause: false"
+        PGHOME: "{{ PGHOME_OLD }}"
+      when: not patroni
+
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            etcd: true
+          types:
+            etcd:
+              finally: true
+      run_once: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            etcd: true
+          types:
+            etcd:
+              finally: true
+      run_once: true
+      when: inventory_hostname == 'master'
+    
+    - name: etcd updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            etcd: true
+          components:
+            etcd: true
+          types:
+            etcd:
+              finally: true
+      run_once: true
+      when: inventory_hostname == 'etcd'
+
+  always:
+  
+    - name: Set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'

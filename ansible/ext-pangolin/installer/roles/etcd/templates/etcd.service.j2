@@ -8,7 +8,7 @@ Wants=network-online.target
 Type=notify
 WorkingDirectory={{ etcd_files.data_dir }}/
 EnvironmentFile=-/etc/etcd/etcd.conf
-User=etcd
+User=postgres
 # set GOMAXPROCS to number of processors
 ExecStart=/bin/bash -c "GOMAXPROCS=$(nproc) ionice -c2 -n0 {{ etcd_files.bin_path }}"
 

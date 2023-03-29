@@ -1,2 +1,101 @@
 - name: Start {{ operation_type }} operation
-  include_tasks: "{{ operation_type }}.yml"
+  block:
+
+    - name: start {{ operation_type }} operation
+      include_tasks: "{{ operation_type }}.yml"
+
+    - name: create new symlink for PGDATA and PGHOME
+      block:
+
+          - name: check {{ PGDATA.split('/')[:-1] | join('/') }} exists
+            stat:
+              path: "{{ PGDATA.split('/')[:-1] | join('/') }}"
+            register: new_pgdata_exists
+
+          - name: check symlink /pgdata/data exists
+            stat:
+              path: "/pgdata/data"
+            register: new_link_pgdata_exists
+
+          - name: check {{ PGHOME }} exists
+            stat:
+              path: "{{ PGHOME }}"
+            register: pghome_exists
+
+          - name: check symlink /usr/pangolin exists
+            stat:
+              path: "/usr/pangolin"
+            register: link_pghome_exists
+        
+          - name: check /usr/pgsql-se-{{ pg_major_version }} exists
+            stat:
+              path: "/usr/pgsql-se-{{ pg_major_version }}"
+            register: other_link_pghome
+
+          - name: create symlinks for {{ PGDATA.split('/')[:-1] | join('/') }} and {{ PGHOME }}
+            file:
+              src: "{{ item.src }}"
+              dest: "{{ item.dest }}"
+              state: link
+              force: yes
+              owner: postgres
+              group: postgres
+            with_items:
+              - { src: "{{ PGDATA.split('/')[:-1] | join('/') }}", dest: "/pgdata/data", condition: "new_pgdata_exists.stat.exists and not new_link_pgdata_exists.stat.exists" }
+              - { src: "{{ PGHOME }}", dest: "/usr/pangolin", condition: "pghome_exists.stat.exists and not link_pghome_exists.stat.exists" }
+              - { src: "{{ PGHOME }}", dest: "/usr/pgsql-se-{{ pg_major_version }}", condition: "pghome_exists.stat.exists and not other_link_pghome.stat.exists" }
+            when: "{{ item.condition }}"
+
+      become: true
+      when: inventory_hostname != 'etcd' and action_type == 'install'
+
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            finally: true
+      run_once: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            finally: true
+      run_once: true
+      when: inventory_hostname == 'master'
+
+    - name: etcd updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            etcd: true
+          components:
+            finally: true
+      run_once: true
+      when: inventory_hostname == 'etcd'
+
+  always:
+
+    - name: to stop install process if error
+      fail: msg='Install process must be stopped by error'
+      when: "action_type == 'install' and \
+            hostvars['master' or 'replica' or 'etcd'].update_errors.aggregate"

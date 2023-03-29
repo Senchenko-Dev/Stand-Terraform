@@ -1,0 +1,344 @@
+- name: Get ping response and gather packages info
+  hosts: localhost:all
+  tasks:
+    - set_fact: update_time_started="{{ lookup('pipe','date \"+%Y-%m-%d %H:%M:%S\"') }}"
+    - action: ping
+    - set_fact:
+        the_ansible_local_address: "{{ hostvars['127.0.0.1'].ansible_default_ipv4.address }}"
+      run_once: true
+    - package_facts:
+        manager: "auto"
+      no_log: "{{ nolog }}"
+  tags: standalone,cluster
+
+########################################   standalone-postgresql-only          ########################################
+########################################   standalone-postgresql-pgbouncer     ########################################
+########################################   standalone-patroni-etcd-pgbouncer   ########################################
+- hosts: master
+  roles:
+    - { role: checkup }
+    - { role: pg_auth_reencrypt,    when: not update_errors.aggregate, operation_type: check_and_stop }
+    - { role: rsyslog,    when: not update_errors.aggregate }
+    - { role: SRC,        when: SRC is defined and SRC and not update_errors.aggregate, operation_type: update_pg_server }
+    - { role: etcd,       when: etcd and not update_errors.aggregate,  vars: { post_update: false } }
+    - { role: etcd,       when: etcd and not update_errors.aggregate,  vars: { post_update: true } }
+    - { role: patroni,    when: patroni and not update_errors.aggregate,  vars: { post_update: false } }
+    - { role: postgresql, when: postgres and not update_errors.aggregate,  vars: { pre_update: true, post_update: false } }
+    - { role: postgresql, when: postgres and not update_errors.aggregate,  vars: { pre_update: false, 
+                                                                                   post_update: false, 
+                                                                                   migrate_host: master } }
+    - { role: postgresql, when: postgres and not update_errors.aggregate,  vars: { pre_update: false, post_update: true } }
+    - { role: patroni,    when: patroni and not update_errors.aggregate,  vars: { post_update: true } }
+    - { role: pgbouncer,  when: pgbouncer and not update_errors.aggregate }
+    - { role: configure,  when: not update_errors.aggregate, operation_type: main_configure }
+    - { role: finally,    when: not update_errors.aggregate, operation_type: switch_to_original_configs }
+    - { role: tests,      when: not update_errors.aggregate and run_smoke_test, vars: { cluster: false }}
+    - { role: configure,  when: not update_errors.aggregate, operation_type: finish_configure }
+    - { role: finally,    when: not update_errors.aggregate, operation_type: change_linux_password }
+    - { role: finally,    when: not update_errors.aggregate, operation_type: finish_update, vars: { _fnshupdt_pghome: "{{ PGHOME }}",
+                                                                                                    _fnshupdt_pgdata: "{{ PGDATA }}" } }
+    - { role: pg_auth_reencrypt,    when: not update_errors.aggregate, operation_type: install_and_update, vars: { _reencrypt_pgdata: "/pgdata/{{ pg_major_version }}/data" } }
+    - { role: SRC,        when: postgres and not update_errors.aggregate, operation_type: install_rpm, vars: { _nstllrpm_pgbackup: "/{{ PGBACKUP.split('/').1 }}/{{ pg_major_version }}",
+                                                                                                               _nstllrpm_pgdata: "/pgdata/{{ pg_major_version }}/data" } }
+  tags: standalone
+
+########################################   cluster-patroni-etcd-pgbouncer           ########################################
+########################################   cluster-patroni-etcd-pgbouncer-haproxy   ########################################
+- hosts: master:replica:etcd
+  roles:
+    - { role: checkup,    when: not update_errors.aggregate }
+    - { role: pg_auth_reencrypt,    when: not update_errors.aggregate, operation_type: check_and_stop }
+    - { role: rsyslog,    when: not update_errors.aggregate }
+    - { role: SRC,        when: SRC is defined and SRC and not update_errors.aggregate, operation_type: update_pg_server }
+    - { role: etcd,       when: etcd and not update_errors.aggregate,  vars: { post_update: false } }
+    - { role: etcd,       when: etcd and not update_errors.aggregate,  vars: { post_update: true } }
+  tags: cluster
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: master
+  roles:
+    - { role: patroni,    when: patroni and not update_errors.aggregate,  vars: { post_update: false } }
+  tags: cluster
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: replica
+  roles:
+    - { role: patroni,    when: patroni and not update_errors.aggregate,  vars: { post_update: false } }
+  tags: cluster
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: replica
+  roles:
+    - { role: postgresql, when: postgres and not update_errors.aggregate,  vars: { pre_update: true, post_update: false } }
+  tags: cluster
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: master
+  roles:
+    - { role: postgresql, when: postgres and not update_errors.aggregate,  vars: { pre_update: true, post_update: false } }
+  tags: cluster
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: master
+  roles:
+    - { role: postgresql, when: postgres and not update_errors.aggregate,  vars: { pre_update: false, 
+                                                                                   post_update: false, 
+                                                                                   migrate_host: master } }
+    - { role: postgresql, when: postgres and not update_errors.aggregate,  vars: { pre_update: false, post_update: true } }
+    - { role: patroni,    when: patroni and not update_errors.aggregate,  vars: { post_update: true } }
+    - { role: pgbouncer,  when: pgbouncer and not update_errors.aggregate }
+    - { role: HAProxy,    when: haproxy and not update_errors.aggregate }
+    - { role: configure,  when: not update_errors.aggregate, operation_type: main_configure }
+    - { role: postgresql, when: postgres and not update_errors.aggregate,  vars: { pre_update: false, 
+                                                                                   post_update: false, 
+                                                                                   migrate_host: replica } }
+  tags: cluster
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: replica
+  roles:
+    - { role: postgresql, when: postgres and not update_errors.aggregate,  vars: { pre_update: false, post_update: true } }
+    - { role: patroni,    when: patroni and not update_errors.aggregate,  vars: { post_update: true } }
+    - { role: pgbouncer,  when: pgbouncer and not update_errors.aggregate }
+    - { role: HAProxy,    when: haproxy and not update_errors.aggregate }
+  tags: cluster
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: replica:master:etcd
+  roles:
+    - { role: finally,    when: not update_errors.aggregate, operation_type: switch_to_original_configs }
+    - { role: tests,      when: not update_errors.aggregate and run_smoke_test , vars: { cluster: true }}
+    #- { role: finally,    when: not update_errors.aggregate, operation_type: turn_off_etcd_v2 }
+  tags: cluster
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+- hosts: master:replica
+  roles:
+    - { role: configure,      when: not update_errors.aggregate, operation_type: finish_configure }
+    - { role: finally,        when: not update_errors.aggregate, operation_type: finish_update, vars: { _fnshupdt_pghome: "{{ PGHOME }}",
+                                                                                                        _fnshupdt_pgdata: "{{ PGDATA }}" } }
+  tags: cluster
+
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+
+- hosts: master:replica
+  roles:
+    - { role: SRC,            when: postgres and not update_errors.aggregate, operation_type: install_rpm, vars: { _nstllrpm_pgbackup: "/{{ PGBACKUP.split('/').1 }}/{{ pg_major_version }}",
+                                                                                                                   _nstllrpm_pgdata: "/pgdata/{{ pg_major_version }}/data" } }
+    - { role: pg_auth_reencrypt,    when: not update_errors.aggregate, operation_type: install_and_update, vars: { _reencrypt_pgdata: "/pgdata/{{ pg_major_version }}/data" } }
+  tags: cluster
+
+- hosts: master:replica:etcd
+  roles:
+    - { role: finally, when: not update_errors.aggregate, operation_type: change_linux_password }
+  tags: cluster
+- hosts: master:replica:etcd
+  tasks:
+    - { include_role: { name: common, tasks_from: update_errors_sync_to_hosts.yml } }
+  tags: cluster
+
+#=== recovery if error ===
+- hosts: replica:etcd:master
+  serial: 1
+  roles:
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: control_services_stopped }
+  tags: standalone,cluster
+
+- hosts: master:replica:etcd
+  roles:
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: checkup }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: etcd }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: rsyslog }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: revert_pg_server }
+  tags: standalone,cluster
+
+- hosts: master
+  roles: 
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: postgresql }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: revert_rpm_install }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: patroni }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: pgbouncer }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: haproxy }
+  tags: standalone,cluster
+
+- hosts: replica
+  roles:
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: postgresql }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: revert_rpm_install }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: patroni }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: pgbouncer }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: haproxy }
+  tags: cluster
+
+- hosts: master:replica:etcd
+  roles:
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: control_services_started, vars: { is_turn_on_etcd: true,
+                                                                                                                                 is_turn_on_pangolin: false,
+                                                                                                                                 is_turn_on_patroni: false,
+                                                                                                                                 is_turn_on_confd: false,
+                                                                                                                                 is_turn_on_pgbouncer: false,
+                                                                                                                                 is_turn_on_haproxy: false } }
+  tags: standalone,cluster
+
+- hosts: master:replica
+  serial: 1
+  roles:
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: control_services_started, vars: { is_turn_on_etcd: false,
+                                                                                                                                 is_turn_on_pangolin: true,
+                                                                                                                                 is_turn_on_patroni: true,
+                                                                                                                                 is_turn_on_confd: true,
+                                                                                                                                 is_turn_on_pgbouncer: true,
+                                                                                                                                 is_turn_on_haproxy: true } }
+  tags: standalone,cluster
+
+- hosts: replica:master
+  roles:
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: pg_auth_reencrypt }
+    - { role: recovery, when: is_inner_full_backup and update_errors.aggregate, recovery_type: finally }
+  tags: standalone,cluster
+
+#=== finish playbook and print finished messages ===
+
+- name: Unblock traffic
+  hosts: master:replica:etcd
+  tasks:
+
+    - name: unblock traffic
+      include_role:
+        name: common
+        tasks_from: block_traffic
+      vars:
+        block_traffic: false
+        the_current_haproxy_port: "{{ ports.haproxy }}"
+        the_current_pgbouncer_port: "{{ ports.pgbouncer }}"
+        the_current_pg_port: "{{ ports.pg }}"
+
+  tags: standalone,cluster
+
+#==== return originals SRC scripts ====
+- name: Return original SRC scripts
+  hosts: master:replica
+  roles:
+    - { role: SRC,      when: SRC is defined and SRC, operation_type: return_original_scripts }
+  tags: standalone,cluster
+  
+- name: Finish playbook and print finished messages
+  hosts: master
+  tasks:
+
+    - name: clear cache update directory
+      file:
+        path: "{{ update_status_files.dir }}"
+        state: absent
+      become: true
+      when: not update_errors.aggregate
+
+    - name: delete disallow file
+      file:
+        path: "{{ update_status_files.disallow_update }}"
+        state: absent
+      become: true
+      when: is_inner_full_backup
+
+    - name: write to process status work
+      include_role:
+        name: common
+        tasks_from: add_process_status_logs
+      vars:
+        process_work_status: "{% if is_trigger_stop_update is defined and is_trigger_stop_update and update_errors.aggregate %}\
+                                  {{ process_work_statuses.recovery.trigger_stop_update }}\
+                              {% elif not is_inner_full_backup and update_errors.aggregate %}\
+                                  {{ process_work_statuses.all_updates.error }}\
+                              {% elif is_inner_full_backup and update_errors.aggregate %}\
+                                  {{ process_work_statuses.recovery.finish }}\
+                              {% else %}\
+                                  {{ process_work_statuses.all_updates.finish }}\
+                              {% endif %}"
+        recovery_key: "{% if is_inner_full_backup and update_errors.aggregate %}\
+                          True\
+                       {% else %}\
+                          False\
+                       {% endif %}"
+      when: "not update_errors.components.checkup \
+             or (is_trigger_stop_update is defined \
+                and is_trigger_stop_update)"
+
+    - debug: msg="{{ update_errors }}"
+
+    - debug: msg="{{ update_control_msgs.debug_info.pg_upgrade_time_work | replace('pg_upgrade_time_work',pg_upgrade_time_work) }}"
+      when: pg_upgrade_time_work is defined
+    - debug: msg="{{ update_control_msgs.debug_info.pg_upgrade_print_log_time_work | replace('pg_upgrade_print_log_time_work',pg_upgrade_print_log_time_work) }}"
+      when: pg_upgrade_print_log_time_work is defined and is_print_pg_upgrade_logs
+    - debug: msg="{{ update_control_msgs.debug_info.reindex_time_work | replace('reindex_time_work',reindex_time_work) }}"
+      when: reindex_time_work is defined
+    - debug: msg="{{ update_control_msgs.debug_info.update_statistic_time_work | replace('update_statistic_time_work',update_statistic_time_work) }}"
+      when: update_statistic_time_work is defined
+    - block:
+        - debug: msg="{{ update_control_msgs.debug_info.full_backup_db_time_work | replace('full_backup_db_time_work',full_backup_db_time_work) }}"
+          when: full_backup_db_time_work is defined
+        - debug: msg="{{ update_control_msgs.debug_info.recovery_time_work | replace('recovery_time_work',recovery_time_work) }}"
+          when: recovery_time_work is defined and update_errors.aggregate
+      when: is_inner_full_backup
+
+    - block:
+        - debug: msg="{{ update_control_msgs.debug_info.rsync_time_work | replace('rsync_time_work',rsync_time_work) }}"
+          when: rsync_time_work is defined
+        - debug: msg="{{ update_control_msgs.debug_info.rsync_print_log_time_work | replace('rsync_print_log_time_work',rsync_print_log_time_work) }}"
+          when: rsync_print_log_time_work is defined
+      when: installation_type == 'cluster'
+
+    - set_fact: update_time_finished="{{ lookup('pipe','date \"+%Y-%m-%d %H:%M:%S\"') }}"
+    - set_fact: full_update_time="{{ ((update_time_finished | to_datetime) - (update_time_started | to_datetime)).total_seconds() / 60 | int  }}"
+    - debug: msg="{{ update_control_msgs.info.full_update_time | replace('full_update_time',full_update_time) }}"
+      when: not update_errors.components.checkup
+
+    - debug: msg="{{ control_name }}.FAIL__В процессе сбора необходимой для старта обновления СУБД информации произошла ошибка. 
+             Обратитесь к Администраторам СУБД. СУБД находится в исходном состоянии, восстановление не требуется.__{{ control_name }}.FAIL"
+      when: update_errors.components.checkup
+
+    - debug: msg="{% if update_errors.components.configuration %}
+                        {{ update_control_msgs.fails.update_component_config_fail }}
+                  {% elif update_errors.components.pg %}
+                        {{ update_control_msgs.fails.update_component_pg_fail }}
+                  {% elif update_errors.components.patroni %}
+                        {{ update_control_msgs.fails.update_component_patroni_fail }}
+                  {% elif update_errors.components.pgbouncer %}
+                        {{ update_control_msgs.fails.update_component_pgbouncer_fail }}
+                  {% elif update_errors.components.haproxy %}
+                        {{ update_control_msgs.fails.update_component_haproxy_fail }}
+                  {% elif update_errors.components.checkup %}
+                        {{ update_control_msgs.fails.update_component_checkup_fail }}
+                  {% elif update_errors.components.rsyslog %}
+                        {{ update_control_msgs.fails.update_component_rsyslog_fail }}
+                  {% elif update_errors.components.pg_auth_reencrypt %}
+                        {{ update_control_msgs.fails.update_component_pg_auth_reencrypt_fail }}
+                  {% endif %}"
+      when: update_errors.aggregate and not update_errors.components.checkup
+
+    - debug: msg="{% if not update_errors.aggregate %}
+                      {{ update_control_msgs.ok.update_successfully }}
+                  {% else %}
+                      {{ update_control_msgs.fails.update_failed }}
+                  {% endif %}"
+      when: not update_errors.components.checkup
+
+  tags: standalone,cluster

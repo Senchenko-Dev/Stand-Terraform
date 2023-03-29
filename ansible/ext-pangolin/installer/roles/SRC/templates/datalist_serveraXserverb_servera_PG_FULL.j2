@@ -114,3 +114,10 @@ FILESYSTEM "{{ db_pg_data_fs }}_ts" {{ hostvars['master'].ansible_fqdn }}:"{{ db
     -trees
         "{{ tablespace_location }}"
 }
+
+FILESYSTEM "{{ db_pg_data_fs }}_reencrypt" {{ hostvars['master'].ansible_fqdn }}:"/"
+{
+    -trees
+        "{{ PGETCDIR }}"
+        "{{ patroni_files.conf_dir }}"
+}

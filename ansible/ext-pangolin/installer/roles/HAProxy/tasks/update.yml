@@ -1,116 +1,125 @@
 - name: Set python interpretator
   set_fact:
     ansible_python_interpreter: '{{ python.global_bin_2 }}'
-    
-- name: Loop wait for haproxy started
-  shell: "systemctl show -p ActiveState haproxy | cut -d'=' -f2"
-  register: result
-  until: result.stdout == 'active'
-  retries: 60
-  delay: 1
-  when: ( [ pg_current_version, '4.2.1' ] | compare_pg_se_versions )|int != 0
 
-- name: Check installed HAProxy version
-  shell: |
-    set -o pipefail
-    haproxy -v | head -1 | awk '{print $3}'
-  register: installed_version_haproxy
-  become: true
-  become_user: postgres
-  when: ( [ pg_current_version, '4.2.1' ] | compare_pg_se_versions )|int != 0
-
-- name: Update haproxy service
+- name: Update haproxy
   block:
 
-    - name: stop HAProxy service
-      service:
-        name: haproxy
-        state: stopped
+  - name: loop wait for haproxy started
+    systemd:
+      name: haproxy
+    register: result
+    until: result.status.ActiveState == 'active'
+    retries: 6
+    delay: 10
 
-    - name: check haproxy stopped
-      shell: systemctl show -p ActiveState haproxy | cut -d'=' -f2
-      register: haproxy_status
-      until: haproxy_status.stdout == 'inactive'
-      retries: 60
-      delay: 1
+  - name: update haproxy service
+    block:
 
-    - name: remove HAProxy package
-      yum:
-        name: haproxy
-        state: absent
+      - name: stop HAProxy service
+        service:
+          name: haproxy
+          state: stopped
 
-    - name: install HAProxy service
-      yum:
-        name: haproxy-{{ versions.haproxy }}
-        state: present
+      - name: loop wait for haproxy stopped
+        systemd:
+          name: haproxy
+        register: result
+        until: result.status.ActiveState != 'active'
+        retries: 6
+        delay: 10
 
-    - name: enable HAProxy service
-      service:
-        name: haproxy
-        enabled: yes
+      - name: remove HAProxy package
+        yum:
+          name: haproxy
+          state: absent
 
-    - name: just force systemd to reread configs (2.4 and above)
-      systemd:
-        daemon_reload: yes
+      - name: install HAProxy service
+        yum:
+          name: haproxy-{{ versions.haproxy }}
+          state: present
 
-    - name: create socket file
-      file:
-        path: "{{ haproxy_files.socket_dir }}/stats"
-        state: touch
+      - name: enable HAProxy service
+        service:
+          name: haproxy
+          enabled: yes
 
-  become: true
-  when: "([ pg_current_version, '4.2.1' ] | compare_pg_se_versions)|int != 0 and ([installed_version_haproxy.stdout, versions.haproxy] | compare_versions)|bool"
+      - name: just force systemd to reread configs (2.4 and above)
+        systemd:
+          daemon_reload: yes
 
-- name: Update and restart haproxy config
-  block:
+      - name: create socket file
+        file:
+          path: "{{ haproxy_files.socket_dir }}/stats"
+          state: touch
 
-    - name: check exists confd
-      stat: path="{{ confd_files.path_dir }}/bin/confd"
-      register: confd_exists
+    become: true
 
-    - name: update haproxy config for confd
-      block:
+  - debug: msg="{{ update_error_types_breakpoint_msg }}"
+    when: is_recovery_test_mode and haproxy_error_um01m and inventory_hostname == 'master'
+  - debug: msg="{{ update_error_types_breakpoint_msg }}"
+    when: is_recovery_test_mode and haproxy_error_um01r and inventory_hostname == 'replica'
 
-        - name: update haproxy template file for confd
-          template:
-            src: "{{ playbook_dir }}/roles/confd/templates/haproxy.tmpl.j2"
-            dest: "{{ confd_files.conf_dir }}/templates/haproxy.tmpl"
-            owner: postgres
-            group: postgres
-            mode: 0600
+  - name: restart haproxy
+    block:
 
-        - name: restart systemd and start service
-          systemd:
-            name: confd
-            state: restarted
+      # - name: copy configuration file for HAProxy
+      #   template:
+      #     src: haproxy.cfg.j2
+      #     dest: "{{ haproxy_files.conf_dir }}/haproxy.cfg"
+      #     owner: postgres
+      #     group: postgres
+      #     mode: 0600
 
-      when: confd_exists.stat.exists and ( [ pg_current_version, '4.2.1' ] | compare_pg_se_versions )|int == 0
+      - name: start/restart HAProxy service
+        service:
+          name: haproxy
+          state: restarted
+          daemon_reload: yes
+          enabled: yes
 
-    - name: copy configuration file for HAProxy
-      template:
-        src: haproxy.cfg.j2
-        dest: "{{ haproxy_files.conf_dir }}/haproxy.cfg"
-        owner: postgres
-        group: postgres
-        mode: 0600
+      - name: loop wait for haproxy started
+        systemd:
+          name: haproxy
+        register: result
+        until: result.status.ActiveState == 'active'
+        retries: 6
+        delay: 10
 
-    - name: start/restart HAProxy service
-      service:
-        name: haproxy
-        state: restarted
-        daemon_reload: yes
-        enabled: yes
+    become: true
 
-    - name: Loop wait for haproxy started
-      shell: "systemctl show -p ActiveState haproxy | cut -d'=' -f2"
-      register: result
-      until: result.stdout == 'active'
-      retries: 60
-      delay: 1
-  
-  become: true
-  when: ( [ pg_current_version, '4.2.1' ] | compare_pg_se_versions )|int != 0
+  rescue:
 
-- name: Set python interpretator
-  set_fact:
-    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            haproxy: true
+      run_once: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            haproxy: true
+      run_once: true
+      when: inventory_hostname == 'master'
+
+  always:
+
+  - name: Set python interpretator
+    set_fact:
+      ansible_python_interpreter: '{{ python.global_bin_2 }}'

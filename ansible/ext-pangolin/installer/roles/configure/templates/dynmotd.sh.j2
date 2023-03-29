@@ -20,12 +20,12 @@
 # NUM_PROCS=`ps aux | wc -l`
 IPADDRESS=`hostname -i`
 #
-#PostgreSQL SE Information
-LEADER=`curl -s http://{{ hostvars['master'].ansible_fqdn }}:8008/cluster | jq -r '.members[] | select(.role == "leader") | .name'`
-REPLICA=`curl -s http://{{ hostvars['master'].ansible_fqdn }}:8008/cluster | jq -r '.members[] | select(.role != "leader") | .name'`
+#Pangolin Information
+LEADER=`curl -s -m {{ curl_connect_timeout }} {{ protocol }}://{{ hostvars['master'].ansible_fqdn }}:8008/cluster | jq -r '.members[] | select(.role == "leader") | .name'`
+REPLICA=`curl -s -m {{ curl_connect_timeout }} {{ protocol }}://{{ hostvars['master'].ansible_fqdn }}:8008/cluster | jq -r '.members[] | select(.role != "leader") | .name'`
 #
 echo -e $tcDkG "==============================================================="
-echo -e $tcLtG " You are connected to PostgreSQL SE Cluster ({{ clustername }})"
+echo -e $tcLtG " You are connected to Pangolin Cluster ({{ clustername }})"
 echo -e $tcLtG " - Hostname             :$tcW `hostname -f`"
 echo -e $tcLtG " - IP Address           : $IPADDRESS"
 echo -e $tcDkG "---------------------------------------------------------------"
@@ -38,9 +38,9 @@ echo -e $tcLtG " - node ( replica )     : $REPLICA "
 echo -e $tcLtG " - arbiter              : {{ hostvars['etcd'].ansible_fqdn }} "
 {% endif %}
 {% if "patroni" in tag %}
-echo -e $tcLtG " - Patroni version      : {{ lookup('file', '{{ local_distr_path }}/patroni/se_version') }}"
+echo -e $tcLtG " - Patroni version      : {{ lookup('file', '{{ local_distr_path }}/patroni/version') }}"
 {% endif %}
-echo -e $tcLtG " - PostgreSQL SE version: {{ postgresql_package_file.split('-').3 }}"
+echo -e $tcLtG " - Pangolin version     : {{ postgresql_package_file.split('-').4 }}"
 echo -e $tcDkG "==============================================================="
 echo -e $tcRESET ""
 #

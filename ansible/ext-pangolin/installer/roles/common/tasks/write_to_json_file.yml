@@ -1,0 +1,50 @@
+- name: Write data to json file
+  block:
+
+    - name: create dir {{ _wrttojson_dir }}
+      file:
+        path: "{{ _wrttojson_dir }}"
+        state: directory
+        mode: '0700'
+        owner: 'postgres'
+        group: 'postgres'
+        recurse: yes
+      loop:
+        - absent
+        - directory
+      loop_control:
+        loop_var: _wrttojson_item
+      
+    - name: create {{ _wrttojson_dir }}/{{ _wrttojson_filename }}.json
+      file:
+        path: "{{ _wrttojson_dir }}/{{ _wrttojson_filename }}.json"
+        state: touch
+        owner: postgres
+        group: postgres
+        mode: '600'
+      no_log: "{{ nolog }}"
+
+    - name: check that {{ _wrttojson_dir }}/{{ _wrttojson_filename }}.json created
+      stat:
+        path: "{{ _wrttojson_dir }}/{{ _wrttojson_filename }}.json"
+      register: _wrttojson_file_created
+
+    - name: save pg_current_version as json structure
+      set_fact:
+        _wrttojson_json_file:
+          _wrttojson_save_data: '{{ _wrttojson_native_data }}'
+      no_log: "{{ nolog }}"
+
+    - name: write data to {{ _wrttojson_dir }}/{{ _wrttojson_filename }}.json
+      copy:
+        content: "{{ _wrttojson_json_file | to_json }}"
+        dest: '{{ _wrttojson_dir }}/{{ _wrttojson_filename }}.json'
+      no_log: "{{ nolog }}"
+
+    - name: check that {{ update_status_files.prev_pgse_version }} file is exists
+      assert:
+        that: _wrttojson_file_created.stat.exists
+        fail_msg: "{{ control_name }}.FAIL__Данные не были записаны в {{ _wrttojson_dir }}/{{ _wrttojson_filename }} файл.__{{ control_name }}.FAIL"
+      
+  become: true
+  when: inventory_hostname != 'etcd'

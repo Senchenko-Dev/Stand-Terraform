@@ -1,0 +1,18 @@
+- name: Run {{ playbook_name }}
+  import_playbook: "{{ playbook_name }}.yaml"
+  vars:
+      playbook_name: "{% if update_complexity_level == 'update_complexity_level_1' %}\
+                          playbook_minor_update\
+                      {% else %}\
+                          playbook_major_update\
+                      {% endif %}"
+      action_type: "{% if update_complexity_level == 'update_complexity_level_1' %}\
+                          update_minor\
+                      {% else %}\
+                          update_major\
+                      {% endif %}"
+      pg_upgrade_mode: "{% if update_complexity_level == 'update_complexity_level_2' %}\
+                          hardlink\
+                       {% else %}\
+                          smartcopy\
+                       {% endif %}"

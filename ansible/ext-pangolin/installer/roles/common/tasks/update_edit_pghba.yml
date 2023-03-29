@@ -25,11 +25,32 @@
     the_editpghba_cfg: "{{ the_editpghba_pgdata }}/pg_hba.conf"
   when: not patroni_exists.stat.exists
 
+- name: Set default insert type
+  set_fact:
+    pghba_insert_type: "after"
+  when: pghba_insert_type is undefined
+
 - name: Enable tuz_for_test connection in pg_hba
   block:
 
     - name: update pg_hba.conf
       block:
+
+        - name: enable tuz_for_tests connection in pg_hba
+          lineinfile:
+            path: '{{ the_editpghba_cfg }}'
+            insertafter: "{{ item[0] }}"
+            line: "{{ item[1].replace('        - ', '') }}"
+          loop: "{{ the_insert_params }}"
+          when: pghba_insert_type == "after"
+
+        - name: enable tuz_for_tests connection in pg_hba
+          lineinfile:
+            path: '{{ the_editpghba_cfg }}'
+            insertbefore: "{{ item[0] }}"
+            line: "{{ item[1].replace('        - ', '') }}"
+          loop: "{{ the_insert_params }}"
+          when: pghba_insert_type == "before"
 
         - name: enable tuz_for_tests connection in pg_hba
           lineinfile:

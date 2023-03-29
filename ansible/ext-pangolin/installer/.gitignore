@@ -1,7 +1,0 @@
-pass
-install.sh
-install_cluster.sh
-cache.json
-__pycache__
-.idea
-*.pyc

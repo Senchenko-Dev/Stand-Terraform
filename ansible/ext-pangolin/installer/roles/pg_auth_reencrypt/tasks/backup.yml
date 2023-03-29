@@ -1,0 +1,156 @@
+- name: Backup pg_auth_reencrypt
+  block:
+
+    - name: create {{ backup.pg_auth_reencrypt }} directory
+      file:
+        path: "{{ item.src }}"
+        state: "{{ item.state }}"
+        owner: postgres
+        group: postgres
+        mode: "{{ item.mode }}"
+      with_items:
+        - { src: "{{ backup.pg_auth_reencrypt }}",                              state: absent,    mode: '0700' }
+        - { src: "{{ backup.pg_auth_reencrypt }}",                              state: directory, mode: '0700' }
+        - { src: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}",                state: directory, mode: '0700' }
+        - { src: "{{ backup.pg_auth_reencrypt }}{{ service_path_dir }}",        state: directory, mode: '0700' }
+        - { src: "{{ backup.pg_auth_reencrypt }}{{ pangolin_common_dir }}/bin", state: directory, mode: '0710' }
+
+    - name: backup pangolin_reencrypt@.service if exists
+      block:
+
+        - name: check exists pangolin_reencrypt@.service
+          stat: path="{{ service_path_dir }}/pangolin_reencrypt@.service"
+          register: backup_pangolin_reencrypt_service_exists
+
+        - name: backup pangolin_reencrypt@.service service
+          copy:
+            src: "{{ service_path_dir }}/pangolin_reencrypt@.service"
+            dest: "{{ backup.pg_auth_reencrypt }}{{ service_path_dir }}/pangolin_reencrypt@.service"
+            remote_src: yes
+            group: root
+            owner: root
+            mode: 0644
+          when: backup_pangolin_reencrypt_service_exists.stat.exists
+
+    - name: backup {{ PGETCDIR }}/enc_util.cfg if exists
+      block:
+
+        - name: check exists enc_util.cfg
+          stat: path="{{ PGETCDIR }}/enc_util.cfg"
+          register: backup_pg_encrypt_cfg_exists
+
+        - name: backup enc_util.cfg config
+          copy:
+            src: "{{ PGETCDIR }}/enc_util.cfg"
+            dest: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/enc_util.cfg"
+            remote_src: yes
+            group: root
+            owner: root
+            mode: 0644
+          when: backup_pg_encrypt_cfg_exists.stat.exists
+
+    - name: backup {{ PGETCDIR }}/start_reencrypt.sh if exists (the first version of the utility was with such a file)
+      block:
+
+        - name: check exists start_reencrypt.sh
+          stat: path="{{ PGETCDIR }}/start_reencrypt.sh"
+          register: backup_start_reencrypt_sh_exists
+
+        - name: backup start_reencrypt.sh
+          copy:
+            src: "{{ PGETCDIR }}/start_reencrypt.sh"
+            dest: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/start_reencrypt.sh"
+            remote_src: yes
+            group: root
+            owner: root
+            mode: 0750
+          when: backup_start_reencrypt_sh_exists.stat.exists
+
+    - name: backup {{ PGETCDIR }}/pg_auth_reencrypt if exists
+      block:
+
+        - name: check exists pg_auth_reencrypt
+          stat: path="{{ PGETCDIR }}/pg_auth_reencrypt"
+          register: backup_old_pg_auth_reencrypt_exists
+
+        - name: backup pg_auth_reencrypt
+          copy:
+            src: "{{ PGETCDIR }}/pg_auth_reencrypt"
+            dest: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/pg_auth_reencrypt"
+            remote_src: yes
+            group: root
+            owner: root
+            mode: 0755
+          when: backup_old_pg_auth_reencrypt_exists.stat.exists
+
+    - name: backup {{ pg_auth_reencrypt_files.bin_path }} if exists
+      block:
+
+        - name: check exists pg_auth_reencrypt
+          stat: path="{{ pg_auth_reencrypt_files.bin_path }}"
+          register: backup_pg_auth_reencrypt_exists
+
+        - name: backup pg_auth_reencrypt
+          copy:
+            src: "{{ pg_auth_reencrypt_files.bin_path }}"
+            dest: "{{ backup.pg_auth_reencrypt }}{{ pg_auth_reencrypt_files.bin_path }}"
+            remote_src: yes
+            group: root
+            owner: root
+            mode: 0755
+          when: backup_pg_auth_reencrypt_exists.stat.exists
+
+    - name: backup {{ PGETCDIR }}/enc_params.cfg.kmadmin_pg if exists
+      block:
+
+        - name: check exists enc_params.cfg.kmadmin_pg
+          stat: path="{{ PGETCDIR }}/enc_params.cfg.kmadmin_pg"
+          register: backup_enc_params_cfg_kmadmin_pg_exists
+
+        - name: backup enc_params.cfg.kmadmin_pg
+          copy:
+            src: "{{ PGETCDIR }}/enc_params.cfg.kmadmin_pg"
+            dest: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/enc_params.cfg.kmadmin_pg"
+            remote_src: yes
+            group: kmadmin_pg
+            owner: kmadmin_pg
+            mode: 0664
+          when: backup_enc_params_cfg_kmadmin_pg_exists.stat.exists
+
+    - name: backup {{ PGETCDIR }}/enc_params.cfg.postgres if exists
+      block:
+
+        - name: check exists enc_params.cfg.postgres
+          stat: path="{{ PGETCDIR }}/enc_params.cfg.postgres"
+          register: backup_enc_params_cfg_postgres_exists
+
+        - name: backup enc_params.cfg.postgres
+          copy:
+            src: "{{ PGETCDIR }}/enc_params.cfg.postgres"
+            dest: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/enc_params.cfg.postgres"
+            remote_src: yes
+            group: postgres
+            owner: postgres
+            mode: 0664
+          when: backup_enc_params_cfg_postgres_exists.stat.exists
+
+    - name: backup {{ PGETCDIR }}/enc_params.cfg if exists (the first version of the utility was with such a file)
+      block:
+
+        - name: check exists enc_params.cfg
+          stat: path="{{ PGETCDIR }}/enc_params.cfg"
+          register: backup_enc_params_cfg_exists
+
+        - name: backup enc_params.cfg
+          copy:
+            src: "{{ PGETCDIR }}/enc_params.cfg"
+            dest: "{{ backup.pg_auth_reencrypt }}{{ PGETCDIR }}/enc_params.cfg"
+            remote_src: yes
+            group: postgres
+            owner: postgres
+            mode: 0664
+          when: backup_enc_params_cfg_exists.stat.exists
+
+  become: true
+  become_user: root
+  when: inventory_hostname != 'etcd' and ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int != 0

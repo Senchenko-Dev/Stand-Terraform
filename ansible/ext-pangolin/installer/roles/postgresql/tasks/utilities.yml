@@ -1,0 +1,52 @@
+- name: Check if migration_tools exists
+  stat:
+    path: "{{ local_distr_path }}/migration_tools"
+  register: result
+  delegate_to: localhost
+  become: false
+
+- name: Install migration tools
+  block:
+
+    - name: create migration directory
+      file:
+        path: "{{ PGHOME }}/migration_tools"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: 0700
+        force: true
+
+    - name: copy migration_tools to nodes
+      copy:
+        src: "{{ item }}"
+        dest: "{{ PGHOME }}/migration_tools"
+        group: postgres
+        owner: postgres
+        mode: 0700
+      with_items:
+        - "{{ local_distr_path }}/migration_tools/ora2pg"
+        - "{{ local_distr_path }}/migration_tools/pgloader"
+
+  become: true
+  become_user: postgres
+  when: result.stat.exists
+
+- name: Check if diagnostic_tool exists
+  stat:
+    path: "{{ local_distr_path }}/diagnostic_tool"
+  register: result
+  delegate_to: localhost
+  become: false
+
+- name: Install diagnostic tool
+  copy:
+    src: "{{ local_distr_path }}/diagnostic_tool"
+    dest: "{{ PGHOME }}/"
+    owner: postgres
+    group: postgres
+    mode: 0700
+    force: true
+  become: true
+  become_user: postgres
+  when: result.stat.exists

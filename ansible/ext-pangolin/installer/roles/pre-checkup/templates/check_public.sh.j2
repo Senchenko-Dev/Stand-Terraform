@@ -1,6 +1,0 @@
-#!/bin/bash
- 
-for ii in $({{ PGHOME_OLD }}/bin/psql -h 127.0.0.1 -p {{ PGPORT_OLD }} -tc "select datname from pg_database where datallowconn")
-do
-{{ PGHOME_OLD }}/bin/psql -h 127.0.0.1 -p {{ PGPORT_OLD }} -tc "SELECT table_name,table_type FROM information_schema.tables WHERE table_schema = 'public' AND table_name NOT LIKE 'pathman%' AND table_name NOT LIKE 'pg_stat_state%';"
-done

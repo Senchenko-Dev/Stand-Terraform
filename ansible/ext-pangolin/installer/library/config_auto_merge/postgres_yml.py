@@ -24,7 +24,7 @@ def get_force_status(result_added, save_path, attr_name):
     return is_force
         
 def merge_attribute(result_removed, result_added, old_yml_objects, sub_old_yml_objects, sub_new_yml_objects, attr_name, attr_path,
-                    only_pgse, support_db_admin_user_list, pghba_mode, diff_bootstrap_file=""):
+                    yml_cfg_section_merge_mode,auth_methods_control_map, is_update_ldap_auth_methods, diff_bootstrap_file=""):
     """
     мерж либо добавление в случае отсутствия новых значений для пар ключ-значение
     result_removed - список полей, которые необходимо удалить в old_yml_data, перед тем как мержить его с новым yml конфигурационным файлом
@@ -35,10 +35,7 @@ def merge_attribute(result_removed, result_added, old_yml_objects, sub_old_yml_o
     attr_name - название поля в новом конфигурационном файле
     attr_path - путь до секции в старом конфигурационном файле, содержащей attr_name
     diff_bootstrap_file - данные из секции bootstrap
-    only_pgse - если False, то в результирующем yml файле будут обработаны вспе корневые разделы, кроме restapi и etcd
-    pghba_mode - режим мержа pg_hba части: megre - слияние pg_hba из старого и нового конфига, 
-                 new - pg_hba из старого конфига полностью заменятся на pg_hba из нового конфига
-    support_db_admin_user_list - список db_admin пользователей из all.yml (sigma или alpha)
+    yml_cfg_section_merge_mode - перечисление корневых разделов yml, которые будут мержится
     """
     if (sub_old_yml_objects is None) and (sub_new_yml_objects is None):
         return
@@ -47,7 +44,6 @@ def merge_attribute(result_removed, result_added, old_yml_objects, sub_old_yml_o
         attr_path = attr_name
     else:
         attr_path = attr_path + '.' + attr_name
-
     if sub_old_yml_objects is None and old_yml_objects is not None:
         # контроль, чтобы поля из result_removed, в случае наличия их в новом конфиге, не попали в результирующий
         is_remove = False
@@ -60,16 +56,15 @@ def merge_attribute(result_removed, result_added, old_yml_objects, sub_old_yml_o
                     is_remove = False
             if is_remove:
                 return
-        if only_pgse == True and ('restapi' in attr_path or 'etcd' in attr_path):
-            pass
-        else:
-            old_yml_objects[attr_name] = sub_new_yml_objects
+        old_yml_objects[attr_name] = sub_new_yml_objects
         return
-    
+
     if isinstance(sub_new_yml_objects, cmtseq): # углубляемся дальше в yml, если имеем список
-        merge_list(result_removed, result_added, sub_old_yml_objects, sub_new_yml_objects, attr_path, attr_name, support_db_admin_user_list, pghba_mode)
+        merge_list(result_removed, result_added, sub_old_yml_objects, sub_new_yml_objects, attr_path, attr_name,
+                   auth_methods_control_map, is_update_ldap_auth_methods)
     elif isinstance(sub_new_yml_objects, cmtmap): # углубляемся дальше в yml, если имеем словарь
-        merge_objects(result_removed, result_added, sub_old_yml_objects, sub_new_yml_objects, attr_path, diff_bootstrap_file, only_pgse, support_db_admin_user_list, pghba_mode)
+        merge_objects(result_removed, result_added, sub_old_yml_objects, sub_new_yml_objects, attr_path, 
+                      diff_bootstrap_file, yml_cfg_section_merge_mode, auth_methods_control_map, is_update_ldap_auth_methods)
     else: # мерж пары ключ:значение
         if sub_new_yml_objects == sub_old_yml_objects:
             old_yml_objects[attr_name] = sub_old_yml_objects
@@ -78,11 +73,11 @@ def merge_attribute(result_removed, result_added, old_yml_objects, sub_old_yml_o
         is_force = get_force_status(result_added, save_path, attr_name)
         # получим старое значение комментария (только для тех переменных, для которых старое и новое значения разные)
         prev_comment = get_comment_from_file(old_yml_objects, attr_name) # получить комментарий для заданного поля
-        
+
         # удалить старые коменты, чтобы не было бороды
         prev_comment = re.sub('{}.*.{}\ '.format(pgutils.CommentList.prev_val.value, pgutils.CommentList.old_cmnt.value), '', prev_comment)
         prev_comment = re.sub('{}.*.{}\ '.format(pgutils.CommentList.new_val.value, pgutils.CommentList.old_cmnt.value), '', prev_comment)
-        
+
         if is_force:
             new_comment = "{} {}".format(pgutils.CommentList.prev_val.value, sub_old_yml_objects)
         else:
@@ -93,7 +88,7 @@ def merge_attribute(result_removed, result_added, old_yml_objects, sub_old_yml_o
             and pgutils.CommentList.new_val.value not in prev_comment \
             and pgutils.CommentList.prev_val.value not in prev_comment:
             new_comment = new_comment + ", {} {}".format(pgutils.CommentList.old_cmnt.value, prev_comment)
-            
+
         if 'shared_preload_libraries' in attr_name:
             shared_preload_libraries = pgutils.merge_shared_preload_libraries(sub_old_yml_objects, sub_new_yml_objects)
             sub_old_yml_objects = shared_preload_libraries
@@ -134,7 +129,7 @@ def get_comment_from_file(old_yml_objects, attr_name):
                     return comment
     return comment
 
-def merge_objects(result_removed, result_added, old_yml_objects, new_yml_objects, attr_path, diff_bootstrap_file, only_pgse, support_db_admin_user_list, pghba_mode):
+def merge_objects(result_removed, result_added, old_yml_objects, new_yml_objects, attr_path, diff_bootstrap_file, yml_cfg_section_merge_mode, auth_methods_control_map,is_update_ldap_auth_methods, is_zero_depth=False):
     """
     result_removed - список полей, которые необходимо удалить в old_yml_data, перед тем как мержить его с новым yml конфигурационным файлом
     result_added - список полей, значения которых в old_yml_data должны быть обновлены значениями из нового yml конфигурационного файла
@@ -142,20 +137,19 @@ def merge_objects(result_removed, result_added, old_yml_objects, new_yml_objects
     new_yml_objects - yml данные из нового конфигурационного файла
     attr_path - путь до секции в старом конфигурационном файле
     diff_bootstrap_file - данные из секции bootstrap
-    only_pgse - если False, то в результирующем yml файле будут обработаны вспе корневые разделы, кроме restapi и etcd
-    support_db_admin_user_list - список db_admin пользователей из all.yml (sigma или alpha)
-    pghba_mode - режим мержа pg_hba части: megre - слияние pg_hba из старого и нового конфига, 
-                 new - pg_hba из старого конфига полностью заменятся на pg_hba из нового конфига
+    yml_cfg_section_merge_mode - перечисление корневых разделов yml, которые будут мержится
     """
     for attr_name in new_yml_objects:
+        if is_zero_depth and  ('all' not in yml_cfg_section_merge_mode and attr_name not in yml_cfg_section_merge_mode):
+            continue
         sub_old_yml_objects = None
         if attr_name in old_yml_objects:
             sub_old_yml_objects = old_yml_objects[attr_name]
         sub_new_yml_objects = new_yml_objects[attr_name]
         merge_attribute(result_removed, result_added, old_yml_objects, sub_old_yml_objects, sub_new_yml_objects, attr_name,
-                        attr_path, only_pgse, support_db_admin_user_list, pghba_mode, diff_bootstrap_file)
+                        attr_path, yml_cfg_section_merge_mode, auth_methods_control_map, is_update_ldap_auth_methods, diff_bootstrap_file)
 
-def merge_list(result_removed, result_added, old_list, new_list, attr_path, attr_name, support_db_admin_user_list, pghba_mode):
+def merge_list(result_removed, result_added, old_list, new_list, attr_path, attr_name, auth_methods_control_map, is_update_ldap_auth_methods):
     """
     result_removed - список полей, которые необходимо удалить в old_yml_data, перед тем как мержить его с новым yml конфигурационным файлом
     result_added - список полей, значения которых в old_yml_data должны быть обновлены значениями из нового yml конфигурационного файла
@@ -163,37 +157,27 @@ def merge_list(result_removed, result_added, old_list, new_list, attr_path, attr
     new_list - исследуемый список из нового конфигурационного файла
     attr_path - путь до секции в старом конфигурационном файле
     attr_name - название поля в новом конфигурационном файле
-    support_db_admin_user_list - список db_admin пользователей из all.yml (sigma или alpha)
-    pghba_mode - режим мержа pg_hba части: megre - слияние pg_hba из старого и нового конфига, 
-                 new - pg_hba из старого конфига полностью заменятся на pg_hba из нового конфига
     """
     lists_with_id = create_merge_directives()
     is_pghba = 'pg_hba' in attr_path
-    if is_pghba:
-       pgutils.remove_duplicate_pghba(old_list)
 
-    # в этом режиме pghba_mode часть с pghba полностью заменяется на новую
-    if is_pghba and pghba_mode == "new":
-        old_list.clear()
+    pgutils.clean_data(result_removed, old_list, attr_path, is_pghba)
 
     for idx, new_elem in enumerate(new_list):
+        if is_pghba: break
+
         item_in_previous = find_item_in_list(lists_with_id, old_list, new_elem, attr_path)
         if item_in_previous is None:
             old_list.append(new_elem)
             continue
         if lists_with_id[attr_path] is None:
-            if is_pghba and pghba_mode == "new":
-                old_list.append(new_elem)
-            else:
-                pgutils.merge_list_elements(old_list, new_elem, is_pghba, support_db_admin_user_list)
+            pgutils.merge_list_elements(old_list, new_elem, is_pghba)
             continue
-        
-        merge_objects(result_removed, result_added, item_in_previous, new_elem, attr_path, pghba_mode)
-    
-    pgutils.clean_data(result_removed, old_list, attr_path, is_pghba)
+
+        merge_objects(result_removed, result_added, item_in_previous, new_elem, attr_path)
     
     if is_pghba:
-        pgutils.sort_pghba(old_list)
+        old_list = pgutils.merge_pghba(old_list, new_list, auth_methods_control_map, is_update_ldap_auth_methods)
 
 def find_item_in_list(lists_with_id, old_list, item_new, attr_path):
     """
@@ -218,22 +202,22 @@ def find_item_in_list(lists_with_id, old_list, item_new, attr_path):
             return item_previous
     return None
 
-def remove_dict_elem(keys, elem, only_pgse):
+def remove_dict_elem(keys, elem, yml_cfg_section_merge_mode,is_zero_depth=False):
     """
     удаление элементов из словаря по ключам
     keys - список ключей для удаления
     elem - структура словаря, в котором находится с элемент с данным значением ключей
-    only_pgse - если False, то в результирующем yml файле будут обработаны вспе корневые разделы, кроме restapi и etcd
+    yml_cfg_section_merge_mode - перечисление корневых разделов yml, которые будут мержится
     """
     if len(keys) > 0:
-        if only_pgse and ('etcd' in keys or 'restapi' in keys): # для версий ниже 421
+        if is_zero_depth and  ('all' not in yml_cfg_section_merge_mode and keys[0] not in yml_cfg_section_merge_mode):
             return False
         key = keys.pop(0)
     else:
         return False
     res = False
     if keys and elem.get(key) != None and type(elem.get(key)) != type(cmtseq()) and len(keys) != 0 and elem[key] != "{}" and len(elem[key]):
-        res = remove_dict_elem(keys, elem.get(key), only_pgse)
+        res = remove_dict_elem(keys, elem.get(key), yml_cfg_section_merge_mode)
 
     if type(elem) == type(cmtseq()):
         return False
@@ -249,12 +233,12 @@ def remove_dict_elem(keys, elem, only_pgse):
 
     return False
 
-def clear_dict(result_removed, old_data, only_pgse):
+def clear_dict(result_removed, old_data, yml_cfg_section_merge_mode):
     """
     удалить в старом конфиге поля прописанные в result_removed (для словаря только)
     result_removed - список полей, которые необходимо удалить в old_yml_data, перед тем как мержить его с новым yml конфигурационным файлом
     old_data - структура из которой необоходимо удалить необходимые поля, прописанные в result_removed
-    only_pgse - если False, то в результирующем yml файле будут обработаны вспе корневые разделы, кроме restapi и etcd
+    yml_cfg_section_merge_mode - перечисление корневых разделов yml, которые будут мержится
     """
     for i, x in enumerate(result_removed):
         # 0 - тип структуры, 1 - значение
@@ -262,7 +246,7 @@ def clear_dict(result_removed, old_data, only_pgse):
             path = x[1].split('.')
             if len(x) == 3:
                 path.append(x[2])
-            remove_dict_elem(path, old_data, only_pgse)
+            remove_dict_elem(path, old_data, yml_cfg_section_merge_mode,is_zero_depth=True)
 
     return
 
@@ -343,16 +327,13 @@ def get_or_replace_pghba(old_conf_file, new_yml_data, result_file, pghba_mode, p
     else:
         return (1, [])
 
-def merge(old_conf_file, new_conf_file, result_file, old_ver, new_ver, root_path, pghba_mode, custom_cfg_name, only_pgse=False):
+def merge(old_conf_file, new_conf_file, result_file, root_path, pghba_mode, custom_cfg_name, yml_cfg_section_merge_mode=False):
     """
     old_conf_file - пусть до postgres.yml файла для old_ver
     new_conf_file - пусть до postgres.yml файла для new_ver
     result_file - пусть до postgres.yml файла, полученного в ходе мержа
-    old_ver - версия старой версии PG SE postgres.yml файла, например, 4.2.5
-    new_ver - версия новой версии PG SE postgres.yml файла, например, 4.3.0
     root_path - путь до папки с diff_cfg.txt, с копией all.yml, где также будет создан diff_bootstrap_dcs.txt
-    only_pgse - если False, то в результирующем yml файле будут обработаны вспе корневые разделы, кроме restapi и etcd
-    pghba_mode - режим мержа pghba части: merge - слияние, new - полная замена на новые значения
+    yml_cfg_section_merge_mode - перечисление корневых разделов yml, которые будут мержится
     custom_cfg_name - yml файл с db_admin пользователями
     """
     diff_bootstrap_file = root_path + "/diff_bootstrap_dcs.txt"
@@ -360,7 +341,7 @@ def merge(old_conf_file, new_conf_file, result_file, old_ver, new_ver, root_path
 
     open(diff_bootstrap_file, 'w').close()
     
-    support_db_admin_user_list = pgutils.load_support_dm_admins_list(root_path, custom_cfg_name, False)
+    auth_methods_control_map, is_update_ldap_auth_methods = pgutils.load_control_info_from_custom_dev(root_path, custom_cfg_name)
 
     with open(old_conf_file, 'r') as fp:
         for old_yml_data in ruamel.yaml.round_trip_load_all(stream=fp):
@@ -369,15 +350,25 @@ def merge(old_conf_file, new_conf_file, result_file, old_ver, new_ver, root_path
         for new_yml_data in ruamel.yaml.round_trip_load_all(stream=fp):
             pass
     # загрузить из diff_cfg.txt данные 
-    result_removed, result_added = pgutils.read_diff_file(old_ver, new_ver, diff_cfg_file)
+    result_removed, result_added = pgutils.read_diff_file(diff_cfg_file)
     
     # удалить из old_yml_data данные, которые исходя из diff_cfg.txt должны удалиться
-    clear_dict(result_removed, old_yml_data, only_pgse)
-    
-    if only_pgse:
-        result_added = remove_patroni_keys(result_added)
+    clear_dict(result_removed, old_yml_data, yml_cfg_section_merge_mode)
 
-    merge_objects(result_removed, result_added, old_yml_data, new_yml_data, '', diff_bootstrap_file, only_pgse, support_db_admin_user_list, pghba_mode)
+    merge_objects(result_removed, result_added, old_yml_data, new_yml_data, '',
+                  diff_bootstrap_file, yml_cfg_section_merge_mode,
+                  auth_methods_control_map,is_update_ldap_auth_methods,is_zero_depth=True)
 
-    ruamel.yaml.round_trip_dump(old_yml_data, open(result_file, 'w'), width=100000, indent=4, block_seq_indent=4,
+    tmp_result_file = result_file.replace('.yml','_tmp.yml')
+    ruamel.yaml.round_trip_dump(old_yml_data, open(tmp_result_file, 'w'), width=100000, indent=4, block_seq_indent=4,
                                 explicit_start=False)
+    with open(tmp_result_file, "rt") as fin:
+        with open(result_file, "wt") as fout:
+            fout.seek(0)  # sets  point at the beginning of the file
+            fout.truncate()  # Clear previous content
+            for line in fin:
+                is_str_exist = bool(re.search('new_hba_line_after_update', line))
+                if is_str_exist:
+                    fout.write('# new_hba_line_after_update\n')
+                else:
+                    fout.write(line)

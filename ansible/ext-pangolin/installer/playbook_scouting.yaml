@@ -1,17 +1,22 @@
 --- 
-- name: Get ping response
-  hosts: all
+- name: Get ping response and gather packages info
+  hosts: localhost:all
   tasks:
     - action: ping
+    - package_facts:
+        manager: "auto"
+      no_log: "{{ nolog }}"
+    - service_facts:
+      no_log: "{{ nolog }}"
   tags: standalone,cluster
 
 - hosts: master
   roles:
-    - { role: pre-checkup,         tags: standalone }
+    - { role: update_scout,         tags: standalone }
 
-- hosts: master:replica
+- hosts: master:replica:etcd
   roles:
-    - { role: pre-checkup,         tags: cluster }
+    - { role: update_scout,         tags: cluster }
 
 - name: Write to process status work that scout process finished
   hosts: all
@@ -22,7 +27,11 @@
         name: common
         tasks_from: add_process_status_logs
       vars:
-        process_work_status: "{{ process_work_statuses.scout.finish }}"
+        process_work_status: "{% if scout_scenario_error_unexpected is defined and scout_scenario_error_unexpected %}\
+                                {{ process_work_statuses.scout.error }}\
+                              {% else %}\
+                                {{ process_work_statuses.scout.finish }}\
+                              {% endif %}"
         scout_key: true
 
   tags: standalone,cluster

@@ -1,0 +1,162 @@
+- name: Define recovery trigger key for components
+  block:
+
+    - name: define key of checkup role
+      set_fact:
+        is_recovery_checkup: "{% if update_errors.aggregate %}\
+                                    true\
+                              {% else %}\
+                                    false\
+                              {% endif %}"
+      when: is_recovery_checkup is undefined
+
+    - name: define key of rsyslog
+      set_fact:
+        is_recovery_rsyslog: "{% if rsyslog \
+                                  and update_errors.aggregate \
+                                  and not update_errors.components.checkup \
+                                  and not update_errors.types.pg_auth_reencrypt.check_and_stop %}\
+                                    true\
+                              {% else %}\
+                                    false\
+                              {% endif %}"
+      when: is_recovery_rsyslog is undefined
+
+    - name: define key of SRC pg_server
+      set_fact:
+        is_recovery_pg_server: "{% if SRC and inventory_hostname != 'etcd' \
+                                   and is_src_exists is defined \
+                                   and is_src_exists \
+                                   and is_src_exists_and_not_correct is defined \
+                                   and not is_src_exists_and_not_correct \
+                                   and update_errors.aggregate \
+                                   and not update_errors.components.checkup \
+                                   and not update_errors.types.pg_auth_reencrypt.check_and_stop \
+                                   and not update_errors.components.rsyslog %}\
+                                      true\
+                                {% else %}\
+                                      false\
+                                {% endif %}"
+      when: is_recovery_pg_server is undefined
+
+    - name: define key of SRC rpm install
+      set_fact:
+        is_recovery_rpm_install: "{% if postgres \
+                                    and update_errors.aggregate \
+                                    and not update_errors.components.checkup \
+                                    and not update_errors.types.pg_auth_reencrypt.check_and_stop \
+                                    and not update_errors.components.rsyslog \
+                                    and not update_errors.components.etcd \
+                                    and not update_errors.types.src.main \
+                                    and not update_errors.types.patroni.main \
+                                    and not update_errors.types.pg.major_pre \
+                                    and not (update_errors.types.pg.major_post \
+                                            and update_errors.hosts.master) \
+                                    and not (update_errors.types.patroni.finally \
+                                            and update_errors.hosts.master) %}\
+                                        true\
+                                  {% else %}\
+                                        false\
+                                  {% endif %}"
+      when: is_recovery_rpm_install is undefined
+
+    - name: define key of etcd
+      set_fact:
+        is_recovery_etcd: "{% if etcd \
+                                and update_errors.aggregate \
+                                and not update_errors.components.checkup \
+                                and not update_errors.types.pg_auth_reencrypt.check_and_stop \
+                                and not update_errors.components.rsyslog %}\
+                                    true\
+                              {% else %}\
+                                    false\
+                              {% endif %}"
+      when: is_recovery_etcd is undefined
+
+    - name: define key of patroni
+      set_fact:
+        is_recovery_patroni: "{% if patroni \
+                                and update_errors.aggregate \
+                                and not update_errors.components.checkup \
+                                and not update_errors.types.pg_auth_reencrypt.check_and_stop \
+                                and not update_errors.components.rsyslog \
+                                and not update_errors.components.etcd %}\
+                                    true\
+                              {% else %}\
+                                    false\
+                              {% endif %}"
+      when: is_recovery_patroni is undefined
+
+    - name: define key of pgbouncer
+      set_fact:
+        is_recovery_pgbouncer:  "{% if pgbouncer \
+                                    and update_errors.aggregate \
+                                    and not update_errors.components.checkup \
+                                    and not update_errors.types.pg_auth_reencrypt.check_and_stop \
+                                    and not update_errors.types.src.main \
+                                    and not update_errors.components.rsyslog \
+                                    and not update_errors.components.etcd \
+                                    and not update_errors.types.patroni.main \
+                                    and not update_errors.types.pg.major_pre \
+                                    and not (update_errors.types.pg.major_post \
+                                            and update_errors.hosts.master) \
+                                    and not (update_errors.types.patroni.finally \
+                                            and update_errors.hosts.master) \
+                                    and not (update_errors.types.src.install_pg_probackup \
+                                            and update_errors.hosts.master) %}\
+                                      true\
+                                 {% else %}\
+                                      false\
+                                 {% endif %}"
+      when: is_recovery_pgbouncer is undefined
+
+    - name: define key of haproxy
+      set_fact:
+        is_recovery_haproxy: "{% if haproxy \
+                                    and update_errors.aggregate \
+                                    and not update_errors.components.checkup \
+                                    and not update_errors.types.pg_auth_reencrypt.check_and_stop \
+                                    and not update_errors.types.src.main \
+                                    and not update_errors.components.rsyslog \
+                                    and not update_errors.components.etcd \
+                                    and not update_errors.types.patroni.main \
+                                    and not update_errors.types.pg.major_pre \
+                                    and not (update_errors.types.pg.major_post \
+                                            and update_errors.hosts.master) \
+                                    and not (update_errors.types.patroni.finally \
+                                            and update_errors.hosts.master) 
+                                    and not (update_errors.components.pgbouncer \
+                                            and update_errors.hosts.master) \
+                                    and not (update_errors.types.src.install_pg_probackup \
+                                            and update_errors.hosts.master) %}\
+                                      true\
+                                 {% else %}\
+                                      false\
+                                 {% endif %}"
+      when: is_recovery_haproxy is undefined
+
+- name: Write to process status work that major update process finished with error and it will be recovery
+  block:
+
+    - set_fact: recovery_time_started="{{ lookup('pipe','date \"+%Y-%m-%d %H:%M:%S\"') }}"
+
+    - name: write to process status work that major update process finished with error and it will be recovery
+      include_role:
+        name: common
+        tasks_from: add_process_status_logs
+      vars:
+        process_work_status: "{{ process_work_statuses.recovery.start }}"
+        recovery_key: true
+
+    - name: write to process status work must be written only one time
+      set_fact:
+        recovery_process_was_started: true
+
+  when: "is_inner_full_backup \
+         and update_errors.aggregate \
+         and not update_errors.components.checkup \
+         and recovery_process_was_started is undefined"
+
+- name: Import {{ action_type }}
+  import_tasks: "{{ recovery_type }}.yml"
+  when: is_inner_full_backup and update_errors.aggregate

@@ -3,7 +3,7 @@
 
     - name: get data from etcd via patroni api
       uri:
-        url: "http://{{ ansible_fqdn }}:{{ ports.patroni }}"
+        url: "{{ protocol }}://{{ ansible_fqdn }}:{{ ports.patroni }}"
         status_code: [503, 200]
         return_content: yes
       register: json_content
@@ -19,9 +19,10 @@
                           {% else %}{% for host in groups['postgres_nodes'] %}{% if host != inventory_hostname  %}\
                           {{ hostvars[host].ansible_fqdn }}{% endif %}{% endfor %}{% endif %}"
 
+  run_once: true
   when: inventory_hostname != 'etcd' and installation_type == 'cluster'
 
 - name: Define current_master for standalone installation
   set_fact:
     current_master: "{{ hostvars['master'].ansible_fqdn }}"
-  when: inventory_hostname != 'etcd' and installation_type == 'standalone'
+  when: installation_type == 'standalone'

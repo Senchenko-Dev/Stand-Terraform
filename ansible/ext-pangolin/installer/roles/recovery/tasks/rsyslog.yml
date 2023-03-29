@@ -1,0 +1,5 @@
+- name: Recovery rsyslog
+  include_role:
+    name: rsyslog
+    tasks_from: revert.yml
+  when: is_recovery_rsyslog

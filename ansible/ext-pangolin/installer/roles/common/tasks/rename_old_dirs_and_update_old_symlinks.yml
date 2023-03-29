@@ -1,0 +1,101 @@
+- name: Rename old directory and update symlinks
+  block:
+
+      - name: check the existence of the old directory
+        stat:
+          path: "{{ dir_item }}"
+        register: old_dir_exists
+        loop: "{{ _rodauos_old_path }}"
+        loop_control:
+          loop_var: dir_item
+
+      - name: remove old symlinks
+        file:
+          path: "{{ old_dir_exists.results[index].stat.path }}"
+          state: absent
+        loop: "{{ old_dir_exists.results }}"
+        loop_control:
+          index_var: index
+        when: "old_dir_exists.results[index].stat.exists \
+               and old_dir_exists.results[index].stat.islnk"
+
+      - name: remove old dirs
+        file:
+          path: "{{ dir_item }}"
+          state: absent
+        loop: "{{ _rodauos_old_path }}"
+        loop_control:
+          loop_var: dir_item
+        when: _rodauos_is_removed_old_dir
+
+      - name: rename old dirs
+        shell: "mv {{ old_dir_exists.results[index].stat.path }} {{ _rodauos_is_name_to_rename_old_dir }}"
+        loop: "{{ old_dir_exists.results }}"
+        loop_control:
+          index_var: index
+        when: "not _rodauos_is_removed_old_dir \
+               and old_dir_exists.results[index].stat.exists \
+               and old_dir_exists.results[index].stat.isdir \
+               and _rodauos_is_rename_old_dir"
+
+      - name: check the existence of the new directory
+        stat:
+          path: "{{ _rodauos_new_path }}"
+        register: new_dir_exists
+
+      - name: remove new dirs
+        file:
+          path: "{{ _rodauos_new_path }}"
+          state: absent
+        when: _rodauos_is_removed_new_dir
+
+      - name: rename the new directory to the name of the old directory
+        shell: "mv {{ _rodauos_new_path }} {{ old_dir_exists.results[index].stat.path }}"
+        loop: "{{ old_dir_exists.results }}"
+        loop_control:
+          index_var: index
+        when: "not _rodauos_is_removed_new_dir \
+               and new_dir_exists.stat.exists \
+               and old_dir_exists.results[index].stat.exists \
+               and old_dir_exists.results[index].stat.isdir"
+
+      - name: add name old dir
+        set_fact:
+          old_dir: "{{ old_dir_exists.results[index].stat.path }}"
+        loop: "{{ old_dir_exists.results }}"
+        loop_control:
+          index_var: index
+        when: "old_dir_exists.results[index].stat.exists \
+               and old_dir_exists.results[index].stat.isdir"
+
+      - name: create symlink for new db directory
+        block:
+
+            - name: check new directory or link exists {{ _rodauos_new_symlink }}
+              stat:
+                path: "{{ _rodauos_new_symlink }}"
+              register: symlink_exists
+              when: _rodauos_new_symlink
+
+            - name: remove new directory or link {{ _rodauos_new_symlink }} if exists
+              file:
+                path: "{{ _rodauos_new_symlink }}"
+                state: absent
+              when: "symlink_exists.stat.exists"
+
+            - name: creat symlink for new db directory
+              file:
+                src: "{{ old_dir_exists.results[index].stat.path }}"
+                dest: "{{ _rodauos_new_symlink }}"
+                state: link
+                force: yes
+                owner: postgres
+                group: postgres
+              loop: "{{ old_dir_exists.results }}"
+              loop_control:
+                index_var: index
+              when: "_rodauos_new_symlink \
+                     and old_dir_exists.results[index].stat.exists \
+                     and old_dir_exists.results[index].stat.isdir"
+
+        when: ( [ pg_current_version, '5.1.0' ] | compare_pg_se_versions )|int == 0

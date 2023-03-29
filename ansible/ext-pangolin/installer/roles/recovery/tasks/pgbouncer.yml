@@ -1,0 +1,42 @@
+- name: Recovery pgbouncer
+  block:
+
+  - name: define recovery available of pgbouncer for major
+    set_fact:
+      is_recovery_pgbouncer_major: "{% if action_type == 'update_major' \
+                                          and (inventory_hostname == 'master' \
+                                               or (update_errors.types.configuration.finally \
+                                                  or update_errors.hosts.replica \
+                                                      and ( update_errors.components.pgbouncer \
+                                                            or update_errors.components.haproxy \
+                                                            or update_errors.types.pg_auth_reencrypt.finally \
+                                                            or update_errors.components.finally \
+                                                            or update_errors.components.tests ))) %}\
+                                        true\
+                                    {% else %}\
+                                        false\
+                                    {% endif %}"
+
+  - name: define recovery available of pgbouncer for minor
+    set_fact:
+      is_recovery_pgbouncer_minor: "{% if action_type == 'update_minor' \
+                                          and (inventory_hostname == 'replica' \
+                                               or (update_errors.hosts.master \
+                                                   and ( update_errors.components.pgbouncer \
+                                                        or update_errors.components.haproxy ))) %}\
+                                        true\
+                                    {% else %}\
+                                        false\
+                                    {% endif %}"
+
+  - name: recovery pgbouncer node from cluster/standalone
+    include_role:
+      name: pgbouncer
+      tasks_from: revert.yml
+    when: "is_recovery_pgbouncer_minor \
+           or is_recovery_pgbouncer_major"
+
+  # pgbouncer is True - компонента была обновлена
+  when: "pgbouncer \
+         and inventory_hostname != 'etcd' \
+         and is_recovery_pgbouncer"

@@ -2,22 +2,24 @@
   stat:
     path: "{{ custom_config }}"
   register: stat_custom_config
-  become: no
   delegate_to: localhost
 
 - name: Assert if custom config file not found
   assert:
     that: stat_custom_config.stat.exists
-    fail_msg: "File {{ custom_config }} was not found"
-    success_msg: "File {{ custom_config }} was found"
+    fail_msg: "{{ message_installer.fails.custom_file_found }}"
+    success_msg: "{{ message_installer.info.custom_file_found }}"
 
 - name: Assert that custom_config file path include '/' symbol
   assert:
     that: custom_config.split('/')|length > 1
-    fail_msg: "{{ custom_config }}: file path not include '/' symbol"
-    success_msg: "{{ custom_config }}: file path include '/' symbol"
+    fail_msg: "{{ message_installer.fails.custom_file_path }}"
+    success_msg: "{{ message_installer.info.custom_file_path }}"
 
 - name: Import custom parameters if exists
   include_vars:
-    file: "{{ custom_config }}"
+    file: "{{ item }}"
+  with_items:
+    - "{{ custom_config_default }}"
+    - "{{ custom_config }}"
   no_log: "{{ nolog }}"

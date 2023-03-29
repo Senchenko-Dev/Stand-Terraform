@@ -173,7 +173,7 @@ node('masterLin'){
                  withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'postgresql_nexus_cred', usernameVariable: 'remoteUsername', passwordVariable: 'remotePassword']]) 
                   {
                     url_to_distr = getNexusLink(nexusRestApiUrl, artifactId, version.toUpperCase(), "tar.gz", repoId, groupId, nexusClassifier, remoteUsername, remotePassword)
-                    sh "wget --user=${remoteUsername} --password=${remotePassword} ${url_to_distr}"
+                    sh "wget -nv --user=${remoteUsername} --password=${remotePassword} ${url_to_distr}"
                     }
                 }
                 stage('Unarchive distributive'){
@@ -218,7 +218,6 @@ node('masterLin'){
                                                                     ' security_level=' + security_level +
                                                                     ' critical_level=' + critical_level +
                                                                     ' segment=' + segment_type.first() +
-                                                                    ' manual_run=yes' +
                                                                     ' action_type=' + action_type +
                                                                     ' stand=' + stand.toLowerCase() +'\"' +
                                                                     ' -e \'{"as_admins":[' + as_admins + ']}\'' +

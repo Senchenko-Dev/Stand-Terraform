@@ -1,3 +1,7 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
 - name: Add process work status to log file
   block:
 
@@ -33,6 +37,11 @@
         _addprocessworkstatustologfile_ver_substr: ", версия до начала обновления {{ pg_current_version }}, статус обновления: {{ update_errors }}"
       when: "'update' in action_type and recovery_key"
 
+    - name: get substring as not recovery from NEW version to OLD version
+      set_fact:
+        _addprocessworkstatustologfile_ver_substr: "{{ _addprocessworkstatustologfile_ver_substr }}, тип обновления {{ action_type }}{% if pg_upgrade_mode is defined  and action_type == 'update_major' %}, режим обновления {{ pg_upgrade_mode }}{% endif %}"
+      when: "action_type in ['update_major', 'update_minor']"
+
     - name: create log file, if not exists
       file:
         path: "{{ process_work_statuses.log_file }}"
@@ -45,7 +54,7 @@
       lineinfile:
         path: "{{ process_work_statuses.log_file }}"
         insertafter: EOF
-        line: "{{ date_utc.stdout }}: {{ process_work_status }}, текущая конфигурация {{ tag }}{{ _addprocessworkstatustologfile_ver_substr }}"
+        line: "{{ date_utc.stdout }}: {{ process_work_status }}, текущая конфигурация {% if tag is defined %}{{ tag }}{% else %}не определена{% endif %} {{ _addprocessworkstatustologfile_ver_substr }}"
         state: present
       become_user: postgres
 

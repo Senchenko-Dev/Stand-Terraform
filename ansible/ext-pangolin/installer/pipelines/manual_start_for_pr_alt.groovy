@@ -62,96 +62,57 @@ list_of_variables = [version : version,
 
 //nexus variables
 switch(segment) {
-  case ["sigma"]:
-        nexusRestApiUrl = 'https://sbrf-nexus.sigma.sbrf.ru/nexus/service/local'
+  case ["sbercloud"]:
+        nexusRestApiUrl = 'https://dzo.sw.sbc.space/nexus-cd'
         nexusClassifier = "distrib"
         groupId = 'Nexus_PROD'
-        artifactId = 'CI02289206_PostgreSQL_Sber_Edition'
-        repoId = 'Nexus_PROD'
-        nexusAddress = 'mirror.sigma.sbrf.ru'
-        pip_repository = 'http://mirror.sigma.sbrf.ru/pypi/simple'
-        break
-  case ["sigma_installer"]:
-        nexusRestApiUrl = 'http://nexus.sigma.sbrf.ru:8099/nexus/service/local'
-        nexusClassifier = "distrib"
-        groupId = 'as_postgresql'
         artifactId = artifactId_for_nexus
-        repoId = 'SBT_CI_distr_repo'
-        nexusAddress = 'mirror.sigma.sbrf.ru'
-        pip_repository = 'http://mirror.sigma.sbrf.ru/pypi/simple'
+        repoId = 'sbt_PROD_group'
+        pip_repository = 'https://spo.solution.sbt/python/simple'
+        nexusAddress = 'spo.solution.sbt'
         break
-  case ["sigma_archive"]:
-        nexusRestApiUrl = 'http://nexus.sigma.sbrf.ru:8099/nexus/service/local'
+  case ["sbercloud_archive"]:
+        nexusRestApiUrl = 'https://dzo.sw.sbc.space/nexus-ci'
         nexusClassifier = "distrib"
-        groupId = 'as_postgresql.archive'
+        groupId = 'ru/sbt/pangolin/archive'
         artifactId = artifactId_for_nexus
-        repoId = 'SBT_CI_distr_repo'
-        nexusAddress = 'mirror.sigma.sbrf.ru'
-        pip_repository = 'http://mirror.sigma.sbrf.ru/pypi/simple'
+        repoId = 'sbt_maven'
+        pip_repository = 'https://spo.solution.sbt/python/simple'
+        nexusAddress = 'spo.solution.sbt'
         break
-  case ["alpha"]:
-        nexusRestApiUrl = 'https://sbrf-nexus.ca.sbrf.ru/nexus/service/local'
+  case ["sbercloud_installer"]:
+        nexusRestApiUrl = env.NexusRestApiUrl
         nexusClassifier = "distrib"
-        groupId = 'Nexus_PROD'
-        artifactId = 'CI02289206_PostgreSQL_Sber_Edition'
-        repoId = 'Nexus_PROD'
-        nexusAddress = 'mirror.ca.sbrf.ru'
-        pip_repository = 'http://mirror.ca.sbrf.ru/pypi/simple'
+        groupId = env.GroupId
+        artifactId = env.ArtifactId_for_nexus
+        repoId = env.RepoId
+        pip_repository = env.Pip_repository
+        nexusAddress = env.NexusAddress
         break
-}
-
-if (segment == 'sigma' || segment == 'sigma_archive'){
-  if (env.JENKINS_URL.contains('sbt-jenkins.sigma.sbrf.ru')){
-    devops_segment = 'CI'
-  }else if (env.JENKINS_URL.contains('sbt-qa-jenkins.sigma.sbrf.ru')){
-    devops_segment = 'CDL'
-  }else if (env.JENKINS_URL.contains('nlb-jenkins-sigma-psi.sigma.sbrf.ru')){
-    devops_segment = 'CDP'
-  }else if (env.JENKINS_URL.contains('nlb-jenkins-sigma.sigma.sbrf.ru')){
-    devops_segment = 'PROD'
-  }
-}else if (segment == 'sigma_installer'){
-  if (env.JENKINS_URL.contains('sbt-jenkins.sigma.sbrf.ru')){
-    devops_segment = 'PR_CI'
-  }else if (env.JENKINS_URL.contains('sbt-qa-jenkins.sigma.sbrf.ru')){
-    devops_segment = 'PR_CDL'
-  }else if (env.JENKINS_URL.contains('nlb-jenkins-sigma-psi.sigma.sbrf.ru')){
-    devops_segment = 'PR_CDP'
-  }else if (env.JENKINS_URL.contains('nlb-jenkins-sigma.sigma.sbrf.ru')){
-    devops_segment = 'PR_PROD'
-  }
-}else{
-    if (env.JENKINS_URL.contains('sbt-jenkins.ca.sbrf.ru')){
-      devops_segment='CI'
-    }else if (env.JENKINS_URL.contains('sbt-qa-jenkins.ca.sbrf.ru')){
-    devops_segment = 'CDL'
-  }else if (env.JENKINS_URL.contains('nlb-jenkins-psi.ca.sbrf.ru')){
-    devops_segment = 'CDP'
-  }else if (env.JENKINS_URL.contains('nlb-jenkins.ca.sbrf.ru')){
-    devops_segment = 'PROD'
-  }
 }
 
 @NonCPS
-def getNexusLink(nexusRestApiUrl, nexusArtifactId, nexusVersionId, nexusExtensionId, nexusRepositoryId, nexusGroupId, nexusClassifier, remoteUsername, remotePassword)
-{
-  def api = "${nexusRestApiUrl}/artifact/maven/redirect?r=${nexusRepositoryId}&g=${nexusGroupId}&a=${nexusArtifactId}&v=${nexusVersionId}&p=${nexusExtensionId}&c=${nexusClassifier}"
-  def con = new URL(api).openConnection()
-  println(con)
-  con.requestMethod = 'HEAD'
-  if (remoteUsername != null && remotePassword != null)
-  {
-    def authString = "${remoteUsername}:${remotePassword}".getBytes().encodeBase64().toString()
-    con.setRequestProperty("Authorization", "Basic ${authString}")
-  }
-  con.setInstanceFollowRedirects(true)
-  con.connect()
-  def is = con.getInputStream()
-  is.close()
-  con.getURL().toString()
+def getNexusLink(nexusRestApiUrl, nexusArtifactId, nexusVersionId, nexusExtensionId, nexusRepositoryId, nexusGroupId, nexusClassifier, remoteUsername, remotePassword) {
+    if ( segment == "sbercloud" || segment == "sbercloud_archive" || segment == "sbercloud_installer" ) {
+      return "${nexusRestApiUrl}/repository/${nexusRepositoryId}/${nexusGroupId}/${nexusArtifactId}/${nexusVersionId}/${nexusArtifactId}-${nexusVersionId}-${nexusClassifier}.tar.gz"
+    } else {
+      def api = "${nexusRestApiUrl}/artifact/maven/redirect?r=${nexusRepositoryId}&g=${nexusGroupId}&a=${nexusArtifactId}&v=${nexusVersionId}&p=${nexusExtensionId}&c=${nexusClassifier}"
+      def con = new URL(api).openConnection()
+      println(con)
+      con.requestMethod = 'HEAD'
+      if (remoteUsername != null && remotePassword != null) {
+          def authString = "${remoteUsername}:${remotePassword}".getBytes().encodeBase64().toString()
+          con.setRequestProperty("Authorization", "Basic ${authString}")
+      }
+      con.setInstanceFollowRedirects(true)
+      con.connect()
+      def is = con.getInputStream()
+      is.close()
+      return con.getURL().toString()
+    }
 }
 
-node('masterLin'){
+node(env.jenkinsAgentLabel){
   timestamps {
     ansiColor('xterm') {
                   deleteDir()
@@ -165,13 +126,6 @@ node('masterLin'){
                         else
                         {
                           println('Error. Variable ' + key + ' is empty')
-                          emailext (attachLog: true,
-                              body: """<p>Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} is FAILURE. <br>More info at ${env.BUILD_URL} or in mail attachment</br></p>""",
-                              compressLog: true,
-                              mimeType: 'text/html',
-                              subject: "FAILURE: Segment: ${segment}, Stage: ${devops_segment}",
-                              to: 'PMKraskin@sberbank.ru, Karpenko.An.Ser@sberbank.ru, Pekler.P.V@sberbank.ru, MAlBibik@sberbank.ru, RMuAminov@sberbank.ru, AAleverov@sberbank.ru'
-                          )
                           autoCancelled = true
                           error("Abortion is build, because the variable from input Jenkins variables is empty")
                         }
@@ -182,14 +136,16 @@ node('masterLin'){
                    withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'postgresql_nexus_cred', usernameVariable: 'remoteUsername', passwordVariable: 'remotePassword']])
                     {
                       url_to_distr = getNexusLink(nexusRestApiUrl, artifactId, version.toUpperCase(), "tar.gz", repoId, groupId, nexusClassifier, remoteUsername, remotePassword)
-                      sh "wget --user=${remoteUsername} --password=${remotePassword} ${url_to_distr}"
+                      sh "wget -nv --no-check-certificate --user=${remoteUsername} --password=${remotePassword} ${url_to_distr}"
                     }
                   }
                   stage('Unarchive distributive'){
                     sh "mkdir distributive"
                     sh "find -iname \\*${version}-distrib.tar.gz -exec tar -xvf {} -C distributive \\;"
+                    sh "cp -r ${env.WORKSPACE}/distributive/installer/files/ ${env.WORKSPACE}/distributive"
                   }
                   stage ('Change installer') {
+                    sh "cp -r ${env.WORKSPACE}/distributive/installer/files/ ${env.WORKSPACE}/distributive/version_build"
                     sh "rm -rf ${env.WORKSPACE}/distributive/installer"
                     sh "mkdir ${env.WORKSPACE}/distributive/installer"
                     dir("${env.WORKSPACE}/distributive/installer")
@@ -200,13 +156,15 @@ node('masterLin'){
                       println "branchName: ${branchName}"
                       println "git commit: ${commitName}"
                     }
+                    sh "rm -rf ${env.WORKSPACE}/distributive/installer/files"
+                    sh "cp -r ${env.WORKSPACE}/distributive/files ${env.WORKSPACE}/distributive/installer/files"
                   }
                   stage('Install python libraries')
                 {
                   sh """
                       virtualenv pg_se_venv --python=python3
                       source pg_se_venv/bin/activate
-                      pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' ansible==2.9.25
+                      pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' ansible==2.9.18
                       pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' -r distributive/installer/files/slave.txt
                      """
                 }
@@ -222,7 +180,11 @@ node('masterLin'){
                   }
                 }
                 stage ('Start job Clearing_servers') {
-                  build job: 'Clearing_servers'
+                  build job: "${clearing_servers_job}"
+                }
+                stage ('Start job Generate_certs') {
+                  build job: "${gen_certs_job}", parameters: [ string(name: 'hosts_list', value: hosts_list),
+                  string(name: 'ssh_user', value: ssh_user), password(name: 'ssh_password', value: ssh_password) ]
                 }
                 stage('Run Ansible playbook for hand case')
                 {
@@ -266,7 +228,6 @@ node('masterLin'){
                                                               ' security_level=' + security_level +
                                                               ' critical_level=' + critical_level +
                                                               ' segment=' + segment_type.first() +
-                                                              ' manual_run=yes' +
                                                               ' inner_install=yes' +
                                                               ' custom_config=' + custom_config +
                                                               ' stand=' + stand +'\"'

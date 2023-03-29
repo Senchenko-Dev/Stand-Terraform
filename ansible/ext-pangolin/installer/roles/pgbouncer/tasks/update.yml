@@ -15,6 +15,37 @@
         state: stopped
       when: ansible_facts.services['pgbouncer.service'].state == 'running'
 
+    - name: remove confd from stand
+      block:
+        
+        - name: check exist directories confd
+          stat:
+            path: "{{ item }}"
+          register: confd_dirs
+          with_items:
+            - "{{ confd_files.path_dir }}"
+            - "{{ confd_files.conf_dir }}"
+            - "{{ confd_files.service_file }}"
+
+        - name: stop confd service
+          service:
+            name: confd
+            state: stopped
+          when: ansible_facts.services['confd.service'].state == 'running'
+
+        - name: remove exist confd files
+          file:
+            path: "{{ item.file_for_remove }}"
+            state: absent
+          when: "item.file_exist"
+          with_items:
+          - { file_exist: "{{ confd_dirs.results[0].stat.exists }}" , file_for_remove: "{{ confd_files.path_dir }}" }
+          - { file_exist: "{{ confd_dirs.results[1].stat.exists }}" , file_for_remove: "{{ confd_files.conf_dir }}"}
+          - { file_exist: "{{ confd_dirs.results[2].stat.exists }}",  file_for_remove: "{{ confd_files.service_file }}"}
+      
+      become: true
+      when: confd
+          
     - name: make pgbouncer systemd script
       template:
         src: pgbouncer.service.j2
@@ -22,6 +53,11 @@
         owner: root
         group: root
         mode: 0644
+
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and pgbouncer_error_um001m and inventory_hostname == 'master'
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and pgbouncer_error_um001r and inventory_hostname == 'replica'
 
     - name: copy pgbouncer bin
       copy:
@@ -38,28 +74,6 @@
         - { src: '{{ local_distr_path }}/pgbouncer{{ user_share_dir }}/man/man1/pgbouncer.1', dest: '{{ user_share_dir }}/man/man1/' }
         - { src: '{{ local_distr_path }}/pgbouncer{{ user_share_dir }}/man/man5/pgbouncer.5', dest: '{{ user_share_dir }}/man/man5/' }
 
-    - name: check exists confd
-      stat: path="{{ confd_files.path_dir }}/bin/confd"
-      register: confd_exists
-
-    - name: update bouncer config for confd
-      block:
-
-        - name: update confd template file
-          template:
-            src: "{{ playbook_dir }}/roles/confd/templates/pgbouncer.tmpl.j2"
-            dest: "{{ confd_files.conf_dir }}/templates/pgbouncer.tmpl"
-            owner: postgres
-            group: postgres
-            mode: 0600
-
-        - name: restart systemd and start service
-          systemd:
-            name: confd
-            state: restarted
-
-      when: confd_exists.stat.exists
-
     - name: ensure config directory {{ pgbouncer_files.conf_dir }} exist
       file:
         path: "{{ pgbouncer_files.conf_dir }}"
@@ -69,12 +83,13 @@
         mode: 0700
 
     - name: make pgbouncer config from template
-      template:
-        src: pgbouncer.ini.j2
+      copy:
+        src: "{{ merge_cfg.pgbouncer }}/pgbouncer.ini"
         dest: "{{ pgbouncer_files.conf_dir }}/pgbouncer.ini"
         owner: postgres
         group: postgres
         mode: 0600
+        remote_src: yes
 
     - name: make pgbouncer userlist from template
       template:
@@ -99,6 +114,11 @@
         timeout: 10
         delay: 5
 
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and pgbouncer_error_um002m and inventory_hostname == 'master'
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and pgbouncer_error_um002r and inventory_hostname == 'replica'
+
     - name: setup logrotate configuration
       template:
         src: pgbouncer.j2
@@ -120,6 +140,7 @@
             replica: true
           components:
             pgbouncer: true
+      run_once: true
       when: inventory_hostname == 'replica'
 
     - name: master updated with error
@@ -133,6 +154,7 @@
             master: true
           components:
             pgbouncer: true
+      run_once: true
       when: inventory_hostname == 'master'
 
   always:

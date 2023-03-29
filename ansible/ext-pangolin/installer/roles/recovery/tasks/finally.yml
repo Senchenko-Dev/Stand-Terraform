@@ -1,0 +1,196 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+- name: Enable backup_user in database
+  include_role:
+    name: common
+    tasks_from: disable_backup_user
+  vars:
+    _dsblbckpusr_enable: true
+    _dsblscrpits: false
+    _python_postgresql_venv: "{{ PGHOME_OLD }}/postgresql_venv/bin/python3"
+  when: SRC and inventory_hostname == 'master' and PGHOME_OLD is defined
+
+- name: Finally recovery
+  block:
+
+    - name: check exists patroni
+      stat: path="{{ patroni_files.service_file }}"
+      register: patroni_exists
+
+    - name: restart patroni if stopped and check that it started
+      block:
+
+        - name: reload systemd and start patroni service
+          systemd:
+            name: patroni
+            state: restarted
+            daemon_reload: yes
+            enabled: yes
+          when: action_type == 'update_minor'
+
+        - name: loop wait for patroni started
+          systemd:
+            name: patroni
+          register: result
+          until: result.status.ActiveState == 'active'
+          retries: 6
+          delay: 10
+
+      when: patroni_exists.stat.exists
+
+    - name: turn off pause mode and restart cluster if needed
+      block:
+
+        - name: turn off pause mode after patroni nodes updated
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: false"
+            PGHOME: "{{ PGHOME_OLD }}"
+          
+        - name: restart cluster if needed
+          include_role: 
+            name: patroni
+            tasks_from: pending_restart.yml
+          vars:
+            current_python_venv: "{{ PYTHON_VENV_OLD }}"
+            current_pghome: "{{ PGHOME_OLD }}"
+            current_pgport: "{{ ports.pg }}"
+            current_patroni_port: "{{ ports.patroni }}"
+
+        - name: send restart command to patroni
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            endpoint_name: restart
+            PGHOME: "{{ PGHOME_OLD }}"
+
+        - name: loop wait for Pangolin started
+          shell: '{{ PGHOME_OLD }}/bin/pg_isready -h 127.0.0.1 -p {{ ports.pg }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 60
+          delay: 1
+          become_user: postgres
+
+        - name: turn ON synchronous mode and wait for cluster synchronization
+          include_role:
+            name: patroni
+            tasks_from: update_wait_cluster_synchronization
+          vars:
+            PGHOME: "{{ PGHOME_OLD }}"
+
+      when: "inventory_hostname == 'master' \
+             and patroni_exists.stat.exists"
+
+    - name: recovery cron job and welcome message
+      block:
+
+        - name: removes cron job
+          cron:
+            name: "a job for postgresql clean logs"
+            state: absent
+          become_user: postgres
+          ignore_errors: yes
+
+        - name: restore cron script and welcome message
+          copy:
+            src: "{{ item.src }}"
+            dest: "{{ item.dest }}"
+            owner: postgres
+            group: postgres
+            mode: "{{ item.mode }}"
+            remote_src: yes
+          with_items:
+            - {src: "{{ backup_root_dir }}{{ global_scripts }}/postgresql_clean_logs",
+               dest: "{{ global_scripts }}/postgresql_clean_logs",
+               mode: "0700",
+               condition: cron_job_exists.stat.exists}
+            - {src: "{{ backup_root_dir }}{{ global_scripts }}/dynmotd.sh",
+               dest: "{{ global_scripts }}/dynmotd.sh",
+               mode: "0755",
+               condition: welcome_message_exists.stat.exists}
+          become_user: root
+          when: "{{ item.condition }}"
+
+        - name: creates cron job
+          cron:
+            name: "a job for postgresql clean logs"
+            special_time: daily
+            job: "{{ global_scripts }}/postgresql_clean_logs"
+          become_user: postgres
+          when: cron_job_exists.stat.exists
+
+      when: inventory_hostname != 'etcd'
+
+    - name: delete encrypt space of patroni db user, if pgse ver < 4.4.0
+      file:
+        path: "{{ pg_encrypt_cfg }}"
+        state: absent
+      become: true
+      when: "inventory_hostname != 'etcd' \
+             and ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0"
+
+    - name: smoke tests
+      include_role:
+        name: tests
+        tasks_from: recovery
+
+    - name: turn ON actual synchronous mode if it is disable
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        change_params: "{{ item }}"
+        PGHOME: "{{ PGHOME_OLD }}"
+      with_items:
+        - "synchronous_mode: {{ pg_synchronous_mode }}"
+        - "synchronous_mode_strict: {{ pg_synchronous_mode_strict }}"
+      when: inventory_hostname == 'master' and patroni_exists
+
+    - name: set control time of recovery process
+      block:
+
+        - set_fact: recovery_time_finished="{{ lookup('pipe','date \"+%Y-%m-%d %H:%M:%S\"') }}"
+        - set_fact: recovery_time_work="{{ ((recovery_time_finished | to_datetime) - (recovery_time_started | to_datetime)).total_seconds() / 60 | int  }}"
+
+      when: inventory_hostname == 'master'
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ PGHOME_OLD }}/postgresql_venv/bin/python3'
+
+    - name: set master as inventory master, if cluster
+      block:
+
+        - name: define current master role of the cluster
+          include_role:
+            name: patroni
+            tasks_from: update_define_roles_of_nodes.yml
+
+        - name: change role of current host in cluster
+          include_role:
+            name: patroni
+            tasks_from: update_run_switchover
+          vars:
+            current_database_port: "{{ ports.pg }}"
+            _runswitchover_pghome: "{{ PGHOME_OLD }}"
+            PGHOME: "{{ PGHOME_OLD }}"
+
+      run_once: true
+      when: "installation_type == 'cluster' \
+             and hostvars['master'].ansible_fqdn != current_master"
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+  become: true
+  when: "update_errors.aggregate \
+         and not update_errors.components.checkup \
+         and not update_errors.types.pg_auth_reencrypt.finally \
+         and not update_errors.types.pg_auth_reencrypt.check_and_stop"

@@ -1,0 +1,142 @@
+- name: Start services
+  block:
+
+    - name: get service_facts
+      service_facts:
+      no_log: "{{ nolog }}"
+
+    - name: start etcd
+      block:
+
+        - name: start etcd service
+          systemd:
+            name: etcd
+            state: started
+          become_user: root
+
+        - name: loop wait for etcd started
+          systemd:
+            name: etcd
+          register: result
+          until: result.status.ActiveState == 'active'
+          retries: 6
+          delay: 10
+
+      when: "is_turn_on_etcd and 'etcd' in stop_list_components"
+
+    - name: start Pangolin
+      block:
+
+        - name: check that DB doesnt work
+          stat:
+            path: "{{ PGDATA_OLD }}/postmaster.pid"
+          register: postmaster_pid_state
+
+        - name: start Pangolin by postgresql.service
+          service:
+            name: postgresql
+            state: started
+          become_user: root
+          when: "not postmaster_pid_state.stat.exists and 'postgresql.service' in ansible_facts.services"
+
+        - name: start old Pangolin by pg_ctl
+          shell: "{{ PGHOME_OLD }}/bin/pg_ctl start -D {{ PGDATA_OLD }}"
+          when: "not postmaster_pid_state.stat.exists and 'postgresql.service' not in ansible_facts.services"
+
+        - name: check database connect to Pangolin
+          shell: '{{ PGHOME_OLD }}/bin/pg_isready -h 127.0.0.1 -p {{ ports.pg }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 60
+          delay: 1
+
+      become_user: postgres
+      when: is_turn_on_pangolin and inventory_hostname != 'etcd'
+
+    - name: start patroni
+      block:
+
+        - name: start patroni service
+          systemd:
+            name: patroni
+            state: started
+          become_user: root
+
+        - name: loop wait for patroni started
+          systemd:
+            name: patroni
+          register: result
+          until: result.status.ActiveState == 'active'
+          retries: 6
+          delay: 10
+
+      when: "is_turn_on_patroni \
+             and 'patroni' in stop_list_components \
+             and inventory_hostname != 'etcd'"
+
+    - name: start confd
+      block:
+
+        - name: start confd service
+          systemd:
+            name: confd
+            state: started
+          become_user: root
+
+        - name: loop wait for confd started
+          systemd:
+            name: confd
+          register: result
+          until: result.status.ActiveState == 'active'
+          retries: 6
+          delay: 10
+
+      when: "is_turn_on_confd \
+             and 'confd.service' in ansible_facts.services \
+             and inventory_hostname != 'etcd'"
+
+    - name: start pgbouncer
+      block:
+
+        - name: start pgbouncer service
+          systemd:
+            name: pgbouncer
+            state: started
+          become_user: root
+
+        - name: loop wait for pgbouncer started
+          systemd:
+            name: pgbouncer
+          register: result
+          until: result.status.ActiveState == 'active'
+          retries: 6
+          delay: 10
+
+      when: "is_turn_on_pgbouncer \
+             and 'pgbouncer' in stop_list_components \
+             and inventory_hostname != 'etcd'"
+
+    - name: start haproxy
+      block:
+
+        - name: start service haproxy
+          systemd:
+            name: haproxy
+            state: started
+          become_user: root
+
+        - name: loop wait for haproxy started
+          systemd:
+            name: haproxy
+          register: result
+          until: result.status.ActiveState == 'active'
+          retries: 6
+          delay: 10
+
+      when: "is_turn_on_haproxy \
+             and 'haproxy' in stop_list_components \
+             and inventory_hostname != 'etcd'"
+
+  become: true
+  when: "not update_errors.components.checkup \
+         and not update_errors.types.pg_auth_reencrypt.check_and_stop"

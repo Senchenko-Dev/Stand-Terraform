@@ -1,3 +1,0 @@
-- include_role:
-    name: ../kafka/roles/start_kafka_systemd
-

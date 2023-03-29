@@ -1,0 +1,364 @@
+############################################################### 1. INSTALL ############################################################
+min_space_pgdata: 0                                                                     # Minimal free disk space on the pgdata (GB)
+min_space_pgarclogs: 0                                                                  # Minimal free disk space on the pgarclogs (GB)
+min_space_pgerrorlogs: 0                                                                # Minimal free disk space on the pgerrorlogs (GB)
+sos_file_size: 0                                                                        # Volume of the sos file will be created in /pgdata (MB)
+ldap_tls: true                                                                          # Whether to switch tls in ldap autentification
+
+############################################################### 2. UPDATE #############################################################
+is_update_ldap_auth_methods: False                                                           # Update ldap auth methods at old pg_hba rules
+is_inner_full_backup: "{% if action_type == 'update_major' %}true{% else %}false{% endif %}" # Local backup is enabled/disabled                                                              # Whether to make local backup before updating
+is_downtime_configure_module: true                                                           # If true then downtime is enable (minor update of configure role)
+is_print_pg_upgrade_logs: false                                                              # If True then pg_upgrade result work will be printed
+local_backup_path: /pgarclogs                                                                # Local backup path
+local_backup_coefficient: 1                                                                  # Local backup coefficient in % (% of dbms size)
+maximum_dbms_size_to_update: 0                                                               # Maximum dbms size to update (Gb)
+false_error_filter_for_data_schema:  []                                                 # List of queries that errors will be ignored during update
+false_error_filter_for_data_schema_default:  ['CREATE ROLE postgres;',
+                                              'CREATE POLICY cron_job_policy ON .*.job USING .*',
+                                              'CREATE POLICY allow_select ON .*.pathman_config FOR SELECT USING \(true\);',
+                                              'CREATE POLICY allow_select ON .*.pathman_config_params FOR SELECT USING \(true\);',
+                                              'CREATE POLICY deny_modification ON .*.pathman_config USING \(.*.check_security_policy\(partrel\)\);',
+                                              'CREATE POLICY deny_modification ON .*.pathman_config_params USING \(.*.check_security_policy\(partrel\)\);']
+                                                                                        # Default list of queries that errors will be ignored during update
+not_support_type_installed_configuration: []                                                 # List of unsupported (deprecated) installation types
+handle_update_errors: true                                                                   # Whether to run recovery cluster when update get error (true = rollback, false = skip error)
+is_compress_data_by_rsync: no                                                                # Enabling flag for compression in rsync when network isn't stability or is slow (function for update)
+is_removed_old_pgdata: true                                                                  # If True then old PGDATA after major update must be removed
+auth_methods_control_map:                                                                    # Auth methods control map
+  md5: 'scram-sha-256'                                                                       # For example, field from auth_methods_control_map dictionary with info, that md5 must be replaced to scram-sha-256
+remove_block_update_tmp_files: true                                                          # Remove temp files for update .trigger_stop_update and update_disallowed
+
+####################################################### 2.1. INFORMATION MESSAGES (optional) ##########################################
+# Information message about the estimation time of the update
+estimation_update_execution_time: "Оценка времени выполнения обновления СУБД Pangolin по результатам НТ:\n\
+                                   а) Standalone конфигурация: \n\
+                                      - 54 минуты (100 Gb СУБД Pangolin) \n\
+                                      - 126 минут (500 Gb СУБД Pangolin) \n\
+                                      - 309 минут (800 Gb СУБД Pangolin) \n\
+                                   б) Cluster конфигурация: \n\
+                                      - 90 минут (100 Gb СУБД Pangolin) \n\
+                                      - 359 минут (500 Gb СУБД Pangolin) \n\
+                                      - 599 минут (800 Gb СУБД Pangolin) \n\
+                                    \n\
+                                   Характеристики серверов: \n\
+                                   a) Standalone, Active, Standby: \n\
+                                      - ОС Red Hat Enterprise Linux Server release 7.9 (Maipo); \n\
+                                      - CPU 16 ядер (Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz); \n\
+                                      - RAM 128 Gb; \n\
+                                      - Disk HDD 2000 Gb; \n\
+                                      - Пропускная способность сети 10Gbit/s. \n\
+                                   б) Arbiter: \n\
+                                      - ОС Red Hat Enterprise Linux Server release 7.9 (Maipo); \n\
+                                      - CPU 2 ядра (Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz); \n\
+                                      - RAM 2 Gb; \n\
+                                      - Disk HDD 50 Gb; \n\
+                                      - Пропускная способность сети 10Gbit/s. \n\
+                                    \n\
+                                   Сценарий нагрузочного тестирования: \n\
+                                   1) Обновление с версии pangolin 4.3.0 до версии pangolin 5.2.0 при нагруженности СУБД pangolin 100 tps \n\
+                                   2) Конфигурация серверов: \n\
+                                      - cluster (cluster-patroni-etcd-pgbouncer); \n\
+                                      - standalone (standalone-postgresql-pgbouncer). \n\
+                                   3) Размер СУБД pangolin: \n\
+                                      - 100 GB; \n\
+                                      - 500 GB; \n\
+                                      - 800 GB; \n\
+                                   4) Процент объема индексов в СУБД pangolin: 30-40%"
+
+######################################################### 3. INSTALL AND UPDATE #######################################################
+enabled_sec_admin_extra_auth_methods: 'cert'                                            # Allowed extra authentication methods for security administrators
+enabled_extra_auth_methods: 'cert'                                                      # Allowed extra authentication methods for non security administrators users
+turn_on_or_update_psql_lockmon: false                                                   # Turn on install or update extension psql_lockmon
+PGLOGS: /pgerrorlogs/{{ ansible_hostname }}                                             # Define log_directory params before install/update
+auth_encrypt: true                                                                      # Switching the settings of the auth encryption auth
+auth_reencrypt: true                                                                    # Switching the settings of the re-encryption utility
+run_smoke_test: false                                                                   # Whether to run autotests after installation/update
+is_compare_checksums: false                                                             # if the parameter is true, then the hashsum of all databases will be checked for major update
+ROLES_EXPIRES_DATE: 'infinity'                                                          # Roles expires date (Always affects as_admin / If rlm, it also affects 'as_admin_read')
+cfg_main_roles: false                                                                   # Updating the role model 'db_admin', 'as_group', 'TUZ_group'
+
+####################################################### 3.1. HBA RULES ################################################################
+# Pg_hba settings for users as_admin/as_admin_read, all-sa-pam-group and other rules (you can write multiple lines separated by "\n")
+
+ldap_server: 'srv-0-39.db.dev.sbt'                                                      # DNS name of LDAP server
+ldap_bind_tuz_name: 'SBT-SA-PGPS0003'                                                   # Name TUZ for ldap
+
+# Ldap parameters for PAM
+ldap_pam_parameters: 'ldapserver={{ ldap_server }} ldapport=389 ldapprefix="cn=" ldapsuffix=", OU=NPA, OU=PAM, OU=ALL, OU=SberTech, DC=MustBeFilled, dc=sbrf, dc=ru"'
+
+# Ldap parameters for Active Directory
+ldap_users_parameters: 'ldapserver="{{ ldap_server }}" ldapport=3268 ldapbasedn="" ldapbinddn="cn={{ ldap_bind_tuz_name }},OU=Service Accounts,OU=SBT,OU=SberTech,dc=MustBeFilled,dc=sbrf,dc=ru"
+                        ldapbindpasswd="{{ ldap_bind_tuz_password }}" ldapsearchfilter="(&(objectCategory=person)(objectClass=user)(cn=$username))"'
+hba_rules: ['host all +all-sa-pam-group 0.0.0.0/0 ldap {{ ldap_pam_parameters }}',
+            'host all +{{ as_group }}, +as_admin_read 0.0.0.0/0 ldap {{ ldap_users_parameters }}',
+            'host all zabbix_oasubd 0.0.0.0/0 scram-sha-256',
+            'host all auditor 0.0.0.0/0 scram-sha-256',
+            'host all monitoring_php 0.0.0.0/0 scram-sha-256'
+           ]                                                                            # Example ['rule 1', 'rule 2']
+
+####################################################### 3.2. SECURITY SETTINGS (SSL) ##################################################
+ssl_mode: true                                                                          # Turn on SSL mode between cluster components
+
+generate_cert_conf: "{% if   ansible_os_family == 'RedHat'   %}/etc/pki/tls/openssl.cnf\
+             	     {% elif ansible_os_family == 'Altlinux' %}/etc/openssl/openssl.cnf\
+             	     {% endif %}"
+pg_certs_pwd:
+  root_ca: "{{ '' | default('/pg_ssl/root.crt', true) }}"                               # Root CA certificate for all components\nodes
+  server_cert: "{{ '' | default('/pg_ssl/server.crt', true) }}"                         # Main server certificate for each node
+  server_key: "{{ '' | default('/pg_ssl/server.key', true) }}"                          # Main server private key for each node
+  postgres_cert: "{{ '' | default('/pg_ssl/client.crt', true) }}"                       # User postgres certificate
+  postgres_key: "{{ '' | default('/pg_ssl/client.key', true) }}"                        # User postgres private key
+  pgbouncer_cert: "{{ '' | default('/pg_ssl/pgbouncer.crt', true) }}"                   # Certificate for connect pgbouncer to PGSE
+  pgbouncer_key: "{{ '' | default('/pg_ssl/pgbouncer.key', true) }}"                    # Private key for connect pgbouncert to PGSE
+  patroni_cert: "{{ '' | default('/pg_ssl/patroni.crt', true) }}"                       # User patroni certificate
+  patroni_key: "{{ '' | default('/pg_ssl/patroni.key', true) }}"                        # User patroni private key
+  patronietcd_cert: "{{ '' | default('/pg_ssl/patronietcd.crt', true) }}"               # Certificate for connect patroni to etcd
+  patronietcd_key: "{{ '' | default('/pg_ssl/patronietcd.key', true) }}"                # Private key for connect patroni to etcd
+  haproxy_cert: "{{ '' | default('/pg_ssl/haproxy.crt', true) }}"                       # Certificate for statistic server Haproxy
+
+crl_file: ""                                                                            # Path to certificate revocation list file
+
+pgbouncer_client_tls_sslmode: "{{ '' | default('prefer', true) }}"                      # Ssl mode for conennections from users side (values: prefer,require,verify-ca,verify-full)
+etcd_ciphers_suits: "{{ '' | default('TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384', true) }}"       # list of supported TLS cipher suites between server/client and peers in etcd
+allowlist_rest_api: ""                                                                  # List hosts with access unsafe request to rest api patroni (example "10.10.10.2,tkles-core00000.vm.esrt.cloud.sbrf.ru")
+haproxy_stat_login: "{{ '' | default('admin', true) }}"                                 # Login for Haproxy statistic server
+haproxy_stat_pass: "{{ '' | default('admin', true) }}"                                  # Password in plain text for Haproxy statistic server
+hosts_access_list: "{{ ansible_default_ipv4.address }}"                                 # Hosts with access to Haproxy statistic server (example hosts_access_list: "10.10.10.2 10.10.10.0/24")
+
+is_ssl_constraints: false
+ssl_min_protocol_version: 'TLSv1.2'
+
+###################################################### 3.3. TDE and AP ################################################################
+tde: false                                                                              # Switching transparent data encryption
+admin_protection: false                                                                 # Switching administrator protection
+admin_protection_users:                                                                 # Dictionary with users, which will be use in initprotection
+  sec_admin_backup:                                                                     # Mandatory user for security adminitstator
+    user_name: 'sec_admin_backup'                                                       # Name of user, which will have any name
+    password: SCRAM-SHA-256$4096:eH4WBnWI0dB7wLMp7/DN7w==$Wyp0iT1iDc7ap2e9jV/IUH9oyHCJ718nL2fTGijFT2Q=:31nAvbNWbjbFya8gr7hcqKi2ufFOLn4CfaqHbiTEKcg=           # Password of user only SCHAM-SHA-256. SuperPuperImbaPasS!123
+  sec_admin:                                                                            # Mandatory user for security adminitstator
+    user_name: 'sec_admin'                                                              # Name of user, which will have any name
+    password: SCRAM-SHA-256$4096:+4e3LA71/IP8mTYRLmzBXQ==$VqGeOQDgXi9PqirHI7O1XqT6XMUSAnN40tAhWgTvYFM=:G0OGlUmB1mSj7wCMEX5z5LIDawQ5FzYG35QbQkcotXs=           # Password of user only SCHAM-SHA-256. SuperPuperPassWithNumbers!123
+sec_admin_hba_rule:
+  connection: host                                                                      # Connection method (host,hostssl,local and etc)
+  databases: all                                                                        # Allowed connection databases
+  network: 0.0.0.0/0                                                                    # Allowed connection networks
+  auth: ldap {{ ldap_pam_parameters }}                                                  # Authentication method
+sec_admin_backup_networks: ['10.40.0.1']                                                # Networks of hosts which can connect to database as sec_admin_backup user
+sec_admin_default_auth: 'scram-sha-256'
+
+KMS_HOST: 10.40.0.2
+KMS_PORT: 8200
+KMS_LOGIN: adminencryption
+KMS_PASSWORD: autotest
+KMS_CONFIG: "{{ PGETCDIR }}/enc_connection_settings.cfg"
+KMS_VERSION: 1.4.0
+KMS_CLUSTER_ID: 'qwerty'
+
+##################################################### 3.4. ENVIRONMENT SETTINGS #######################################################
+pip_repository:
+  index_url:     https://pypi.org/simple/
+  trusted_host:  pypi.org
+
+linux_repos:
+  - name:     EPEL7
+    file:     mirror
+    baseurl:  http://mirror.sigma.sbrf.ru/rhel-extras/EPEL7
+    enabled:  "{{ ansible_os_family == 'RedHat' }}"
+
+#  - name:     EPEL7
+#    file:     mirror
+#    baseurl:  http://mirror.ca.sbrf.ru/rhel-extras/EPEL7
+#    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'alpha' }}"
+#
+#  - name:     EPEL7
+#    file:     mirror
+#    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-server-rhscl-7-rpms/
+#    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
+#
+#  - name:     rhel-server-rhscl-7-rpms
+#    file:     D10
+#    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-server-rhscl-7-rpms/
+#    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
+#
+#  - name:     rhel-7-server-extras-rpms
+#    file:     D10
+#    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-7-server-extras-rpms/
+#    enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
+
+################################################ 3.5. COMPONENT CONFIGURATION SETTINGS ################################################
+                                                    ### POSTGRESQL SETTINGS ###
+pg_synchronous_mode: true                                                               # Replication modes (asynchronous or synchronous)
+pg_synchronous_mode_strict: false                                                       # Switching to asynchronous mode (strict or non-strict synchronous replication)
+log_prefix: '%t [%p]: [%l-1] app=%a,user=%u,db=%d,client=%h,type=%b '                   # A string, in the style of the printf function, which is output at the beginning of each line of the message log
+
+                                                    #### ETCD SETTINGS ####
+etcd_timeout: 5000                                                                      # Is how long a follower node will go without hearing a notification before attempting to become leader itself (ms)
+etcd_interval: 1000                                                                     # This is the frequency with which the leader will notify followers that it is still the leader (ms)
+
+########################################################## 3.6. PASSWORDS #############################################################
+# pgbouncerPas$superStronG9@34
+pgbouncer_scram_password: SCRAM-SHA-256$4096:6dSZcvwPBkjQxyYISRYwtg==$mhVRh0ny/2d9KTIqq3Kef19eRihnktgkVBh16XACzTE=:INzsKgwAIYvJVr5DxZ15FZGNw7uYRUAHPGtstbJVU7E=
+
+# auditorPas$superStronG9@12
+auditor_scram_pass: SCRAM-SHA-256$4096:XhaLdCH3EsW3KxzkWv+7DA==$7js2ocPf+h4dM75S8Pvrhyuqh7WFKkDJzapxGXYtHdg=:XY10Hq7Yycdj0mLOPdIIbSmKIuE/8QdRYx72BlPogus=
+
+# zabbixPas$superStronG9@78
+zabbix_oasubd_scram_pass: SCRAM-SHA-256$4096:ixX6wg41Fokk2E5lEr5z4Q==$3cjYP9ulKFZ6FzxuKkOXnf6QSCAtwBspwjAL46TvbeU=:AdWErQT4lzBl6EJrmUyyhVMVcZKtHu8pvzSAHwW/A7Y=
+
+# phpPas$superStronG9@56
+monitoring_php_scram_pass: SCRAM-SHA-256$4096:VhI4TEkll0gJn0sPvImwsA==$GZHkciDMeQ/xx2afpqkqpSaarpJptyiQgX67m/khTBo=:c9w/Z1WjrptJ3cB39xVt4aNgsStnygRfnnYg0/El/HY=
+
+# postgresPas$superStronG9@90
+postgres_db_scram_pass: SCRAM-SHA-256$4096:WG9q8dnq0H8Fe3zhmP2JpA==$MIaRUuKZKrAOxRRWutZZ+j16ou16ehq4t90hyYOlsGg=:ZCfyArmwtnYW+sAPzKtEVSFxeF66rRLU5LqjoQ02gp0=
+
+# Postgre!LinuxPa55
+postgres_linux_pass: postgres:$6$ZEyrLfdl$hSCw8.nBy6rbA.as8f8kD/duUCXajonEwbkqJ29t.k/v/sfiD877zxtBs4KH4DI.9zZqeBJMHh2OPes3YLcBk0
+
+kmadmin_pg_linux_pass: kmadmin_pg:$6$ZWRDSkEz$d0JNIVo2GVVeEczaYIV495XnP6k6Kuw2KJItRfCXzmfkx39ScLJuxFrFo.UdBxqyUO2ygNRZ2/cCNzVUjHvZG1
+
+# pgSQL654#2!
+ldap_bind_tuz_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          37373831323338333033653337373961363539663439373962653434303231333332663065303065
+          6539313038356661346161383533653864386531646162360a366233326134633165616565383239
+          64383736616334336134643430356631316630383436303634376562386531653031313138626230
+          3464376266336161650a656235353530323463326539393661353830353163333438633565653738
+          6263
+
+# backupPas$superStronG9@112
+pg_backup_user_passwd: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          61336232636132306631316330643761363132333835613862616639343535363434383637386363
+          3432326664346233643233353334316330366433363630340a616533653262656563643065363965
+          34313766303664303966306635633936376639373561623733636636633032323664373462613133
+          3233356130656138390a636238663131343866313462313437623063393461653539643338376333
+          36336466396434303532393166353938653534386535353334613634666663303965
+
+# dev_api_pastroni_pass!
+patroni_yml_pass: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          30346335643465623163336231383839343836393965616133656363323461343863613232653035
+          3561333566363238323538646362343830396331653432300a643964646262303139633663656566
+          37366131656539663337366132313163626231643032656138303736386237356132653039313437
+          3132363933356332320a383366626533663561353161313364636539356534373566343833663963
+          33373734636162613733313437643239373466316461316337336362643362643632
+
+# DO NOT CHANGE!!!
+# Asadminuser$1234
+db_group_roles:
+  as_admin:
+    pass:
+      scram: SCRAM-SHA-256$4096:2H6ypfV3DJP0LUZLrSnPsA==$yOIhGySEsNiY9p91PkJ5a2/kUQhxAwzUAQcjwCHov3A=:gd7X+KDJ+4GY44H9Xelan5dkhLwLLyDZLrhw4LhmDo8=
+      open: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          34643930303136633766383430316337656139383937353539333262633764383061643039316366
+          3862303530643633623532326139356331373934396164300a616263336630363133653436363464
+          38356261653134666166313763636634343437623063386238306637613833623831643434626533
+          3135623362343364620a656534383934623661666262323135333532613139646438393262643364
+          62376331373862313530626239633436646338383537386166306532363161373335
+# Supertransport$123
+  transport:
+    pass:
+      scram: SCRAM-SHA-256$4096:TTysuRbQcMM3tOQAoR7LWg==$t89DzT7Y92HXMQxolmGXxG8AGQPvu/yDWV4leOAXiO0=:0vZGdq40uKFLLzfzB2JJ9SD1Ei8rxSObHUlPUcdHByM=
+      open: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          62303866633331633763643061633334373061303363333738376531643038306565373635363030
+          3737353562666331383365366634336138383463343832380a303039666663666534333433343466
+          63623364346132376464363364363062373865666234356166333662663436643862306237316531
+          3931373266376665320a316233333464643032383965623562633965663333373139663264633232
+          65663131333139663830656138646436393238306230373762626331333538343338
+
+############################################## 3.7. DIAGNOSTIC AND MONITORING PARAMETERS ##############################################
+pg_profile:
+  is_enable: true                                                                       # Turn on/off pg_profile
+  topn: 20                                                                              # Number of common objects (statements, relations and etc.) for every sorted tables
+  max_sample_age: 7                                                                     # The shelf life of samples in days
+  track_sample_timings: 'off'                                                           # Track the exact time of sample collection
+  stats_periods: '0,30 * * * *'                                                         # Time periods for cron job with pg_profile
+
+pg_stat_track_activities: 'on'                                                          # It is enables monitoring of the current command being executed by any server process
+pg_stat_track_counts: 'on'                                                              # It is controls whether statistics are collected about table and index accesses
+pg_stat_track_io_timing: 'on'                                                           # It is enables monitoring of block read and write times
+pg_stat_track_functions: 'none'                                                         # It is enables tracking of usage of user-defined functions
+pg_stat_statements_track: 'top'                                                         # It is controls which statements are counted by the module
+pg_stat_statements_max: '5000'                                                          # It is the maximum number of statements tracked by the module (i.e., the maximum number of rows in the pg_stat_statements view)
+pg_enable_monitor_object_modification_date: 'on'                                        # It is enables monitoring create object in DB
+pg_object_modification_date_keep_interval: '1 week'                                     # It is parameter interval removed object
+
+pg_stat_kcache_is_enable: true                                                          # Turn on/off pg_stat_kcache
+pg_stat_kcache_linux_hz: -1                                                             # Linux CONGIX_HZ options (default -1 for trying to fuess it at startup) (limits -1 - 2147483647)
+
+relnblocks_enable: 'on'                                                                 # Enable counting mechanism
+relnblocks_hash_max_size: '1000000'                                                     # Maximum number of relations (having physical files on disk) in the database (limits 500 - 1431650303)
+relnblocks_hash_init_size: '1024'                                                       # Number of relationships (having physical files on disk) in the database for which the cache will be allocated (limits 500 - 1431650303)
+relnblocks_hash_max_db: '1024'                                                          # Maximum number of databases (having physical files on disk) (limits 4 - 1431650303)
+relnblocks_hash_init_db: '20'                                                           # Estimated maximum number of hashtable entries in relation sizes
+
+performance_insights:
+  is_enable: false                                                                      # Turn on/off performance insights
+  masking: 'true'                                                                       # Enables/disables masking of request parameters, connection parameters and user name
+  sampling_enable: 'true'                                                               # Turn on/of data collecting
+  sampling_period: '5s'                                                                 # Frequency of data collection
+  num_samples_in_ram: '12'                                                              # Time the activity data of current sessions is kept in memory before being written to disk
+  num_samples_in_files: '17280'                                                         # Storage time of activity data of current sessions
+
+############################################## 3.8. PASSWORD POLICY PARAMETERS ########################################################
+password_policy_params:
+  is_temp_tuz_password: true                                                            # Determines the type of password (temporary or not) for the TUZ users
+  transport_password_mark_automatic: false                                              # Configures the rules for determining the password as a transport
+  transport_password_life_time: '0'                                                     # Defines the lifetime interval of the transport password
+  deny_default: 'off'                                                                   # It is denied  using password policy from postgresql.conf or by default
+  reuse_time: '365 days'                                                                # It is time for reuse password
+  in_history: '4'                                                                       # Maximum number of old passwords saved
+  max_age: '0'                                                                          # The lifetime of the password, after which the password is considered expired
+  min_age: '0'                                                                          # The time that must pass between two password changes
+  grace_login_limit: '0'                                                                # The maximum number of authentications available to a role after the password lifetime expires
+  grace_login_time_limit: '3 days'                                                      # The time after the expiration of the password, during which it continues to work
+  expire_warning: '7 days'                                                              # The time until the expiration of the password, during which a warning will be displayed to the user
+  lockout: 'on'                                                                         # Sign that the account block rule is enabled as a result of reaching the maximum of login attempts with an incorrect password
+  lockout_duration: '24 hours'                                                          # The time for which the account is blocked as a result of reaching the maximum of login attempts with an incorrect password
+  max_failure: '6'                                                                      # The maximum number of incorrect passwords entered in a row, upon reaching which the password lock is triggered
+  failure_count_interval: '0'                                                           # The time after which the number of incorrect password entries is reset to zero
+  check_syntax: 'on'                                                                    # Indicates whether password syntax checking rules are enabled (if possible)
+  min_length: '16'                                                                      # Minimum password length
+  illegal_values: 'on'                                                                  # Whether the password verification rule is enabled by the list of frequently used passwords (crack.h)
+  alpha_numeric: '3'                                                                    # Minimum number of digits in the password
+  min_alpha_chars: '0'                                                                  # Minimum number of letters in the password
+  min_special_chars: '1'                                                                # Minimum number of non-letter or digit characters in a password
+  min_uppercase: '1'                                                                    # Minimum number of uppercase letters
+  min_lowercase: '0'                                                                    # Minimum number of lowercase letters
+  max_rpt_chars: '0'                                                                    # Maximum number of duplicate characters
+  track_login: 'off'                                                                    # Should I remember the time of the last authentication
+  max_inactivity: '0'                                                                   # The time after the last authentication after which the role will be blocked
+  use_password_strength_estimator: 'on'                                                 # Use a library that will check the complexity of the password, instead of the built-in syntax check?
+  password_strength_estimator_score: '3'                                                # Minimum password complexity rating allowed in the system
+  deduplicate_ssl_no_ssl_fail_auth_attepmts: 'on'                                       # Enabling the deduplication mechanism for repeated psql connection attempts
+  allow_hashed_password: 'on'                                                           # Allow setting a password as a hash
+
+#################################################### 4. RSYSLOG SETTINGS (optional-bank) ##############################################
+rsyslog: false                                                                          # Whether to switch RSYSLOG/SOC, usually used in PROM
+SOC_server: '10.40.0.3'
+SOC_server_port: 7718
+SOC_config_file: /etc/rsyslog.conf
+
+################################################## 5. BACKUP SETTINGS (optional-bank) #################################################
+SRC: false                                                                              # Whether to switch SRC(Backup System), usually used in PROM
+distrib_server: 'mirror.sigma.sbrf.ru'
+distrib_ob2_version: "10.50"
+distrib_server_ob2_path: "http://{{ distrib_server }}/packages/rpm/DP/DP_{{ distrib_ob2_version }}/"
+data_protector_host: "Dismas13-idz.delta.sbrf.ru"
+data_protector_datalists: /etc/opt/omni/server/datalists
+data_protector_schedules: /etc/opt/omni/server/schedules
+manage_backup_bin: /opt/omni/lbin
+
+######################################################## 6. MONITORING ZABBIX (optional-bank) #########################################
+monitoring_zabbix: false                                                                # Whether to switch Zabbix monitoring, usually used in PROM.
+monitoring_params:
+  monitoring_url: "http://api.zabbix.sigma.sbrf.ru/api/monitoring/create_host"
+  token_main: "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJvcmlnX2lhdCI6MTU2NjI5NDY5MywiZXhwIjo5NTY1NjkzNDkzLCJ1c2VyX2lkIjoiS2FycGVua28tYXMiLCJyb2xlIjoibW9uaXRvcmluZ19hZGQ7bW9uaXRvcmluZ19hZGRfYWRtaW47bW9uaXRvcmluZ19jaGVja2FkbWluczttb25pdG9yaW5nX2FkZF9kaSIsIm5hbWUiOiJcdTA0MWFcdTA0MzBcdTA0NDBcdTA0M2ZcdTA0MzVcdTA0M2RcdTA0M2FcdTA0M2UgXHUwNDEwXHUwNDNkXHUwNDM0XHUwNDQwXHUwNDM1XHUwNDM5IFx1MDQyMVx1MDQzNVx1MDQ0MFx1MDQzM1x1MDQzNVx1MDQzNVx1MDQzMlx1MDQzOFx1MDQ0NyJ9.m-DxD5aXsmmwMxRlYKfx3fl-frZ68KdVPnxae75CZIc"
+  tag: "dbsberpg"
+  monitoring_url_pause: "http://api.zabbix.sigma.sbrf.ru/api/event_supressing/create"
+  monitoring_url_pause_delete: "http://api.zabbix.sigma.sbrf.ru/api/event_supressing/delete"
+  token_for_pause: "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJvcmlnX2lhdCI6MTU2NjI5NDY5MywiZXhwIjo5NTY1NjkzNDkzLCJ1c2VyX2lkIjoiS2FycGVua28tYXMiLCJyb2xlIjoibW9uaXRvcmluZ19hZGQ7bW9uaXRvcmluZ19hZGRfYWRtaW47bW9uaXRvcmluZ19jaGVja2FkbWluczttb25pdG9yaW5nX2FkZF9kaTtldmVudGRhc2hib2FyZDtldmVudGRhc2hib2FyZHN1cHJlc3M7ZXZlbnRfc3VwcmVzc2luZztldmVudF9zdXByZXNzaW5nX2dldCIsIm5hbWUiOiJcdTA0MWFcdTA0MzBcdTA0NDBcdTA0M2ZcdTA0MzVcdTA0M2RcdTA0M2FcdTA0M2UgXHUwNDEwXHUwNDNkXHUwNDM0XHUwNDQwXHUwNDM1XHUwNDM5IFx1MDQyMVx1MDQzNVx1MDQ0MFx1MDQzM1x1MDQzNVx1MDQzNVx1MDQzMlx1MDQzOFx1MDQ0NyJ9.95MpTPll5NrnS7DWhnId6MnIDTxzYGMkPR8feVLz7Lw"
+  pause_period: 60

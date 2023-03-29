@@ -1,13 +1,31 @@
-- name: Define version of current python interpreter
-  set_fact:
-    previous_python_interpreter: "{{ ansible_python_interpreter }}"
-
-- name: Set python interpretator
-  set_fact:
-    ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
-
-- name: Disable backup_user in database
+- name: Disable or enable backup_user in database
   block:
+
+    - name: define version of current python interpreter
+      set_fact:
+        previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: "{{ _python_postgresql_venv }}"
+
+    - name: check status RC
+      block:
+
+        - name: get status information from backup.history
+          postgresql_query:
+            port: "{{ PGPORT_OLD }}"
+            query: SELECT state FROM backup.history ORDER BY start_time DESC LIMIT 1;
+          register: current_state_src
+
+        - name: check status RC
+          assert:
+            that: "current_state_src.query_result == [] or \
+                  'completed' in current_state_src.query_result[0].state or \ 
+                  'failed' in  current_state_src.query_result[0].state or \
+                  'waiting_for_wal_backup' in  current_state_src.query_result[0].state"
+            fail_msg: "{{ update_control_msgs.fails.update_component_src_status_fail }}"
+      when: not _dsblbckpusr_enable
 
     - name: check exist pg_probackup
       postgresql_query:
@@ -18,8 +36,57 @@
     - name: disable special technical user
       postgresql_query:
         port: "{{ ports.pg }}"
-        query: ALTER USER "backup_user" NOLOGIN
-      when: is_backup_user.rowcount|int != 0
+        query: REVOKE ALL on FUNCTION pg_start_backup from "backup_user"
+      when: inventory_hostname == 'master' and is_backup_user.rowcount|int != 0 and not _dsblbckpusr_enable
+
+    - name: check status RC
+      block:
+
+        - name: get status information from backup.history
+          postgresql_query:
+            port: "{{ PGPORT_OLD }}"
+            query: SELECT state FROM backup.history ORDER BY start_time DESC LIMIT 1;
+          register: current_state_src
+
+        - name: check status RC
+          assert:
+            that: "current_state_src.query_result == [] or \
+                  'completed' in current_state_src.query_result[0].state or \ 
+                  'failed' in  current_state_src.query_result[0].state or \
+                  'waiting_for_wal_backup' in  current_state_src.query_result[0].state"
+            fail_msg: "{{ update_control_msgs.fails.update_component_src_status_fail }}"
+      when: not _dsblbckpusr_enable
+
+    - name: enable special technical user
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: GRANT ALL on FUNCTION pg_start_backup to "backup_user"
+      when: inventory_hostname == 'master' and is_backup_user.rowcount|int != 0 and _dsblbckpusr_enable
+
+    - name: change manage_backup and pg_se_archlogs scripts
+      block:
+
+        - name: rename previous files
+          command:
+            cmd: "mv {{ item }} {{ manage_backup_bin }}/original_scripts_{{ item.split('/')[-1] }}"
+          with_items:
+            - "{{ path_to_manage_backup_sh_file }}"
+            - "{{ path_to_pg_se_archlogs_sh_file }}"
+          become_user: root
+
+        - name: change scripts files on fakes
+          template:
+            src: "{{ item.source }}"
+            dest: "{{ manage_backup_bin }}/{{ item.dest.split('/')[-1] }}"
+            owner: root
+            group: root
+            mode: 0751
+          with_items:
+            - { source: 'pg_se_archlogs_fake.sh.j2', dest: '{{ path_to_pg_se_archlogs_sh_file }}' }
+            - { source: 'manage_backup_fake.sh.j2', dest: '{{ path_to_manage_backup_sh_file }}' }
+          become_user: root
+        
+      when: is_src_exists and _dsblscrpits
 
   always:
  
@@ -27,10 +94,7 @@
       set_fact:
         ansible_python_interpreter: '{{ previous_python_interpreter }}'
 
-  environment:
-    - PGHOST: "{{ ansible_fqdn }}"
-    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
-    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  environment: "{{ db_connection_args }}"
   become: true
   become_user: postgres
-  when: inventory_hostname == 'master'
+  when: inventory_hostname != 'etcd'

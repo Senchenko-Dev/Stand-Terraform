@@ -1,0 +1,306 @@
+max_used_worker_process: 8
+is_recovery_test_mode: "{{ '' | default(false, true) }}"
+is_recovery_available: false
+is_user_agreement_statuses_file: "{{ '' | default(true, true) }}"
+action_type: "{{ '' | default('install', true) }}" #install, update_minor, update_configure, update_major pg se version
+stand: "{{ '' | default('dev', true) }}"
+supported_action_types:
+  installer: ['install', 'update_minor', 'update_major', 'scout_update_major', 'scout_update_minor']
+  control: ['start_database', 'stop_database', 'switchover', 'scouting_users', 'unlock_reset_user',
+            'scouting_create_user', 'create_user', 'get_installed_contrib_ext', 'install_contrib_ext',
+            'scouting_pgbouncer', 'tunning_pgbouncer', 'scout_edit_pg_hba', 'edit_pg_hba']
+nolog: "{{ '' | default(true, true) }}"
+inner_install: "{{ '' | default(false, true) }}"
+ansible_shell_executable: "/bin/bash"
+ansible_ver: 2.9.18
+custom_config_default: "{{ local_distr_path }}/installer/templates/custom_config_default.yml"
+#components state
+postgres: "{{ '' | default(true, true) }}"
+patroni: "{{ '' | default(true, true) }}"
+pgbouncer: "{{ '' | default(true, true) }}"
+etcd: "{{ '' | default(true, true) }}"
+haproxy: "{{ '' | default(true, true) }}"
+configure: "{{ '' | default(true, true) }}"
+documentations: "{{ '' | default(true, true) }}"
+confd: "{{ '' | default(true, true) }}"
+#the minimum version of the pangolin product that the update algorithm works with
+min_actual_pangolin_ver: 4.3.0
+#cluster directories
+PGDATA: "/pgdata/{% if action_type == 'install' or action_type == 'update_minor' %}\
+                       {{ pg_major_version }}\
+                 {% else %}\
+                       data_tmp\
+                 {% endif %}/data"
+PGLOGS: /pgerrorlogs/{{ ansible_hostname }}
+PGUSERHOME: /home/postgres
+PGBACKUP: "/pgarclogs/{% if action_type == 'install' or action_type == 'update_minor' %}\
+                            {{ pg_major_version }}\
+                      {% else %}\
+                            arclogs_tmp\
+                      {% endif %}"
+tmp_dump_dir: "/pgarclogs/tmp_dumps"
+previous_pgbackup_dir: "{% if ( [ pg_current_version, '4.2.5' ] | compare_pg_se_versions )|int == 0 %}/pgbackup/11\
+                        {% elif ( [ pg_current_version, '4.2.5' ] | compare_pg_se_versions )|int == 2 %}/pgarclogs/11\
+                        {% elif ( [ pg_current_version, '4.2.5' ] | compare_pg_se_versions )|int == 1 %}/pgarclogs/11\
+                        {% endif %}"
+PGSSL: "{{ PGUSERHOME }}/ssl"
+#default_db
+tablespace_name: "{{ '' | default('tbl_t', true) }}"
+tablespace_location: "/pgdata/{% if action_type == 'install' or action_type == 'update_minor' %}\
+                                    {{ pg_major_version }}\
+                              {% else %}\
+                                    data_tmp\
+                              {% endif %}/tablespaces"
+db_name: "{{ '' | default('first_db', true) }}"
+schema_name: "{{ '' | default('sch1', true) }}"
+sec_officer: "{{ '' | default('17644673', true) }}" #strictly 1 login
+support: "{{ '' | default([13289436, 13289437], true) }}" #list of logins
+as_admins: "{{ '' | default(['12345678'], true) }}" #list of logins
+as_TUZ: "{{ '' | default(['test_tuz', 'test_tuz_devops'], true) }}" #list of logins
+control_name: "{{ '' | default('RLM', true) }}"
+# postgres etc dir
+PGETCDIR: "/etc/postgres"
+pg_encrypt_cfg: "{{ PGETCDIR }}/enc_utils_auth_settings.cfg"
+
+protocol: "{% if ssl_mode %}https{% else %}http{% endif %}"
+etcdv3_ssl_connect: '--cert="{{ pg_certs_pwd.server_cert }}" --key="{{ pg_certs_pwd.server_key }}" --cacert="{{ pg_certs_pwd.root_ca }}"'
+etcdv2_ssl_connect: '--cert-file {{ pg_certs_pwd.server_cert }} --key-file {{ pg_certs_pwd.server_key }} --ca-file {{ pg_certs_pwd.root_ca }}'
+endpoints_v3: "--endpoints={% for host in groups['all'] %}{{ hostvars[host].ansible_fqdn }}:{{ ports.etcd_inner }}{% if not loop.last %},{% endif %}{% endfor %}"
+endpoints_v2: "--endpoints {% for host in groups['all'] %}{{ protocol }}://{{ hostvars[host].ansible_fqdn }}:{{ ports.etcd_inner }}{% if not loop.last %},{% endif %}{% endfor %}"
+endpoints_v3_bp: "--endpoints={{ ansible_fqdn }}:{{ ports.etcd_inner }}"
+endpoints_v2_bp: "--endpoints {{ protocol }}://{{ ansible_fqdn }}:{{ ports.etcd_inner }}"
+pg_hba_conn_type: "{% if ssl_mode %}hostssl{% else %}host{% endif %}"
+curl_connect_timeout: 3
+
+db_connection_args:
+  PGHOST: "{{ ansible_fqdn }}"
+  PGSSLCERT: "{{ pg_certs_pwd.postgres_cert }}"
+  PGSSLKEY: "{{ pg_certs_pwd.postgres_key }}"
+  PGSSLROOTCERT: "{{ pg_certs_pwd.root_ca }}"
+
+
+pg_coef_conns: 5
+pg_add_conns: 20
+superuser_reserved_connections: 10
+processor_vcpus: "{{ ansible_processor_vcpus }}"
+pg_max_connections: "{% if ansible_processor_vcpus >= 16 %}{{ processor_vcpus * pg_coef_conns + pg_add_conns + superuser_reserved_connections }}\
+                     {% else %}{{100 + superuser_reserved_connections }}\
+                     {% endif %}"
+
+REMOTE_TMP: "{{ PGUSERHOME }}/installer_cache_dir"
+PGHOME: /usr/pangolin-{{ pg_new_version_without_zeros }}
+bin_dir: /usr/local/bin
+global_scripts: /usr/local/sbin
+#all cluster ports
+ports:
+  etcd_inner: "{{ '' | default('2379', true) }}"
+  etcd_external: "{{ '' | default('2380', true) }}"
+  pg: "{{ '' | default('5433', true) }}"
+  pgbouncer_pg_auth: "{{ '' | default('5544', true) }}"
+  pgbouncer: "{{ '' | default('6544', true) }}"
+  patroni: "{{ '' | default('8008', true) }}"
+  haproxy: "{{ '' | default('5001', true) }}"
+
+pgbouncer_files:
+  conf_dir: /etc/pgbouncer
+  log_dir: "{{ PGLOGS }}"
+  pid_dir: /var/run/pgbouncer
+  bin_path: "{{ bin_dir }}/pgbouncer"
+  service_file: "{{ service_path_dir }}/pgbouncer.service"
+haproxy_files:
+  socket_dir: /var/lib/haproxy
+  conf_dir: /etc/haproxy
+  pid_dir: /var/run
+  bin_path: /usr/sbin/haproxy
+etcd_files:
+  data_dir: /var/lib/etcd
+  conf_dir: /etc/etcd
+  bin_path: "{% if   ansible_os_family == 'RedHat'   %}/usr/bin/etcd\
+             {% elif ansible_os_family == 'Altlinux' %}/usr/sbin/etcd\
+             {% endif %}"
+  service_file: "{{ service_path_dir }}/etcd.service"
+confd_files:
+  conf_dir: /etc/confd
+  path_dir: /opt/confd
+  service_file: "{{ service_path_dir }}/confd.service"
+patroni_files:
+  conf_dir: /etc/patroni
+  service_file: "{{ service_path_dir }}/patroni.service"
+postgresql_files:
+  service_file: "{{ service_path_dir }}/postgresql.service"
+pangolin_common_dir: /opt/pangolin-common
+pg_auth_reencrypt_files:
+  pid_dir: /var/run/pangolin_reencrypt
+  bin_path: "{{ pangolin_common_dir }}/bin/pg_auth_reencrypt"
+  service_file_name_postgres: pangolin_reencrypt@postgres.service
+  service_file_name_kmadmin_pg: pangolin_reencrypt@kmadmin_pg.service
+patroni_wait_seconds: 11
+service_path_dir: /etc/systemd/system
+user_share_dir: /usr/local/share
+logrorate_dir: /etc/logrotate.d
+alt_security_dir: /etc/alt/security
+versions:
+   etcd:  "{% if   ansible_os_family == 'RedHat'   %}3.*\
+           {% elif ansible_os_family == 'Altlinux' and ansible_distribution_version == '8.2' %}3.4.9\
+           {% elif ansible_os_family == 'Altlinux' %}3.*\
+           {% endif %}"
+   haproxy: "{% if   ansible_os_family == 'RedHat'   %}1.*\
+             {% elif ansible_os_family == 'Altlinux' and ( ansible_distribution_version == '8.2' or ansible_distribution_version == '8.4' or ansible_distribution_version == 'p9' ) %}2.0.20\
+             {% elif ansible_os_family == 'Altlinux' %}2.*\
+             {% endif %}"
+PATRONI_HOME: /usr/patroni
+python:
+  pip_conf: "{{ PGUSERHOME }}/.config/pip/pip.conf"
+  patroni_venv: "{{ PATRONI_HOME }}/patroni_venv"
+  patroni_venv_package: "{{ PATRONI_HOME }}/patroni_venv/lib/python3/site-packages:{{ PATRONI_HOME }}/patroni_venv/lib64/python3/site-packages:{{ PATRONI_HOME }}/patroni_venv/lib/python3.6/site-packages:{{ PATRONI_HOME }}/patroni_venv/lib64/python3.6/site-packages"
+  postgresql_venv: "{{ PGHOME }}/postgresql_venv"
+  postgresql_venv_packages: "{{ PGHOME }}/postgresql_venv/lib/python3/site-packages:{{ PGHOME }}/postgresql_venv/lib64/python3/site-packages:{{ PGHOME }}/postgresql_venv/lib/python3.6/site-packages:{{ PGHOME }}/postgresql_venv/lib64/python3.6/site-packages"
+  packages: "{{ REMOTE_TMP }}/python_packages"
+  global_bin_2: "/usr/bin/python2"
+  global_virtualenv_bin: "{% if   ansible_os_family == 'RedHat'   %}virtualenv-3\
+                          {% elif ansible_os_family == 'Altlinux' %}virtualenv3\
+                          {% endif %}"
+
+shell_profile_file: "{% if ansible_os_family == 'Debian' %}\
+                        {{PGUSERHOME}}/.profile\
+                     {% else %}\
+                        {{PGUSERHOME}}/.bash_profile\
+                     {% endif %}"
+
+sudoers_file: /etc/sudoers
+
+required_os_version:
+  min: "{% if ansible_os_family == 'RedHat' %}\
+          7.7
+        {% elif ansible_os_family == 'Altlinux' %}\
+          8.0
+        {% elif ansible_os_family == 'Debian' %}\
+          18.04
+        {% endif %}"
+
+  max: "{% if ansible_os_family == 'RedHat' %}\
+          7.9
+        {% elif ansible_os_family == 'Altlinux' %}\
+          9.2
+        {% elif ansible_os_family == 'Debian' %}\
+          20.04
+        {% endif %}"
+
+#update backups
+backup_main_dir: /pgarclogs/backups
+backup:
+  confd: "{{ backup_root_dir }}/confd"
+  patroni: "{{ backup_root_dir }}/patroni"
+  postgresql: "{{ backup_root_dir }}/postgresql"
+  etcd: "{{ backup_root_dir }}/etcd"
+  haproxy: "{{ backup_root_dir }}/haproxy"
+  pgbouncer: "{{ backup_root_dir }}/pgbouncer"
+  doc: "{{ backup_root_dir }}/doc"
+  src: "{{ backup_root_dir }}/src"
+  rsyslog: "{{ backup_root_dir }}/rsyslog"
+  pg_probackup_bak_dir: "{{ local_backup_path }}/{{ pg_current_version }}"
+  pg_auth_reencrypt: "{{ backup_root_dir }}/pg_auth_reencrypt"
+logs_root_dir: "{{ PGUSERHOME }}/pgse_installer_logs/"
+installer_logs:
+  update_directory: "{{ logs_root_dir }}/update"
+  install_directory: "{{ logs_root_dir }}/install"
+  ansible_log: "{{ logs_root_dir }}/{{ action_type }}/ansible.log"
+  update_log: "{{ logs_root_dir }}/update/update.log"
+  install_log: "{{ logs_root_dir }}/install/install.log"
+update_status_files:
+  dir: '{{ PGUSERHOME }}/.update_pgse'
+  disallow_update: '{{ PGUSERHOME }}/.update_pgse/update_disallowed'
+  prev_pgse_version: 'prev_pgse_version.json'
+  pgaudit_bases: 'pgaudit_bases.json'
+#auto merge params (only update roles)
+merge_cfg_root_dir: "{{ REMOTE_TMP }}/config_auto_merge"
+merge_cfg:
+  dir_path: "{{ merge_cfg_root_dir }}"
+  script: "{{ merge_cfg_root_dir }}/config_auto_merge.py"
+  old_cfg_patroni: "{{ backup.patroni }}{{ patroni_files.conf_dir }}"
+  old_cfg_pgse: "{{ backup.postgresql }}{{ PGDATA_OLD }}"
+  old_cfg_pgbouncer: "{{ backup.pgbouncer }}{{ pgbouncer_files.conf_dir }}"
+  old_cfg_confd: "{{ backup.confd }}{{ confd_files.conf_dir }}"
+  new_cfg: "{{ merge_cfg_root_dir }}/from_new_version"
+  pgbouncer: "{{ merge_cfg_root_dir }}/pgbouncer_merge"
+  result_pgse: "{{ merge_cfg_root_dir }}/result_pgse"
+  result_pgse_patroni: "{{ merge_cfg_root_dir }}/result_pgse_patroni"
+  result_patroni: "{{ merge_cfg_root_dir }}/result_patroni"
+  result_pgbouncer: "{{ merge_cfg_root_dir }}/pgbouncer"
+  old_ver: "{{ pg_current_version }}"
+  new_ver: "{{ pg_version }}"
+  diff_cfg: "{{ merge_cfg_root_dir }}/diff_cfg.txt"
+  diff_bootstrap_cfg: "{{ merge_cfg_root_dir }}/diff_bootstrap_dcs.txt"
+#if True then error exist
+update_errors:
+  aggregate: false
+  hosts:
+    master: false
+    replica: false
+    etcd: false
+  components:
+    checkup: false
+    configuration: false
+    etcd: false
+    patroni: false
+    pgbouncer: false
+    haproxy: false
+    pg: false
+    src: false
+    rsyslog: false
+    finally: false
+    tests: false
+    pg_auth_reencrypt: false
+  types:
+    pg:
+      minor_before_first_db_started: false
+      minor_before_bin_updated: false
+      minor_after_first_db_started: false
+      minor_before_first_switchover: false
+      minor_before_second_switchover: false
+      minor_bootstrap: false
+      major_pre: false
+      major_main_migrate_master_db: false
+      major_main_migrate_replica_db: false
+      major_main_start_after_migrate_db: false
+      major_post: false
+    patroni:
+      main: false
+      finally: false
+    etcd:
+      main: false
+      finally: false
+    src:
+      install_pg_probackup: false
+      main: false
+    configuration:
+      main: false
+      finally: false
+    pg_auth_reencrypt:
+      check_and_stop: false
+      finally: false
+
+process_work_statuses:
+  log_file: "{{ PGUSERHOME }}/.process_work_statuses"
+  installation:
+    start: "Установка СУБД Pangolin запущена"
+    finish: "Установка СУБД Pangolin успешно завершена"
+  scout:
+    start: "Разведка перед обновлением СУБД Pangolin запущена"
+    error: "В процессе выполнения разведки СУБД Pangolin возникла ошибка"
+    finish: "Разведка перед обновлением СУБД Pangolin завершена"
+  all_updates:
+    start: "Обновление СУБД Pangolin запущено"
+    error: "В процессe обновления СУБД Pangolin возникла ошибка"
+    finish: "Обновление СУБД Pangolin успешно завершено"
+  recovery:
+    start: "Восстановление СУБД Pangolin запущено"
+    finish: "Восстановление СУБД Pangolin успешно завершено"
+    unavailable: "Восстановление СУБД Pangolin в автоматическом режиме недоступно для этого типа ошибки"
+    trigger_stop_update: "Установка СУБД Pangolin была прервана пользователем, восстановление СУБД Pangolin успешно завершено"
+
+db_admin: "{{ '' | default('db_admin', true) }}"
+sec_admin: "{{ '' | default('sec_admin', true) }}"
+sec_password: "{{ '' | default('Supersecadmin\\$1234', true) }}"
+as_group: "{{ '' | default('as_admin', true) }}"
+TUZ_group: "{{ '' | default('as_TUZ', true) }}"

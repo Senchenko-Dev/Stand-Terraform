@@ -1,0 +1,88 @@
+- name: Make DB dump and calc checksums
+  block:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ _mdacdc_python_venv }}/bin/python3'
+      run_once: true
+
+    - name: define cpu count for pg_upgrade work
+      set_fact:
+        _mdacdc_proc_cpu: "1"
+
+    - name: get list of databases
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT datname FROM pg_database WHERE datname NOT LIKE 'template0' AND datname NOT LIKE 'qa_db'
+      register: _mdacdc_current_dbs
+      when: _mdacdc_current_dbs is undefined
+
+    - name: save list of databases
+      set_fact:
+        _mdacdc_db_list: "{{ _mdacdc_current_dbs.query_result }}"
+      when: _mdacdc_db_list is undefined
+
+    - name: define directory for dump
+      set_fact:
+        _mdacdc_dump_dir: "{% if PGHOME_OLD == _mdacdc_pghome and _mdacdc_checksums_old_dump is defined %}\
+                                 {{ tmp_dump_dir }}/{{ _mdacdc_pangolin_version }}_recovery\
+                           {% else %}\
+                                 {{ tmp_dump_dir }}/{{ _mdacdc_pangolin_version }}\
+                           {% endif %}"
+
+    - name: create dump dir
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0700'
+        owner: 'postgres'
+        group: 'postgres'
+        recurse: yes
+      with_items:
+        - "{{ _mdacdc_dump_dir }}"
+
+    - name: make db dump
+      shell: "{{ _mdacdc_pghome }}/bin/pg_dump --jobs {{ _mdacdc_proc_cpu }} --no-comments -d {{ item.datname }} > {{ _mdacdc_dump_dir }}/{{ item.datname }}"
+      with_items: "{{ _mdacdc_db_list }}"
+
+    - name: sort db dump and get chwcksum
+      shell: "sort {{ _mdacdc_dump_dir }}/{{ item.datname }} \
+              | sed '/^--.*/d' \
+              | sed '/^SET default_with_oids.*/d' \
+              | sed '/^CREATE TRIGGER.*/d' \
+              | sed '/EXECUTE PROCEDURE.*/d' \
+              | sed '/EXECUTE FUNCTION.*/d' \
+              | sed '/ALTER DEFAULT PRIVILEGES FOR ROLE postgres.*REVOKE ALL.*/d' \
+              | sed '/^SET default_table_access_method.*/d' \
+              | sed '/.*FOR ROLE as_admin.*REVOKE ALL.*/d' \
+              | sed '/.*FOR ROLE as_admin.*GRANT ALL.*/d' \
+              | sed '/REVOKE ALL ON FUNCTION pg_catalog.*FROM PUBLIC;/d' \
+              | sed '/GRANT ALL ON FUNCTION pg_catalog.*TO as_admin;/d' \
+              | sed '/^$/d' \
+              | cksum"
+      register: _mdacdc_checksums_db_dump
+      with_items: "{{ _mdacdc_db_list }}"
+
+    - name: save checksums of old {{ PGHOME_OLD }} after recovery Pangolin
+      set_fact:
+        _mdacdc_checksums_old_dump_after_recovery: "{{ _mdacdc_checksums_db_dump.results }}"
+      when: PGHOME_OLD == _mdacdc_pghome and _mdacdc_checksums_old_dump is defined
+
+    - name: save checksums of old {{ PGHOME_OLD }}
+      set_fact:
+        _mdacdc_checksums_old_dump: "{{ _mdacdc_checksums_db_dump.results }}"
+      when: PGHOME_OLD == _mdacdc_pghome
+
+    - name: save checksums of old {{ PGHOME }}
+      set_fact:
+        _mdacdc_checksums_new_dump: "{{ _mdacdc_checksums_db_dump.results }}"
+      when: PGHOME == _mdacdc_pghome
+      
+  environment:
+    - LD_LIBRARY_PATH: "{{ _mdacdc_pghome }}/lib"
+    - PG_PLUGINS_PATH: "{{ _mdacdc_pghome }}/lib"
+    - PGPORT: "{{ ports.pg }}"
+    - "{{ db_connection_args }}"
+  become: true
+  become_user: postgres
+  when: inventory_hostname == 'master'

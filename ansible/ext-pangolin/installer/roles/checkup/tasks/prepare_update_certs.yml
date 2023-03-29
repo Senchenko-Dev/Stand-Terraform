@@ -1,0 +1,275 @@
+- name: Check if certificates are turned on
+  reciter:
+    ANSIBLE_MODULE_ARGS:
+      src: "{{ PGDATA_OLD }}/postgresql.conf"
+      action: get
+      parameter: ssl
+  register: ssl
+  environment:
+    - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
+  become: true
+  become_user: postgres
+
+- name: Define ssl error as false
+  set_fact:
+    _preupdatecerts_ssl_error: false
+
+- name: Print ssl is off
+  assert:
+    that: ssl.message != "off"
+    fail_msg: "RLM.FAIL__SSL настроен, но выключен в конфигурации БД. Возможно в кандидате на обновление уже был ранее настроен SSL. \
+                Для продолжения обновления необходимо удалить настройки БД, связанные с ssl и повторить запуск обновления.__RLM.FAIL"
+
+- name: Set ssl connection to db
+  block:
+
+    - name: check exists patroni
+      stat: path="{{ PYTHON_VENV_OLD }}/bin/patroni"
+      register: patroni_exists
+
+    - name: backup config files
+      block:
+
+        - name: ensure {{ backup_root_dir }}
+          file:
+            path: "{{ item.src }}"
+            state: "{{ item.state }}"
+            owner: postgres
+            group: postgres
+            mode: 0700
+          with_items:
+            - { src: "{{ backup.postgresql }}",                          state: absent }
+            - { src: "{{ backup.postgresql }}/{{ PGDATA_OLD }}",         state: directory }
+            - { src: "{{ backup.patroni }}",                             state: absent }
+            - { src: "{{ backup.patroni }}{{ patroni_files.conf_dir }}", state: directory }
+
+        - name: save current backup dir
+          set_fact:
+            _preupdatecerts_backup_hba_cfgs: "{{ backup_root_dir }}"
+
+        - name: backup postgresql.conf, pg_hba.conf, postgresql.auto.conf
+          copy:
+            src: "{{ item.src }}"
+            dest: "{{ item.dest }}"
+            owner: postgres
+            group: postgres
+            remote_src: yes
+            mode: 0600
+          with_items:
+            - { src: '{{ PGDATA_OLD }}/pg_hba.conf',          dest: '{{ backup.postgresql }}{{ PGDATA_OLD }}/pg_hba.conf' }
+            - { src: '{{ PGDATA_OLD }}/postgresql.conf',      dest: '{{ backup.postgresql }}{{ PGDATA_OLD }}/postgresql.conf' }
+          when: not patroni_exists.stat.exists
+
+        - name: backup patroni configuration file
+          copy:
+            src: "{{ patroni_files.conf_dir }}/postgres.yml"
+            dest: "{{ backup.patroni }}{{ patroni_files.conf_dir }}/postgres.yml"
+            remote_src: yes
+            owner: postgres
+            group: postgres
+            mode: 0600
+          when: patroni_exists.stat.exists
+
+      become_user: root
+
+    - name: define main config file for configure
+      set_fact:
+        _preupdatecerts_pg_hba_cfg_file: "{% if patroni_exists.stat.exists %}{{ patroni_files.conf_dir }}/postgres.yml\
+                                          {% else %}{{ PGDATA_OLD }}/pg_hba.conf{% endif %}"
+
+
+    - name: change pg_hba for local connections only
+      replace:
+        path: '{{ _preupdatecerts_pg_hba_cfg_file }}'
+        regexp: "{{ item.rgxp }}"
+        replace: "{{ item.line }}"
+      with_items:
+        - { rgxp: 'hostssl(.*)postgres(.*)postgres(.*)127.0.0.1/32(.*)cert(.*)$',                          line: 'hostssl all postgres 127.0.0.1/32 cert' }
+        - { rgxp: 'hostssl(.*)postgres(.*)postgres(.*){{ ansible_default_ipv4.address }}/32(.*)cert(.*)$', line: 'hostssl all postgres {{ ansible_default_ipv4.address }}/32 cert' }
+      become_user: postgres
+
+    - name: change config for ssl
+      block:
+
+        - name: generate certificates
+          include_role:
+            name: postgresql
+            tasks_from: generate_certs.yml
+
+        - name: change postgresql config files
+          block:
+
+            - name: insert ssl block to postgresql config
+              lineinfile:
+                path: '{{ PGDATA_OLD }}/postgresql.conf'
+                insertafter: "synchronous_commit = 'on'"
+                line: "ssl = 'on'\n\
+                      ssl_cert_file = '{{ PGSSL }}/server.crt'\n\
+                      ssl_key_file = '{{ PGSSL }}/server.key'\n\
+                      ssl_ca_file = '{{ pg_certs_pwd.root_ca }}'"
+
+            - name: change pg_hba for local connections only
+              lineinfile:
+                path: '{{ PGDATA_OLD }}/pg_hba.conf'
+                regexp: '^(.*)(all|postgres) postgres 127.0.0.1/32 md5(.*)$'
+                line: 'hostssl all postgres 127.0.0.1/32 cert'
+
+            - name: insert ssl block to pg_hba config
+              lineinfile:
+                path: '{{ PGDATA_OLD }}/pg_hba.conf'
+                insertafter: 'hostssl all postgres 127.0.0.1/32 cert'
+                line: "hostssl all postgres {{ hostvars['master'].ansible_default_ipv4.address | ipaddr('network/prefix') }} cert"
+
+            - name: send reload command to postgresql
+              shell: "{{ PGHOME_OLD }}/bin/pg_ctl reload -D {{ PGDATA_OLD }}"
+              become_user: postgres
+
+          when: not patroni_exists.stat.exists
+
+        - name: change postgres.yml config files
+          block:
+
+            - name: replace password with ssl required params
+              replace:
+                path: '{{ patroni_files.conf_dir }}/postgres.yml'
+                regexp: '^(.*)            password:(.*)$'
+                replace: "            sslmode: require\n            \
+                                      sslkey: {{ pg_certs_pwd.postgres_key }}\n            \
+                                      sslcert: {{ pg_certs_pwd.postgres_cert }}\n            \
+                                      sslrootcert: {{ pg_certs_pwd.root_ca }}"
+
+            - name: insert ssl block to postgresql config
+              lineinfile:
+                path: '{{ patroni_files.conf_dir }}/postgres.yml'
+                insertafter: "synchronous_commit: 'on'"
+                line: "        ssl: 'on'\n        \
+                               ssl_cert_file: {{ PGSSL }}/server.crt\n        \
+                               ssl_key_file: {{ PGSSL }}/server.key\n        \
+                               ssl_ca_file: {{ pg_certs_pwd.root_ca }}"
+
+            - name: change pg_hba for local connections only
+              lineinfile:
+                path: '{{ patroni_files.conf_dir }}/postgres.yml'
+                regexp: '^(.*)(all|postgres) postgres 127.0.0.1/32 md5(.*)$'
+                line: '    - hostssl all postgres 127.0.0.1/32 cert'
+                backrefs: yes
+
+            - name: insert ssl block to pg_hba config
+              lineinfile:
+                path: '{{ patroni_files.conf_dir }}/postgres.yml'
+                insertafter: '    - hostssl all postgres 127.0.0.1/32 cert'
+                line: "    - hostssl all postgres {{ hostvars['master'].ansible_default_ipv4.address | ipaddr('network/prefix') }} cert\n    \
+                           - hostssl all postgres {{ hostvars['replica'].ansible_default_ipv4.address | ipaddr('network/prefix') }} cert"
+              when: installation_type == 'cluster'
+
+            - name: insert ssl block to pg_hba config
+              lineinfile:
+                path: '{{ patroni_files.conf_dir }}/postgres.yml'
+                insertafter: '    - hostssl all postgres 127.0.0.1/32 cert'
+                line: "    - hostssl all postgres {{ hostvars['master'].ansible_default_ipv4.address | ipaddr('network/prefix') }} cert"
+              when: installation_type == 'standalone'
+
+            - name: change pg_hba for replication local connections
+              lineinfile:
+                path: '{{ patroni_files.conf_dir }}/postgres.yml'
+                regexp: '^(.*)    - host replication postgres 127.0.0.1/32 md5(.*)$'
+                line: '    - hostssl replication postgres 127.0.0.1/32 cert'
+                backrefs: yes
+
+            - name: change pg_hba for replication master connections
+              lineinfile:
+                path: '{{ patroni_files.conf_dir }}/postgres.yml'
+                regexp: "^(.*)    - host replication postgres {{ hostvars['master'].ansible_default_ipv4.address | ipaddr('network/prefix') }} md5(.*)$"
+                line: "    - hostssl replication postgres {{ hostvars['master'].ansible_default_ipv4.address | ipaddr('network/prefix') }} cert"
+                backrefs: yes
+
+            - name: change pg_hba for replication replica connections
+              lineinfile:
+                path: '{{ patroni_files.conf_dir }}/postgres.yml'
+                regexp: "^(.*)    - host replication postgres {{ hostvars['replica'].ansible_default_ipv4.address | ipaddr('network/prefix') }} md5(.*)$"
+                line: "    - hostssl replication postgres {{ hostvars['replica'].ansible_default_ipv4.address | ipaddr('network/prefix') }} cert"
+                backrefs: yes
+              when: installation_type == 'cluster'
+
+            - name: send reload command to patroni
+              include_role:
+                name: patroni
+                tasks_from: update_with_patronictl
+              vars:
+                endpoint_name: reload
+
+          when: patroni_exists.stat.exists
+
+      when: not ssl.message
+
+    - pause:
+        seconds: "{{ patroni_wait_seconds }}"
+
+    - name: check pgsql port is opened
+      shell: '{{ PGHOME_OLD }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ PGPORT_OLD }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+      become_user: postgres
+
+  become: true
+
+  rescue:
+
+    - name: define ssl error as true
+      set_fact:
+        _preupdatecerts_ssl_error: true
+
+    - name: revert old postgresql configuration files
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: postgres
+        group: postgres
+        mode: 0600
+        remote_src: yes
+      with_items:
+        - { src: '{{ backup.postgresql }}{{ PGDATA_OLD }}/postgresql.conf',  dest: '{{ PGDATA_OLD }}/postgresql.conf' }
+        - { src: '{{ backup.postgresql }}{{ PGDATA_OLD }}/pg_hba.conf',      dest: '{{ PGDATA_OLD }}/pg_hba.conf' }
+      when: not patroni_exists.stat.exists
+
+    - name: revert old patroni configuration file
+      copy:
+        src: "{{ backup.patroni }}{{ patroni_files.conf_dir }}/postgres.yml"
+        dest: "{{ patroni_files.conf_dir }}/postgres.yml"
+        owner: postgres
+        group: postgres
+        mode: 0600
+        remote_src: yes
+      when: patroni_exists.stat.exists
+
+  always:
+
+    - name: send reload command to postgresql
+      shell: "{{ PGHOME_OLD }}/bin/pg_ctl reload -D {{ PGDATA_OLD }}"
+      become_user: postgres
+      when: not patroni_exists.stat.exists
+
+    - name: send reload command to patroni
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl
+      vars:
+        endpoint_name: reload
+        PGHOME: "{{ PGHOME_OLD }}"
+      when: patroni_exists.stat.exists
+
+    - name: wait when pgsql open port
+      shell: '{{ PGHOME_OLD }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ PGPORT_OLD }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+      become_user: postgres
+
+    - name: print ssl is off
+      assert:
+        that: not _preupdatecerts_ssl_error
+        fail_msg: "{{ control_name }}.FAIL__SSL не был настроен корректно. Возможно в кандидате на обновление уже был ранее настроен SSL. \
+                  Для продолжения обновления необходимо удалить настройки БД, связанные с ssl и повторить запуск обновления.__{{ control_name }}.FAIL"

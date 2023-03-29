@@ -22,10 +22,7 @@
         query: DROP USER IF EXISTS pgbouncer
       with_items: "{{ current_dbs.query_result }}"
 
-  environment:
-    - PGHOST: "{{ ansible_fqdn }}"
-    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
-    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  environment: "{{ db_connection_args }}"
   become: true
   become_user: postgres
   when: pgbouncer_exists.stat.exists and ansible_fqdn == current_master

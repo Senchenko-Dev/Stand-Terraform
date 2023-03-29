@@ -1,9 +1,0 @@
-# todo далее про SSL
-#4. - см conf_edit.sh:
-#stop_start_sh - скрипты с добавлением EXTRA_ARGS=(
-#ssl - каталог с хранилищем ключей. Ключи лучше получать пререквизитом. Либо генерировать?
-#jmx - ?? может, и не надо
-#jaas - хз. какие-то логины-пароли
-#5. zoo.properties - сравнить. добавлен AUTHENTICATION
-#6. consumer/producer - изменены
-#7. server.properties генерится файлом, разница в broker.id и listeners

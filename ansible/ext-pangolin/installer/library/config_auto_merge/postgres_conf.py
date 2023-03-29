@@ -55,13 +55,11 @@ def remove_unactual_fields(result_removed, old_data):
                     break
     return
 
-def merge_postgres_conf(old_conf_file, new_conf_file, result_file, old_ver, new_ver, root_path):
+def merge_postgres_conf(old_conf_file, new_conf_file, result_file, root_path):
     """
     old_conf_file - пусть до postgres.yml файла для old_ver
     new_conf_file - пусть до postgres.yml файла для new_ver
     result_file - пусть до postgrsql.conf файла, полученного в ходе мержа
-    old_ver - версия старой версии PG SE postgres.yml файла, например, 4.2.5
-    new_ver - версия новой версии PG SE postgres.yml файла, например, 4.3.0
     root_path - путь до папки с diff_cfg.txt, с копией all.yml, где также будет создан diff_bootstrap_dcs.txt
     """
     file_diff_name = root_path + "/diff_cfg.txt"
@@ -69,7 +67,7 @@ def merge_postgres_conf(old_conf_file, new_conf_file, result_file, old_ver, new_
     old_config_dict = read_postgres_conf(old_conf_file)
     new_config_dict = read_postgres_conf(new_conf_file)
 
-    result_removed, result_added = pgutils.read_diff_file(old_ver, new_ver, file_diff_name)
+    result_removed, result_added = pgutils.read_diff_file(file_diff_name)
     remove_unactual_fields(result_removed, old_config_dict)
 
     remove_keys = []  #список пересекающихся в обоих конфигах строк

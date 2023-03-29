@@ -7,25 +7,18 @@
         state: stopped
       when: inventory_hostname != 'etcd'
 
-    - name: clear cache etcd
-      shell: "ETCDCTL_API=2 etcdctl rm -r /service"
-      ignore_errors: true
-
     - name: stop etcd service
-      service:
+      systemd:
         name: etcd
         state: stopped
+      register: result
+      until: result.status.ActiveState != 'active'
+      retries: 6
+      delay: 10
 
     - name: remove etcd data dir
       file:
         path: "{{ etcd_files.data_dir }}"
         state: absent
-
-    - name: loop wait for etcd stopped
-      shell: "systemctl show -p ActiveState etcd | cut -d'=' -f2"
-      register: result
-      until: result.stdout == 'inactive'
-      retries: 60
-      delay: 1
 
   become: true

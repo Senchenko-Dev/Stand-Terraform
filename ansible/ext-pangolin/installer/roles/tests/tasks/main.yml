@@ -1,408 +1,467 @@
-- name: check postgresql logs
+- name: Smoke tests
   block:
+    
+    - name: check postgresql logs
+      block:
 
-    - name: search for errors in postgresql logs
-      shell: grep --files-with-matches -e '[^replication slot]ERROR:' *.log
-      args:
-        chdir: "{{ PGLOGS }}"
-      register: result_grep
-      failed_when: false
+        - name: search for errors in postgresql logs
+          shell: grep --files-with-matches -e '[^replication slot]ERROR:' *.log
+          args:
+            chdir: "{{ PGLOGS }}"
+          register: result_grep
+          failed_when: false
 
-    - name: сheck for errors in postgresql logs
-      assert:
-        that: result_grep.stdout|length == 0
-        fail_msg: "Errors were found in postgresql logs"
-        success_msg: "There are no errors in postgresql logs"
+        - name: сheck for errors in postgresql logs
+          assert:
+            that: result_grep.stdout|length == 0
+            fail_msg: "Errors were found in postgresql logs"
+            success_msg: "There are no errors in postgresql logs"
 
-  become: true
-  become_user: postgres
-  when: "postgres and 'update' not in action_type"
+      become: true
+      become_user: postgres
+      when: "postgres and 'update' not in action_type"
 
-# - name: test postgresql.conf
-#   block:
+    # - name: test postgresql.conf
+    #   block:
 
-#     - name: create configs from a template
-#       template:
-#         src: "{{ playbook_dir }}/roles/postgresql/templates/postgresql.conf.j2"
-#         dest: "{{ PGDATA }}/postgresql_test.conf"
-#         owner: postgres
-#         group: postgres
-#         mode: 0640
-#         trim_blocks: False
+    #     - name: create configs from a template
+    #       template:
+    #         src: "{{ playbook_dir }}/roles/postgresql/templates/postgresql.conf.j2"
+    #         dest: "{{ PGDATA }}/postgresql_test.conf"
+    #         owner: postgres
+    #         group: postgres
+    #         mode: 0640
+    #         trim_blocks: False
 
-#     - name: turn off allow_hashed_password parameter in patroni configuration file
-#       lineinfile:
-#         path: "{{ PGDATA }}/postgresql_test.conf"
-#         regexp: 'password_policy.allow_hashed_password'
-#         line: "password_policy.allow_hashed_password = 'off'"
+    #     - name: turn off allow_hashed_password parameter in patroni configuration file
+    #       lineinfile:
+    #         path: "{{ PGDATA }}/postgresql_test.conf"
+    #         regexp: 'password_policy.allow_hashed_password'
+    #         line: "password_policy.allow_hashed_password = 'off'"
 
-#     - name: read data from a postgresql.conf file
-#       shell:  |
-#         set -o pipefail
-#         cat {{ PGDATA }}/postgresql.conf
-#       register: cfg_data
-#       failed_when: false
+    #     - name: read data from a postgresql.conf file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat {{ PGDATA }}/postgresql.conf
+    #       register: cfg_data
+    #       failed_when: false
 
-#     - name: read data from a postgresql_test.conf file
-#       shell:  |
-#         set -o pipefail
-#         cat {{ PGDATA }}/postgresql_test.conf
-#       register: cfg_data_test
-#       failed_when: false
+    #     - name: read data from a postgresql_test.conf file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat {{ PGDATA }}/postgresql_test.conf
+    #       register: cfg_data_test
+    #       failed_when: false
 
-#     - name: delete temporary files
-#       file:
-#         path: "{{ PGDATA }}/postgresql_test.conf"
-#         state: absent
+    #     - name: delete temporary files
+    #       file:
+    #         path: "{{ PGDATA }}/postgresql_test.conf"
+    #         state: absent
 
-#     - name: check for parameters with correct values
-#       assert:
-#         that: cfg_data.stdout.find(item) !=-1
-#         fail_msg: "This parameter is missing or has an incorrect value"
-#         success_msg: "The parameter exists with the correct value"
-#       with_items: "{{ cfg_data_test.stdout_lines }}"
+    #     - name: check for parameters with correct values
+    #       assert:
+    #         that: cfg_data.stdout.find(item) !=-1
+    #         fail_msg: "This parameter is missing or has an incorrect value"
+    #         success_msg: "The parameter exists with the correct value"
+    #       with_items: "{{ cfg_data_test.stdout_lines }}"
 
-#   become: yes
-#   become_user: postgres
-#   no_log: true
-#   when: postgres|bool and not cluster|bool
+    #   become: yes
+    #   become_user: postgres
+    #   no_log: true
+    #   when: postgres|bool and not cluster|bool
 
-# - name: test pg_hba.conf
-#   block:
+    # - name: test pg_hba.conf
+    #   block:
 
-#     - name: create configs from a template
-#       template:
-#         src: "{{ playbook_dir }}/roles/postgresql/templates/pg_hba.conf.j2"
-#         dest: "{{ PGDATA }}/pg_hba_test.conf"
-#         owner: postgres
-#         group: postgres
-#         mode: 0640
-#         trim_blocks: False
+    #     - name: create configs from a template
+    #       template:
+    #         src: "{{ playbook_dir }}/roles/postgresql/templates/pg_hba.conf.j2"
+    #         dest: "{{ PGDATA }}/pg_hba_test.conf"
+    #         owner: postgres
+    #         group: postgres
+    #         mode: 0640
+    #         trim_blocks: False
 
-#     - name: read data from a pg_hba.conf file
-#       shell:  |
-#         set -o pipefail
-#         cat {{ PGDATA }}/pg_hba.conf
-#       register: cfg_data
-#       failed_when: false
+    #     - name: read data from a pg_hba.conf file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat {{ PGDATA }}/pg_hba.conf
+    #       register: cfg_data
+    #       failed_when: false
 
-#     - name: delete part of pg_hba in pg_hba_test.conf
-#       lineinfile:
-#         path: "{{ PGDATA }}/pg_hba_test.conf"
-#         regexp: '{{ item }}'
-#         state: absent
-#       with_items:
-#         - "host all {{ as_group }} 0.0.0.0/0 md5"
-#         - "local all all md5"
+    #     - name: delete part of pg_hba in pg_hba_test.conf
+    #       lineinfile:
+    #         path: "{{ PGDATA }}/pg_hba_test.conf"
+    #         regexp: '{{ item }}'
+    #         state: absent
+    #       with_items:
+    #         - "host all {{ as_group }} 0.0.0.0/0 md5"
+    #         - "local all all md5"
 
-#     - name: read data from a pg_hba_test.conf file
-#       shell:  |
-#         set -o pipefail
-#         cat {{ PGDATA }}/pg_hba_test.conf
-#       register: cfg_data_test
-#       failed_when: false
+    #     - name: read data from a pg_hba_test.conf file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat {{ PGDATA }}/pg_hba_test.conf
+    #       register: cfg_data_test
+    #       failed_when: false
 
-#     # - name: delete temporary files
-#     #   file:
-#     #     path: "{{ PGDATA }}/pg_hba_test.conf"
-#     #     state: absent
+    #     # - name: delete temporary files
+    #     #   file:
+    #     #     path: "{{ PGDATA }}/pg_hba_test.conf"
+    #     #     state: absent
 
-#     - name: check for parameters with correct values
-#       assert:
-#         that: cfg_data.stdout.find(item) !=-1
-#         fail_msg: "This parameter is missing or has an incorrect value"
-#         success_msg: "The parameter exists with the correct value"
-#       with_items: "{{ cfg_data_test.stdout_lines }}"
+    #     - name: check for parameters with correct values
+    #       assert:
+    #         that: cfg_data.stdout.find(item) !=-1
+    #         fail_msg: "This parameter is missing or has an incorrect value"
+    #         success_msg: "The parameter exists with the correct value"
+    #       with_items: "{{ cfg_data_test.stdout_lines }}"
 
-#   become: yes
-#   become_user: postgres
-#   # no_log: true
-#   when: postgres|bool
+    #   become: yes
+    #   become_user: postgres
+    #   # no_log: true
+    #   when: postgres|bool
 
-# - name: test etcd.conf
-#   block:
+    # - name: test etcd.conf
+    #   block:
 
-#     - name: create configs from a template
-#       template:
-#         src: "{{ playbook_dir }}/roles/etcd/templates/etcd.conf.j2"
-#         dest: "/etc/etcd/etcd_test.conf"
-#         owner: root
-#         group: root
-#         mode: 0640
-#         trim_blocks: False
+    #     - name: create configs from a template
+    #       template:
+    #         src: "{{ playbook_dir }}/roles/etcd/templates/etcd.conf.j2"
+    #         dest: "/etc/etcd/etcd_test.conf"
+    #         owner: root
+    #         group: root
+    #         mode: 0640
+    #         trim_blocks: False
 
-#     - name: read data from a etcd.conf file
-#       shell:  |
-#         set -o pipefail
-#         cat /etc/etcd/etcd.conf
-#       register: cfg_data
-#       failed_when: false
+    #     - name: read data from a etcd.conf file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat /etc/etcd/etcd.conf
+    #       register: cfg_data
+    #       failed_when: false
 
-#     - name: read data from a etcd_test.conf file
-#       shell:  |
-#         set -o pipefail
-#         cat /etc/etcd/etcd_test.conf
-#       register: cfg_data_test
-#       failed_when: false
+    #     - name: read data from a etcd_test.conf file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat /etc/etcd/etcd_test.conf
+    #       register: cfg_data_test
+    #       failed_when: false
 
-#     - name: delete temporary files
-#       file:
-#         path: "/etc/etcd/etcd_test.conf"
-#         state: absent
+    #     - name: delete temporary files
+    #       file:
+    #         path: "/etc/etcd/etcd_test.conf"
+    #         state: absent
 
-#     - name: check for parameters with correct values
-#       assert:
-#         that: cfg_data.stdout.find(item) !=-1
-#         fail_msg: "This parameter is missing or has an incorrect value"
-#         success_msg: "The parameter exists with the correct value"
-#       with_items: "{{ cfg_data_test.stdout_lines }}"
+    #     - name: check for parameters with correct values
+    #       assert:
+    #         that: cfg_data.stdout.find(item) !=-1
+    #         fail_msg: "This parameter is missing or has an incorrect value"
+    #         success_msg: "The parameter exists with the correct value"
+    #       with_items: "{{ cfg_data_test.stdout_lines }}"
 
-#   become: yes
-#   become_user: root
-#   no_log: true
-#   when: not postgres|bool
+    #   become: yes
+    #   become_user: root
+    #   no_log: true
+    #   when: not postgres|bool
 
-# - name: check the patroni config postgres.yml
-#   block:
+    # - name: check the patroni config postgres.yml
+    #   block:
 
-#     - name: create configs from a template
-#       template:
-#         src: "{{ playbook_dir }}/roles/patroni/templates/postgres.yml.j2"
-#         dest: "{{ patroni_files.conf_dir }}/postgres_test.yml"
-#         owner: postgres
-#         group: postgres
-#         mode: 0640
-#         trim_blocks: False
+    #     - name: create configs from a template
+    #       template:
+    #         src: "{{ playbook_dir }}/roles/patroni/templates/postgres.yml.j2"
+    #         dest: "{{ patroni_files.conf_dir }}/postgres_test.yml"
+    #         owner: postgres
+    #         group: postgres
+    #         mode: 0640
+    #         trim_blocks: False
 
-#     - name: read data from a postgres.yml file
-#       shell:  |
-#         set -o pipefail
-#         cat {{ patroni_files.conf_dir }}/postgres.yml
-#       register: cfg_data
-#       failed_when: false
+    #     - name: read data from a postgres.yml file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat {{ patroni_files.conf_dir }}/postgres.yml
+    #       register: cfg_data
+    #       failed_when: false
 
-#     - name: turn off allow_hashed_password parameter in patroni configuration file
-#       lineinfile:
-#         path: "{{ patroni_files.conf_dir }}/postgres_test.yml"
-#         regexp: 'password_policy.allow_hashed_password'
-#         line: "        password_policy.allow_hashed_password: 'off'"
+    #     - name: turn off allow_hashed_password parameter in patroni configuration file
+    #       lineinfile:
+    #         path: "{{ patroni_files.conf_dir }}/postgres_test.yml"
+    #         regexp: 'password_policy.allow_hashed_password'
+    #         line: "        password_policy.allow_hashed_password: 'off'"
 
-#     - name: delete few strings from pg_hba
-#       lineinfile:
-#         path: "{{ patroni_files.conf_dir }}/postgres_test.yml"
-#         regexp: "{{ item }}"
-#         state: absent
-#       with_items:
-#         - "host all {{ as_group }} 0.0.0.0/0 md5"
-#         - "local all all md5"
+    #     - name: delete few strings from pg_hba
+    #       lineinfile:
+    #         path: "{{ patroni_files.conf_dir }}/postgres_test.yml"
+    #         regexp: "{{ item }}"
+    #         state: absent
+    #       with_items:
+    #         - "host all {{ as_group }} 0.0.0.0/0 md5"
+    #         - "local all all md5"
 
-#     - name: read data from a postgres_test.yml file
-#       shell:  |
-#         set -o pipefail
-#         cat {{ patroni_files.conf_dir }}/postgres_test.yml
-#       register: cfg_data_test
-#       failed_when: false
+    #     - name: read data from a postgres_test.yml file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat {{ patroni_files.conf_dir }}/postgres_test.yml
+    #       register: cfg_data_test
+    #       failed_when: false
 
-#     - name: delete temporary files
-#       file:
-#         path: "{{ patroni_files.conf_dir }}/postgres_test.yml"
-#         state: absent
+    #     - name: delete temporary files
+    #       file:
+    #         path: "{{ patroni_files.conf_dir }}/postgres_test.yml"
+    #         state: absent
 
-#     - name: check for parameters with correct values
-#       assert:
-#         that: cfg_data.stdout.find(item) !=-1
-#         fail_msg: "This parameter is missing or has an incorrect value"
-#         success_msg: "The parameter exists with the correct value"
-#       with_items: "{{ cfg_data_test.stdout_lines }}"
+    #     - name: check for parameters with correct values
+    #       assert:
+    #         that: cfg_data.stdout.find(item) !=-1
+    #         fail_msg: "This parameter is missing or has an incorrect value"
+    #         success_msg: "The parameter exists with the correct value"
+    #       with_items: "{{ cfg_data_test.stdout_lines }}"
 
-#   become: yes
-#   become_user: postgres
-#   no_log: true
-#   when: cluster|bool
+    #   become: yes
+    #   become_user: postgres
+    #   no_log: true
+    #   when: cluster|bool
 
-# - name: check the confd config
-#   block:
+    # - name: check the confd config
+    #   block:
 
-#     - name: creating configurations from templates
-#       template:
-#         src: "{{ item.name }}"
-#         dest: "{{ item.path }}"
-#         owner: root
-#         group: root
-#         mode: 0640
-#         trim_blocks: False
-#       with_items:
-#         - { name: "{{ playbook_dir }}/roles/confd/templates/pgbouncer.toml.j2", path: "/etc/confd/conf.d/pgbouncer_test.toml" }
-#         - { name: "{{ playbook_dir }}/roles/confd/templates/pgbouncer.tmpl.j2", path: "/etc/confd/templates/pgbouncer_test.tmpl" }
+    #     - name: creating configurations from templates
+    #       template:
+    #         src: "{{ item.name }}"
+    #         dest: "{{ item.path }}"
+    #         owner: root
+    #         group: root
+    #         mode: 0640
+    #         trim_blocks: False
+    #       with_items:
+    #         - { name: "{{ playbook_dir }}/roles/confd/templates/pgbouncer.toml.j2", path: "/etc/confd/conf.d/pgbouncer_test.toml" }
+    #         - { name: "{{ playbook_dir }}/roles/confd/templates/pgbouncer.tmpl.j2", path: "/etc/confd/templates/pgbouncer_test.tmpl" }
 
-#     - name: read data from a pgbouncer.toml file
-#       shell:  |
-#         set -o pipefail
-#         cat /etc/confd/conf.d/pgbouncer.toml
-#       register: cfg_data_toml
-#       failed_when: false
+    #     - name: read data from a pgbouncer.toml file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat /etc/confd/conf.d/pgbouncer.toml
+    #       register: cfg_data_toml
+    #       failed_when: false
 
-#     - name: read data from a pgbouncer_test.toml file
-#       shell:  |
-#         set -o pipefail
-#         cat /etc/confd/conf.d/pgbouncer_test.toml
-#       register: cfg_data_toml_test
-#       failed_when: false
+    #     - name: read data from a pgbouncer_test.toml file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat /etc/confd/conf.d/pgbouncer_test.toml
+    #       register: cfg_data_toml_test
+    #       failed_when: false
 
-#     - name: read data from a pgbouncer.tmpl file
-#       shell:  |
-#         set -o pipefail
-#         cat /etc/confd/templates/pgbouncer.tmpl
-#       register: cfg_data_tmpl
-#       failed_when: false
+    #     - name: read data from a pgbouncer.tmpl file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat /etc/confd/templates/pgbouncer.tmpl
+    #       register: cfg_data_tmpl
+    #       failed_when: false
 
-#     - name: read data from a pgbouncer_test.tmpl file
-#       shell:  |
-#         set -o pipefail
-#         cat /etc/confd/templates/pgbouncer_test.tmpl
-#       register: cfg_data_tmpl_test
-#       failed_when: false
+    #     - name: read data from a pgbouncer_test.tmpl file
+    #       shell:  |
+    #         set -o pipefail
+    #         cat /etc/confd/templates/pgbouncer_test.tmpl
+    #       register: cfg_data_tmpl_test
+    #       failed_when: false
 
-#     - name: check for parameters toml with correct values
-#       assert:
-#         that: cfg_data_toml.stdout.find(item) !=-1
-#         fail_msg: "This parameter is missing or has an incorrect value"
-#         success_msg: "The parameter exists with the correct value"
-#       with_items: "{{ cfg_data_toml_test.stdout_lines }}"
+    #     - name: check for parameters toml with correct values
+    #       assert:
+    #         that: cfg_data_toml.stdout.find(item) !=-1
+    #         fail_msg: "This parameter is missing or has an incorrect value"
+    #         success_msg: "The parameter exists with the correct value"
+    #       with_items: "{{ cfg_data_toml_test.stdout_lines }}"
 
-#     - name: check for parameters tmpl with correct values
-#       assert:
-#         that: cfg_data_tmpl.stdout.find(item) !=-1
-#         fail_msg: "This parameter is missing or has an incorrect value"
-#         success_msg: "The parameter exists with the correct value"
-#       with_items: "{{ cfg_data_tmpl_test.stdout_lines }}"
+    #     - name: check for parameters tmpl with correct values
+    #       assert:
+    #         that: cfg_data_tmpl.stdout.find(item) !=-1
+    #         fail_msg: "This parameter is missing or has an incorrect value"
+    #         success_msg: "The parameter exists with the correct value"
+    #       with_items: "{{ cfg_data_tmpl_test.stdout_lines }}"
 
-#     - name: delete temporary files
-#       file:
-#         path: "{{ item }}"
-#         state: absent
-#       with_items:
-#         - "/etc/confd/templates/pgbouncer_test.tmpl"
-#         - "/etc/confd/conf.d/pgbouncer_test.toml"
+    #     - name: delete temporary files
+    #       file:
+    #         path: "{{ item }}"
+    #         state: absent
+    #       with_items:
+    #         - "/etc/confd/templates/pgbouncer_test.tmpl"
+    #         - "/etc/confd/conf.d/pgbouncer_test.toml"
 
-#   become: yes
-#   become_user: root
-#   no_log: true
-#   when: confd|bool
+    #   become: yes
+    #   become_user: root
+    #   no_log: true
+    #   when: confd|bool
 
-# - name: checking the pgbouncer config
-#   block:
-#     - name: creating configurations from templates
-#       template:
-#         src: "{{ item.name }}"
-#         dest: "{{ item.path }}"
-#         owner: root
-#         group: root
-#         mode: 0640
-#         trim_blocks: False
-#       with_items:
-#         - { name: "{{ playbook_dir }}/roles/pgbouncer/templates/pgbouncer.ini.j2", path: "{{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini" }
-#         - { name: "{{ playbook_dir }}/roles/pgbouncer/templates/userlist.txt.j2", path: "{{ pgbouncer_files.conf_dir }}/userlist_test.txt" }
-#         - { name: "{{ playbook_dir }}/roles/pgbouncer/templates/pgbouncer.j2", path: "/etc/logrotate.d/pgbouncer_test" }
+    # - name: checking the pgbouncer config
+    #   block:
+    #     - name: creating configurations from templates
+    #       template:
+    #         src: "{{ item.name }}"
+    #         dest: "{{ item.path }}"
+    #         owner: root
+    #         group: root
+    #         mode: 0640
+    #         trim_blocks: False
+    #       with_items:
+    #         - { name: "{{ playbook_dir }}/roles/pgbouncer/templates/pgbouncer.ini.j2", path: "{{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini" }
+    #         - { name: "{{ playbook_dir }}/roles/pgbouncer/templates/userlist.txt.j2", path: "{{ pgbouncer_files.conf_dir }}/userlist_test.txt" }
+    #         - { name: "{{ playbook_dir }}/roles/pgbouncer/templates/pgbouncer.j2", path: "/etc/logrotate.d/pgbouncer_test" }
 
-#     - name: modification of the parameter. only for haproxy
-#       lineinfile:
-#         path: "{{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini"
-#         regexp: ' = host='
-#         line: "* = host={{ ansible_nodename }} port={{ ports.pg }}"
-#       when: "haproxy|bool == True and inventory_hostname == 'replica'"
+    #     - name: modification of the parameter. only for haproxy
+    #       lineinfile:
+    #         path: "{{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini"
+    #         regexp: ' = host='
+    #         line: "* = host={{ ansible_nodename }} port={{ ports.pg }}"
+    #       when: "haproxy|bool == True and inventory_hostname == 'replica'"
 
-#     - name: modification of the parameter pgbouncer_test
-#       lineinfile:
-#         path: "{{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini"
-#         regexp: ' = host='
-#         line: "* = host={{ hostvars['master'].ansible_nodename }} port={{ ports.pg }}"
-#       when: "haproxy|bool == False and inventory_hostname == 'replica'"
+    #     - name: modification of the parameter pgbouncer_test
+    #       lineinfile:
+    #         path: "{{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini"
+    #         regexp: ' = host='
+    #         line: "* = host={{ hostvars['master'].ansible_nodename }} port={{ ports.pg }}"
+    #       when: "haproxy|bool == False and inventory_hostname == 'replica'"
 
-#     - name: reading data from a pgbouncer.ini file
-#       shell: cat {{ pgbouncer_files.conf_dir }}/pgbouncer.ini
-#       register: cfg_data_ini
-#       failed_when: false
+    #     - name: reading data from a pgbouncer.ini file
+    #       shell: cat {{ pgbouncer_files.conf_dir }}/pgbouncer.ini
+    #       register: cfg_data_ini
+    #       failed_when: false
 
-#     - name: reading data from a pgbouncer_test.ini file
-#       shell: cat {{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini
-#       register: cfg_data_ini_test
-#       failed_when: false
-#       when: haproxy|bool == False
+    #     - name: reading data from a pgbouncer_test.ini file
+    #       shell: cat {{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini
+    #       register: cfg_data_ini_test
+    #       failed_when: false
+    #       when: haproxy|bool == False
 
-#     - name: reading data from a pgbouncer_test.ini file
-#       shell: cat {{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini
-#       register: cfg_data_ini_test_haproxy
-#       failed_when: false
-#       when: haproxy|bool == True
+    #     - name: reading data from a pgbouncer_test.ini file
+    #       shell: cat {{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini
+    #       register: cfg_data_ini_test_haproxy
+    #       failed_when: false
+    #       when: haproxy|bool == True
 
-#     - name: reading data from a userlist.txt file
-#       shell: cat /{{ pgbouncer_files.conf_dir }}/userlist.txt
-#       register: cfg_data_userlist
-#       failed_when: false
+    #     - name: reading data from a userlist.txt file
+    #       shell: cat /{{ pgbouncer_files.conf_dir }}/userlist.txt
+    #       register: cfg_data_userlist
+    #       failed_when: false
 
-#     - name: reading data from a userlist_test.txt file
-#       shell: cat {{ pgbouncer_files.conf_dir }}/userlist_test.txt
-#       register: cfg_data_userlist_test
-#       failed_when: false
+    #     - name: reading data from a userlist_test.txt file
+    #       shell: cat {{ pgbouncer_files.conf_dir }}/userlist_test.txt
+    #       register: cfg_data_userlist_test
+    #       failed_when: false
 
-#     - name: reading data from a pgbouncer file
-#       shell: cat /etc/logrotate.d/pgbouncer
-#       register: cfg_data
-#       failed_when: false
+    #     - name: reading data from a pgbouncer file
+    #       shell: cat /etc/logrotate.d/pgbouncer
+    #       register: cfg_data
+    #       failed_when: false
 
-#     - name: reading data from a pgbouncer_test file
-#       shell: cat /etc/logrotate.d/pgbouncer_test
-#       register: cfg_data_test
-#       failed_when: false
+    #     - name: reading data from a pgbouncer_test file
+    #       shell: cat /etc/logrotate.d/pgbouncer_test
+    #       register: cfg_data_test
+    #       failed_when: false
 
-#     - name: checking for parameters pgbouncer.ini with correct values
-#       assert:
-#         that: cfg_data_ini.stdout.find(item) !=-1
-#         fail_msg: "This parameter is missing or has an incorrect value"
-#         success_msg: "The parameter exists with the correct value"
-#       with_items: "{{ cfg_data_ini_test.stdout_lines | replace('#TODO if construction for max_db_connections', '') }}"
-#       when: haproxy|bool == False
+    #     - name: checking for parameters pgbouncer.ini with correct values
+    #       assert:
+    #         that: cfg_data_ini.stdout.find(item) !=-1
+    #         fail_msg: "This parameter is missing or has an incorrect value"
+    #         success_msg: "The parameter exists with the correct value"
+    #       with_items: "{{ cfg_data_ini_test.stdout_lines | replace('#TODO if construction for max_db_connections', '') }}"
+    #       when: haproxy|bool == False
 
-#     - name: checking for parameters pgbouncer.ini with correct values (haproxy)
-#       assert:
-#         that: cfg_data_ini.stdout.find(item) !=-1
-#         fail_msg: "This parameter is missing or has an incorrect value"
-#         success_msg: "The parameter exists with the correct value"
-#       with_items: "{{ cfg_data_ini_test_haproxy.stdout_lines | replace('#TODO if construction for max_db_connections', '') }}"
-#       when: haproxy|bool == True
+    #     - name: checking for parameters pgbouncer.ini with correct values (haproxy)
+    #       assert:
+    #         that: cfg_data_ini.stdout.find(item) !=-1
+    #         fail_msg: "This parameter is missing or has an incorrect value"
+    #         success_msg: "The parameter exists with the correct value"
+    #       with_items: "{{ cfg_data_ini_test_haproxy.stdout_lines | replace('#TODO if construction for max_db_connections', '') }}"
+    #       when: haproxy|bool == True
 
-#     - name: checking for parameters userlist.txt with correct values
-#       assert:
-#         that: cfg_data_userlist.stdout.find(item) !=-1
-#         fail_msg: "This parameter is missing or has an incorrect value"
-#         success_msg: "The parameter exists with the correct value"
-#       with_items: "{{ cfg_data_userlist_test.stdout_lines }}"
+    #     - name: checking for parameters userlist.txt with correct values
+    #       assert:
+    #         that: cfg_data_userlist.stdout.find(item) !=-1
+    #         fail_msg: "This parameter is missing or has an incorrect value"
+    #         success_msg: "The parameter exists with the correct value"
+    #       with_items: "{{ cfg_data_userlist_test.stdout_lines }}"
 
-#     - name: checking for parameters pgbouncer with correct values
-#       assert:
-#         that: cfg_data.stdout.find(item) !=-1
-#         fail_msg: "This parameter is missing or has an incorrect value"
-#         success_msg: "The parameter exists with the correct value"
-#       with_items: "{{ cfg_data_test.stdout_lines }}"
+    #     - name: checking for parameters pgbouncer with correct values
+    #       assert:
+    #         that: cfg_data.stdout.find(item) !=-1
+    #         fail_msg: "This parameter is missing or has an incorrect value"
+    #         success_msg: "The parameter exists with the correct value"
+    #       with_items: "{{ cfg_data_test.stdout_lines }}"
 
-#     - name: deleting temporary files
-#       file:
-#         path: "{{ item }}"
-#         state: absent
-#       with_items:
-#         - "{{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini"
-#         - "/etc/logrotate.d/pgbouncer_test"
-#         - "{{ pgbouncer_files.conf_dir }}/userlist_test.txt"
-#   become: yes
-#   become_user: root
-#   no_log: true
-#   when: cluster|bool == True
+    #     - name: deleting temporary files
+    #       file:
+    #         path: "{{ item }}"
+    #         state: absent
+    #       with_items:
+    #         - "{{ pgbouncer_files.conf_dir }}/pgbouncer_test.ini"
+    #         - "/etc/logrotate.d/pgbouncer_test"
+    #         - "{{ pgbouncer_files.conf_dir }}/userlist_test.txt"
+    #   become: yes
+    #   become_user: root
+    #   no_log: true
+    #   when: cluster|bool == True
 
-- name: Consistency tests
-  import_tasks: consistency.yml
-  when: inventory_hostname != 'etcd'
+    - name: Consistency tests
+      import_tasks: consistency.yml
+      when: inventory_hostname != 'etcd'
 
-- name: Interface tests
-  import_tasks: interface.yml
-  when: "'update' not in action_type and inventory_hostname != 'etcd'"
+    - name: Interface tests
+      import_tasks: interface.yml
+      when: "'update' not in action_type and inventory_hostname != 'etcd'"
+
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and tests_error_um01m and inventory_hostname == 'master'
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and tests_error_um01r and inventory_hostname == 'replica'
+
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            tests: true
+      run_once: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            tests: true
+      run_once: true
+      when: inventory_hostname == 'master'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            tests: true
+      run_once: true
+      when: inventory_hostname == 'master'
+
+  always:
+
+    - name: to stop install process if error
+      fail: msg='Install process must be stopped by error'
+      when: "action_type == 'install' and \
+            hostvars['master' or 'replica' or 'etcd'].update_errors.aggregate"

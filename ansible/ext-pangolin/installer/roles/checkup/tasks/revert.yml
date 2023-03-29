@@ -1,0 +1,9 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+- name: Clear {{ PGHOME }}
+  file:
+    path: "{{ PGHOME }}"
+    state: absent
+  become: true

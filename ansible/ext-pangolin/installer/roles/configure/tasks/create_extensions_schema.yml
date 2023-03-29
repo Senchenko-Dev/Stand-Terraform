@@ -1,0 +1,49 @@
+- name: Create ext schema
+  postgresql_schema:
+    db: "{{ item.datname }}"
+    name: ext
+    owner: "{{ db_admin }}"
+    port: "{{ ports.pg }}"
+  with_items: "{{ current_dbs.query_result }}"
+
+- name: Add description for ext schema
+  postgresql_query:
+    port: "{{ ports.pg }}"
+    db: "{{ item.datname }}"
+    query: COMMENT ON SCHEMA ext IS 'Schema for extensions'
+  with_items: "{{ current_dbs.query_result }}"
+
+- name: Revoke previus rights for ext schema
+  postgresql_query:
+    port: "{{ ports.pg }}"
+    db: "{{ item.datname }}"
+    query: REVOKE ALL ON SCHEMA ext FROM public
+  with_items: "{{ current_dbs.query_result }}"
+
+- name: Grant USAGE on ext schema to {{ as_group }}, {{ TUZ_group }}
+  postgresql_query:
+    port: "{{ ports.pg }}"
+    db: "{{ item.datname }}"
+    query: GRANT USAGE ON SCHEMA ext TO "{{ as_group }}", "{{ TUZ_group }}"
+  with_items: "{{ current_dbs.query_result }}"
+
+- name: Alter default privs on ext schema tables, sequences, functions, types to {{ as_group }}, {{ TUZ_group }}
+  postgresql_query:
+    port: "{{ ports.pg }}"
+    query: '{{ item.0 }} "{{ as_group }}", "{{ TUZ_group }}"'
+  with_nested:
+    - [ 'ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT ALL ON TABLES TO',
+        'ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT SELECT, USAGE ON SEQUENCES TO',
+        'ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT EXECUTE ON FUNCTIONS TO',
+        'ALTER DEFAULT PRIVILEGES IN SCHEMA ext GRANT USAGE ON TYPES TO' ]
+    - "{{ current_dbs.query_result }}"
+
+- name: Grant privs on ext schema as_admin_read
+  postgresql_query:
+    query: "{{ item }}"
+    port: "{{ ports.pg }}"
+  with_items:
+    - GRANT USAGE ON SCHEMA ext TO "as_admin_read"
+    - GRANT SELECT ON ALL TABLES IN SCHEMA ext TO "as_admin_read"
+    - GRANT USAGE ON ALL SEQUENCES IN SCHEMA ext TO "as_admin_read"
+    - GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA ext TO "as_admin_read"

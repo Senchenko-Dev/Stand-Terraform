@@ -1,0 +1,37 @@
+- name: Print journal pg_upgrade
+  block:
+
+    - name: get list of files pg_upgrade log
+      shell: "ls {{ _pgupgrdlogprnt_log_dir }}"
+      register: pg_upgrade_files
+
+    - name: writing the contents of the pg_upgrade log files to a variable
+      shell: "cat {{ _pgupgrdlogprnt_log_dir }}/{{ item }}"
+      with_items: "{{ pg_upgrade_files.stdout_lines }}"
+      register: pg_upgrade_files_contents
+      no_log: "{{ nolog }}"
+
+    - name: set pg_upgrade_list_files
+      set_fact:
+        pg_upgrade_list_files: "{{ pg_upgrade_files_contents.results | 
+                                    map('dict2items') | list | flatten | 
+                                    json_query('[?key==`item`].value') | list }}"
+
+    - name: set pg_upgrade_file_contents
+      set_fact:
+        pg_upgrade_file_contents: "{{ pg_upgrade_files_contents.results | 
+                                    map('dict2items') | list | flatten | 
+                                    json_query('[?key==`stdout_lines`].value') | list }}"
+      no_log: "{{ nolog }}"
+
+    - name: set dict pg_upgrade_journal
+      set_fact:
+        pg_upgrade_journal: "{{ dict(pg_upgrade_list_files | zip(pg_upgrade_file_contents)) }}"
+      no_log: "{{ nolog }}"
+
+    - name: journal pg_upgrade
+      debug:
+        msg: "{{ pg_upgrade_journal }}"
+
+  become: true
+  become_user: postgres

@@ -1,0 +1,117 @@
+- name: define version of current python interpreter
+  set_fact:
+    previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+- name: set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+- name: Move user tablespases after update
+  block:
+
+    - name: check database connect to PG SE (master and replica)
+      shell: '{{ _mvusertbl_pghome }}/bin/pg_isready -h 127.0.0.1 -p {{ ports.pg }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+
+    - name: turn off PAUSE mode
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        change_params: "pause: true"
+      when: patroni
+
+    - name: to do checkpoint
+      include_tasks: update_run_checkpoint.yml
+      vars:
+        _runcheckpoint_database_port: "{{ ports.pg }}"
+
+    - name: get the oid of the tablespaces to move it
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: SELECT oid, spcname FROM pg_tablespace WHERE spcname not in ('pg_default', 'pg_global')
+      register: _mvusertbl_oid_tbls
+
+    - name: get location of moving tablespaces
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: "SELECT pg_tablespace_location({{ item.oid }})"
+      register: _mvusertbl_tbl_locations
+      with_items: "{{ _mvusertbl_oid_tbls.query_result }}"
+
+    - name: stop Pangolin
+      shell: "{{ _mvusertbl_pghome }}/bin/pg_ctl stop -D {{ _mvusertbl_pgdata }}"
+      when: is_patroni_exists
+
+    - name: stop Pangolin
+      service:
+        name: postgresql
+        state: stopped
+      become_user: root
+      when: not is_patroni_exists
+
+    - name: create cache update dir
+      file:
+        path: "{{ tablespace_location }}"
+        state: directory
+        mode: '0700'
+        owner: 'postgres'
+        group: 'postgres'
+        recurse: yes
+
+    - name: move user tablespaces
+      shell: "mv {{ item.query_result[0].pg_tablespace_location }} {{ tablespace_location }}/{{  _mvusertbl_oid_tbls.query_result[index].spcname }}"
+      loop: "{{ _mvusertbl_tbl_locations.results }}"
+      loop_control:
+        index_var: index  
+
+    - name: update symbolic link of tablespaces
+      shell: "ln -sf {{ tablespace_location }}/{{  item.spcname }} {{ _mvusertbl_pgdata }}/pg_tblspc/{{ item.oid }}"
+      loop: "{{ _mvusertbl_oid_tbls.query_result }}"
+
+    - name: start pangolin
+      shell: "{{ _mvusertbl_pghome }}/bin/pg_ctl start -D {{ _mvusertbl_pgdata }}"
+      when: is_patroni_exists
+
+    - name: start Pangolin
+      service:
+        name: postgresql
+        state: started
+      become_user: root
+      when: not is_patroni_exists
+
+    - name: check database connect to PG SE
+      shell: '{{ _mvusertbl_pghome }}/bin/pg_isready -h 127.0.0.1 -p {{ ports.pg }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+
+    - name: get location of moved tablespaces
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: "SELECT pg_tablespace_location({{ item.oid }})"
+      register: _mvusertbl_tbl_locations
+      with_items: "{{ _mvusertbl_oid_tbls.query_result }}"
+
+    - name: stop update process if user tablespaces didn't removed
+      fail: 
+        msg: "error: {{ item.query_result[0].pg_tablespace_location }} != {{ tablespace_location }}/{{  _mvusertbl_oid_tbls.query_result[index].spcname }} after tablespace updated"
+      loop: "{{ _mvusertbl_tbl_locations.results }}"
+      loop_control:
+        index_var: index
+      when: "item.query_result[0].pg_tablespace_location != tablespace_location+'/'+_mvusertbl_oid_tbls.query_result[index].spcname"
+
+  environment: "{{ db_connection_args }}"
+  become: true
+  become_user: postgres
+  when: inventory_hostname == 'master'
+
+  always:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ previous_python_interpreter }}'

@@ -17,26 +17,26 @@
 - name: Check certificates on host
   block:
 
-    - name: Setup variable
+    - name: setup variable
       set_fact:
         found_ssl_certificates: []
 
-    - name: Check files on host
+    - name: check files on host
       stat:
         path: "{{ item }}"
       become: true
       with_items:
-        - "{{ PGSSL }}/root.crt"
-        - "{{ PGSSL }}/{{ ansible_fqdn }}.key"
-        - "{{ PGSSL }}/client.key"
+        - "{{ pg_certs_pwd.root_ca }}"
+        - "{{ pg_certs_pwd.server_key }}"
+        - "{{ pg_certs_pwd.postgres_key }}"
       register: state_of_ssl_files
 
-    - name: Add data to variable
+    - name: add data to variable
       set_fact:
         found_ssl_certificates: "{{ found_ssl_certificates + [state_of_ssl_files.results[item].stat.exists] }}"
       with_items: [0, 1, 2]
 
-    - name: Setup variable
+    - name: setup variable
       set_fact:
         ssl_certificates_exists: "{% if true in found_ssl_certificates %}true{% else %}false{% endif %}"
 
@@ -51,57 +51,53 @@
             path: '{{ REMOTE_TMP }}/certificates'
             state: directory
 
-        - name: create csr
+        - name: create csr for root certificate
           shell: "openssl req -new -nodes -text -out {{ PGSSL }}/root.csr -keyout {{ PGSSL }}/root.key -subj '/CN={{ hostvars['master'].ansible_fqdn }}'"
 
-        - name: create request
-          shell: "openssl x509 -req -in {{ PGSSL }}/root.csr -text -days 3650  -extfile {{ pg_certs.ssl_conf }} -extensions
-                  v3_ca -signkey {{ PGSSL }}/root.key -out {{ PGSSL }}/root.crt"
+        - name: create self sign root certificate
+          shell: "openssl x509 -req -in {{ PGSSL }}/root.csr -text -days 3650  -extfile {{ generate_cert_conf }} -extensions
+                  v3_ca -signkey {{ PGSSL }}/root.key -out {{ pg_certs_pwd.root_ca }}"
 
-      when: inventory_hostname == 'master'
+      run_once: true
       become: true
       become_user: postgres
 
     - name: fetch files from master
       fetch:
         src: '{{ item }}'
-        dest: '{{ local_distr_path }}'
+        dest: '{{ local_distr_path }}/'
+        flat: yes
       with_items:
-        - '{{ PGSSL }}/root.crt'
+        - '{{ pg_certs_pwd.root_ca }}'
         - '{{ PGSSL }}/root.key'
+      run_once: true
       become: true
       become_user: postgres
-      when: inventory_hostname == 'master'
 
-    - name: copy root certificate on replica node
-      block:
-
-        - name: copy files from ansible host
-          copy:
-            src: '{{ item }}'
-            dest: '{{ PGSSL }}'
-          with_items:
-            - '{{ local_distr_path }}/master/home/postgres/ssl/root.crt'
-            - '{{ local_distr_path }}/master/home/postgres/ssl/root.key'
-
+    - name: copy files from ansible host
+      copy:
+        src: '{{ item }}'
+        dest: '{{ PGSSL }}'
+      with_items:
+        - '{{ local_distr_path }}/root.crt'
+        - '{{ local_distr_path }}/root.key'
       become: true
       become_user: postgres
-      when: inventory_hostname == 'replica'
 
     - name: create server certificate
       block:
 
-        - name: create csr
-          shell: "openssl req -new -nodes -text -out {{ PGSSL }}/{{ ansible_fqdn }}.csr -keyout {{ PGSSL }}/{{ ansible_fqdn }}.key -subj
+        - name: create csr for server certificate
+          shell: "openssl req -new -nodes -text -out {{ PGSSL }}/server.csr -keyout {{ pg_certs_pwd.server_key }} -subj
                   '/CN={{ ansible_default_ipv4.address }}'"
 
-        - name: сreate request
-          shell: "openssl x509 -req -in {{ PGSSL }}/{{ ansible_fqdn }}.csr -text -days 365 -CA {{ PGSSL }}/root.crt -CAkey {{ PGSSL }}/root.key -CAcreateserial
-                  -out {{ PGSSL }}/{{ ansible_fqdn }}.crt"
+        - name: siging server certificate
+          shell: "openssl x509 -req -in {{ PGSSL }}/server.csr -text -days 365 -CA {{ pg_certs_pwd.root_ca }} -CAkey {{ PGSSL }}/root.key -CAcreateserial
+                  -out {{ pg_certs_pwd.server_cert }}"
 
         - name: сhange permissions
           file:
-            path: "{{ PGSSL }}/{{ ansible_fqdn }}.key"
+            path: "{{ pg_certs_pwd.server_key }}"
             owner: postgres
             group: postgres
             mode: og-rwx
@@ -109,22 +105,33 @@
       become: true
       become_user: postgres
 
-    - name: сreate client certificate
+    - name: сreate postgres client certificate
       block:
 
-        - name: Create csr
-          shell: "openssl req -new -nodes -text -out {{ PGSSL }}/client.csr -keyout {{ PGSSL }}/client.key -subj '/CN=postgres'"
+        - name: create csr
+          shell: "openssl req -new -nodes -text -out {{ PGSSL }}/client.csr -keyout {{ pg_certs_pwd.postgres_key }} -subj '/CN=postgres'"
 
-        - name: сreate request
-          shell: "openssl x509 -req -in {{ PGSSL }}/client.csr -text -days 365 -CA {{ PGSSL }}/root.crt -CAkey {{ PGSSL }}/root.key -CAcreateserial
-                  -out {{ PGSSL }}/client.crt"
+        - name: siging postgres certificate
+          shell: "openssl x509 -req -in {{ PGSSL }}/client.csr -text -days 365 -CA {{ pg_certs_pwd.root_ca }} -CAkey {{ PGSSL }}/root.key -CAcreateserial
+                  -out {{ pg_certs_pwd.postgres_cert }}"
 
         - name: сhange permissions
           file:
-            path: "{{ PGSSL }}/client.key"
+            path: "{{ pg_certs_pwd.postgres_key }}"
             owner: postgres
             group: postgres
             mode: og-rwx
+
+        - name: write client certificate exports in bash_profile
+          lineinfile:
+            path: ~/.bash_profile
+            insertafter: EOF
+            line: "{{ item }}"
+            state: present
+          with_items:
+            - export PGSSLCERT={{ pg_certs_pwd.postgres_cert }}
+            - export PGSSLKEY={{ pg_certs_pwd.postgres_key }}
+            - export PGSSLROOTCERT={{ pg_certs_pwd.root_ca }}
 
       become: true
       become_user: postgres

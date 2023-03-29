@@ -111,4 +111,4 @@
         loop_var: user
         index_var: index
       when: list_all_users.query_result[index].rolname not in list_skip_users
-  when: "'update' in action_type"
+  when: "action_type in ['update_major', 'update_minor']"

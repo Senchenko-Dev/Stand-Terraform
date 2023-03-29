@@ -35,7 +35,7 @@ def compare_versions(versions):
 
 
 def compare_pg_se_versions(versions, idx=0):
-    """compare version for PostgreSQL SE only. When left version less than rigth version,
+    """compare version for Pangolin only. When left version less than rigth version,
     function is returning 0 and etc."""
     first = versions[0]
     second = versions[1]

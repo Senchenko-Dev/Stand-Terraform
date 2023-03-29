@@ -1,40 +1,10 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
 - name: Get service_facts
   service_facts:
   no_log: "{{ nolog }}"
-
-- name: Check installed HAProxy version
-  shell: |
-    set -o pipefail
-    haproxy -v | head -1 | awk '{print $3}'
-  register: installed_version_haproxy
-  become: true
-  become_user: postgres
-
-- name: Remove old installation haproxy service, if exist
-  block:
-
-    - name: stop service haproxy, if started
-      systemd:
-        name: haproxy
-        state: stopped
-        enabled: yes
-        daemon_reload: yes
-      when: ansible_facts.services['haproxy.service'].state == 'running'
-
-    - name: loop wait for haproxy stopped
-      shell: "systemctl show -p ActiveState haproxy | cut -d'=' -f2"
-      register: result
-      until: result.stdout == 'inactive'
-      retries: 60
-      delay: 1
-
-    - name: remove haproxy package
-      yum:
-        name: haproxy
-        state: absent
-
-  become: true
-  when: "'haproxy' in ansible_facts.packages and ( [installed_version_haproxy.stdout, versions.haproxy] | compare_versions )"
 
 - name: Recovery old version of haproxy
   block:
@@ -42,10 +12,53 @@
     - name: recovery, if was deleted
       block:
 
-        - name: install haproxy service
-          yum:
-            name: "{{ backup.haproxy }}/haproxy-{{ versions.haproxy }}"
-            state: present
+        - name: stop service haproxy, if started
+          systemd:
+            name: haproxy
+            state: stopped
+            enabled: yes
+            daemon_reload: yes
+          when: ansible_facts.services['haproxy.service'].state == 'running'
+
+        - name: check prev saved version of haproxy
+          find:
+            paths: "{{ backup.haproxy }}/"
+            use_regex: no
+            patterns: '*rpm'
+          register: haproxy_distributive_exists
+
+        - name: reinstall RHEL etcd
+          block:
+
+            - name: remove installed new haproxy
+              yum:
+                name: haproxy
+                state: absent
+              ignore_errors: yes
+
+            - name: install prev haproxy rpm from a local file
+              yum:
+                name: "{{ haproxy_distributive_exists.files.0.path }}"
+                state: present
+              when: haproxy_distributive_exists.matched|int != 0
+
+          when: ansible_os_family == 'RedHat'
+
+        - name: install prev haproxy rpm from a local file
+          shell: "apt-get {{ item }}"
+          with_items:
+            - remove -y haproxy
+            - install -y {{ haproxy_distributive_exists.files.0.path }}
+          when: ansible_os_family == 'Altlinux'
+
+        - name: install prev haproxy rpm from repo
+          include_role:
+            name: common
+            tasks_from: install_versioned_package
+          vars:
+            _install_versioned_package_name: haproxy
+            _install_versioned_package_version: "{{ versions.haproxy }}"
+          when: haproxy_distributive_exists.matched|int == 0
 
         - name: enable haproxy service
           service:
@@ -73,8 +86,6 @@
           file:
             path: "{{ haproxy_files.socket_dir }}/stats"
             state: touch
-          
-      when: "[installed_version_haproxy.stdout, versions.haproxy] | compare_versions"
 
     - name: recovery haproxy files
       copy:
@@ -83,7 +94,7 @@
         remote_src: yes
         owner: postgres
         group: postgres
-        mode: '0750'    
+        mode: 0600  
 
     - name: start/restart haproxy service
       service:
@@ -93,8 +104,10 @@
   become: true
 
 - name: Loop wait for haproxy started
-  shell: "systemctl show -p ActiveState haproxy | cut -d'=' -f2"
+  systemd:
+    name: haproxy
   register: result
-  until: result.stdout == 'active'
-  retries: 60
-  delay: 1
+  until: result.status.ActiveState == 'active'
+  retries: 6
+  delay: 10
+  become: true

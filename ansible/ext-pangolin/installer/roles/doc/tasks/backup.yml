@@ -1,10 +1,12 @@
-- name: Common task for master and replica
+- name: Documentation block for backup with exception etcd host
   block:
 
     - name: ensure {{ backup.doc }} directory exist
       file:
         path: "{{ item.src }}"
         state: "{{ item.state }}"
+        owner: postgres
+        group: postgres
         mode: 0750
       with_items:
         - { src: "{{ backup.doc }}", state: "absent" }
@@ -12,7 +14,7 @@
 
     - name: backup old doc version directory
       copy:
-        src: "{{ PGHOME_OLD }}/doc"
+        src: "{{ PGHOME_OLD }}/{{ 'documentation' if ( [ pg_current_version, '5.2.0' ] | compare_pg_se_versions | int != 0 ) else 'doc' }}"
         dest: "{{ backup.doc }}"
         owner: postgres
         group: postgres
@@ -23,6 +25,8 @@
       copy:
         src: "{{ item }}"
         dest: "{{ backup.doc }}"
+        owner: postgres
+        group: postgres
         remote_src: yes
       with_items:
         - "{{ PGHOME_OLD }}/readme.txt"

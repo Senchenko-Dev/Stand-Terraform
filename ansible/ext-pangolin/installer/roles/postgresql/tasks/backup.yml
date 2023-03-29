@@ -1,25 +1,4 @@
-- name: Execute for all nodes
-  block:
-
-    - name: ensure {{ backup_root_dir }}{{ PGUSERHOME }}
-      file:
-        path: "{{ backup_root_dir }}{{ PGUSERHOME }}"
-        state: directory
-        owner: postgres
-        group: postgres
-        mode: 0700
-
-    - name: backup shell profile
-      copy:
-        src: "{{ shell_profile_file }}"
-        dest: "{{ backup_root_dir }}{{ shell_profile_file }}"
-        remote_src: yes
-        owner: postgres
-        group: postgres
-
-  become: true 
-
-- name: Run this block only for master and replica, not etcd
+- name: Backup only config files
   block:
 
     - name: ensure {{ backup_root_dir }}
@@ -32,6 +11,7 @@
       with_items:
         - { src: "{{ backup.postgresql }}",                        state: absent }
         - { src: "{{ backup.postgresql }}/{{ PGDATA_OLD }}",       state: directory }
+        - { src: "{{ backup.postgresql }}{{ PGETCDIR }}",          state: directory }
         - { src: "{{ backup_root_dir }}{{ global_scripts }}",      state: directory }
 
     - name: backup postgresql.conf, pg_hba.conf, postgresql.auto.conf
@@ -45,7 +25,7 @@
         - { src: '{{ PGDATA_OLD }}/pg_hba.conf',          dest: '{{ backup.postgresql }}{{ PGDATA_OLD }}/pg_hba.conf' }
         - { src: '{{ PGDATA_OLD }}/postgresql.conf',      dest: '{{ backup.postgresql }}{{ PGDATA_OLD }}/postgresql.conf' }
         - { src: '{{ PGDATA_OLD }}/postgresql.auto.conf', dest: '{{ backup.postgresql }}{{ PGDATA_OLD }}/postgresql.auto.conf' }
-      
+
     - name: check exists pg service
       stat: path="{{ service_path_dir }}/postgresql.service"
       register: postgresql_service_exists
@@ -68,6 +48,14 @@
         mode: 0700
         remote_src: yes
 
+    - name: backup {{ PGETCDIR }} directory
+      synchronize:
+        src: "{{ PGETCDIR }}"
+        dest: "{{ backup.postgresql }}"
+      delegate_to: "{{ inventory_hostname }}"
+      become_user: root
+      when: ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int != 0
+
     - name: remove old python venv from "{{ PGHOME_OLD_NAME }}"
       file:
         path: "{{ backup.postgresql }}/{{ PGHOME_OLD_NAME }}/postgres_venv"
@@ -89,5 +77,263 @@
       become_user: root
       when: cron_job_exists.stat.exists
 
+    - name: check exists welcome message
+      stat: path="{{ global_scripts }}/dynmotd.sh"
+      register: welcome_message_exists
+
+    - name: backup welcome message
+      copy:
+        src: "{{ global_scripts }}/dynmotd.sh"
+        dest: "{{ backup_root_dir }}{{ global_scripts }}/dynmotd.sh"
+        remote_src: yes
+        group: postgres
+        owner: postgres
+        mode: 0755
+      when: welcome_message_exists.stat.exists
+
   become: true   
   when: inventory_hostname != 'etcd'
+
+- name: Backup with pg_probackup
+  block:
+
+    - name: clear pg_probackup backup dir
+      file:
+        path: "{{ backup.pg_probackup_bak_dir }}"
+        state: absent
+      become_user: root
+
+    - name: add hba rule for replication postgres
+      block:
+
+        - name: add rule hba if standalone
+          block:
+
+          - name: insert replication rule to pg_hba config
+            lineinfile:
+              path: '{{ PGDATA_OLD }}/pg_hba.conf'
+              insertafter: 'hostssl all postgres 127.0.0.1/32 cert'
+              line: "hostssl replication postgres 127.0.0.1/32 cert"
+
+          - name: send reload command to postgresql
+            shell: "{{ PGHOME_OLD }}/bin/pg_ctl reload -D {{ PGDATA_OLD }}"
+
+          when: not is_patroni_exists
+
+        - name: add rule hba if cluster
+          block:
+
+          - name: insert replication rule to pg_hba config
+            lineinfile:
+              path: '{{ patroni_files.conf_dir }}/postgres.yml'
+              insertafter: 'hostssl all postgres 127.0.0.1/32 cert'
+              line: '        - hostssl replication postgres 127.0.0.1/32 cert'
+
+          - name: send reload command to patroni
+            include_role:
+              name: patroni
+              tasks_from: update_with_patronictl
+            vars:
+              endpoint_name: reload
+              PGHOME: "{{ PGHOME_OLD }}"
+
+          when: is_patroni_exists
+
+        - name: wait when pgsql open port
+          shell: '{{ PGHOME_OLD }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ PGPORT_OLD }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 60
+          delay: 1
+
+    - name: init pg_probackup backup dir
+      pangolin_pg_probackup:
+        ANSIBLE_MODULE_ARGS:
+          method: init
+          path_backup: "{{ backup.pg_probackup_bak_dir }}/pg_probackup"
+      become_user: postgres
+      become_flags: '-i'
+
+    - name: determine pg_probackup instance
+      pangolin_pg_probackup:
+        ANSIBLE_MODULE_ARGS:
+          method: add_instance
+          path_backup: "{{ backup.pg_probackup_bak_dir }}/pg_probackup"
+          path_data: "{{ PGDATA_OLD }}"
+          instance: "{{ clustername }}"
+      become_user: postgres
+      become_flags: '-i'
+
+    - name: create pg_receivewal service
+      template:
+        src: pg_receivewal.service.j2
+        dest: "{{ service_path_dir }}/pg_receivewal.service"
+      become_user: root
+
+    - name: start pg_receivewal daemon
+      systemd:
+        name: pg_receivewal
+        state: started
+        daemon_reload: yes
+      become_user: root
+
+    - name: ensure pg_receivewal daemon is running
+      service_facts:
+      register: temp_service_facts
+      until: temp_service_facts.ansible_facts.services['pg_receivewal.service'].state == 'running'
+      retries: 3
+      ignore_errors: yes
+      no_log: true
+
+    - name: assert due pg_receivewal daemon
+      assert:
+        that: not temp_service_facts.failed
+        success_msg: "{{ update_control_msgs.info.pg_receivewal_ok }}"
+        fail_msg: "{{ update_control_msgs.fails.pg_receivewal_failed }}"
+
+    - name: fail if pg_receivewal cant start
+      fail:
+        msg: "pg_receivewal daemon doesnt run"
+      when: temp_service_facts.failed
+
+    - set_fact: pg_probackup_time_started="{{ lookup('pipe','date \"+%Y-%m-%d %H:%M:%S\"') }}"
+
+    - name: make backup with pg_probackup
+      pangolin_pg_probackup:
+        ANSIBLE_MODULE_ARGS:
+          method: backup
+          path_backup: "{{ backup.pg_probackup_bak_dir }}/pg_probackup"
+          instance: "{{ clustername }}"
+          backup_mode: FULL
+          user_db: postgres
+          compress_algorithm: zlib
+          compress_level: 4
+          thread_worker: "{{ proc_cpu_for_ansible_used }}"
+          port: "{{ PGPORT_OLD }}"
+          any_opts:
+            - "--temp-slot"
+            - "--stream"
+            - "--progress"
+          check_trigger: "{{ update_status_files.dir }}/.trigger_stop_update"
+      async: 1000000
+      poll: 0
+      register: backup_progress
+      become_flags: "-i"
+
+    - name: print msg that backup process started
+      debug:
+        msg: "{{ update_control_msgs.info.pg_probackup_backup_start }}"
+
+    - name: testing recovery
+      block:
+
+        - name: wait backup timing
+          wait_for:
+            timeout: 5
+
+        - name: touch trigger
+          file:
+            path: "{{ update_status_files.dir }}/.trigger_stop_update"
+            state: touch
+          become: true
+
+      when: is_recovery_test_mode and trigger_stop01m
+
+    - name: show backup progress pg_probackup
+      async_status:
+        jid: "{{ backup_progress.ansible_job_id }}"
+      register: job_result
+      ignore_errors: yes
+      until: job_result.finished
+      retries: 3000
+      delay: 60
+      no_log: "{{ nolog }}"
+
+    - set_fact: pg_probackup_time_finished="{{ lookup('pipe','date \"+%Y-%m-%d %H:%M:%S\"') }}"
+    - debug:
+        msg: "{{ pg_probackup_time_finished }}"
+    - set_fact: full_backup_db_time_work="{{ ((pg_probackup_time_finished | to_datetime) - (pg_probackup_time_started | to_datetime)).total_seconds() / 60 | int  }}"
+
+    - name: make sure that backup done
+      assert:
+        that: not job_result.failed
+        success_msg: "{{ update_control_msgs.info.pg_probackup_backup_ok }}"
+
+  rescue:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+    - name: revert old postgresql configuration files if not patroni
+      copy:
+        src: "{{ backup.postgresql }}{{ PGDATA_OLD }}/pg_hba.conf"
+        dest: "{{ PGDATA_OLD }}/pg_hba.conf"
+        owner: postgres
+        group: postgres
+        mode: 0600
+        remote_src: yes
+      when: not is_patroni_exists
+
+    - name: revert old postgresql configuration files if patroni
+      copy:
+        src: "{{ backup.patroni }}{{ patroni_files.conf_dir }}/postgres.yml"
+        dest: "{{ patroni_files.conf_dir }}/postgres.yml"
+        owner: postgres
+        group: postgres
+        mode: 0600
+        remote_src: yes
+      when: is_patroni_exists
+
+    - name: send reload command to postgresql
+      shell: "{{ PGHOME_OLD }}/bin/pg_ctl reload -D {{ PGDATA_OLD }}"
+      become_user: postgres
+      when: is_patroni_exists
+
+    - name: send reload command to patroni
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl
+      vars:
+        endpoint_name: reload
+        PGHOME: "{{ PGHOME_OLD }}"
+
+    - name: wait when pgsql open port
+      shell: '{{ PGHOME_OLD }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ PGPORT_OLD }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+      become_user: postgres
+
+    - name: stop pg_receivewal daemon
+      systemd:
+        name: pg_receivewal
+        state: stopped
+      become_user: root
+      ignore_errors: yes
+
+    - name: remove pg_receivewal daemon
+      file:
+        path: "{{ service_path_dir }}/pg_receivewal.service"
+        state: absent
+      become_user: root
+
+    - name: clear pg_probackup dir
+      file:
+        path: "{{ backup.pg_probackup_bak_dir }}/pg_probackup"
+        state: absent
+
+    - name: trigger stop updated
+      include_role:
+        name: common
+        tasks_from: trigger_stop_update
+
+    - name: make sure that backup done
+      assert:
+        that: not job_result.failed
+        fail_msg: "{{ update_control_msgs.fails.pg_probackup_backup_failed }}"
+
+  become_user: postgres
+  become: true
+  when: "inventory_hostname == 'master' and 'update_major' in action_type and is_inner_full_backup"

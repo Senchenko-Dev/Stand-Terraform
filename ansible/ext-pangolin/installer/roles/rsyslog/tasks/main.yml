@@ -1,6 +1,22 @@
----
 - name: Rsyslog configuration
   block:
+
+    - name: trigger revert check
+      block:
+
+        - name: touch trigger
+          file:
+            path: "{{ update_status_files.dir }}/.trigger_stop_update"
+            state: touch
+          become: true
+          when: is_recovery_test_mode and trigger_stop07m
+
+        - name: trigger stop updated
+          include_role:
+            name: common
+            tasks_from: trigger_stop_update
+
+      when: inventory_hostname == 'master'
 
     - name: configure iptable
       iptables:
@@ -8,6 +24,7 @@
         protocol: udp
         destination_port: "{{ SOC_server_port }}"
         jump: ACCEPT
+      when: rsyslog is defined and rsyslog
 
     - name: configure {{ SOC_config_file }}
       lineinfile:
@@ -25,10 +42,51 @@
         line: "*.info;mail.none;authpriv.none;cron.none;local0.none;local3.none    /var/log/messages"
 
     - name: restart rsyslog service
-      service:
+      systemd:
         name: rsyslog
         state: restarted
+        daemon_reload: yes
         enabled: yes
+      when: rsyslog is defined and rsyslog
 
-  become: yes
-  become_user: root
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and rsyslog_error_um001m and inventory_hostname == 'master'
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and rsyslog_error_um001r and inventory_hostname == 'replica'
+
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            rsyslog: true
+      run_once: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            rsyslog: true
+      run_once: true
+      when: inventory_hostname == 'master'
+
+    - name: to stop install process if error
+      fail: msg='Install process must be stopped by error'
+      when: "action_type == 'install' and \
+            hostvars['master' or 'replica'].update_errors.aggregate"
+
+  become: true

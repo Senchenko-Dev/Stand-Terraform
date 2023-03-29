@@ -4,11 +4,14 @@
     - name: check openldap config
       lineinfile:
         name: "{{ openldap_config }}"
-        regexp: '^TLS_CACERT(.*){{ cert_dir }}'
+        regexp: "{{ item }}"
         state: absent
-      check_mode: yes
-      changed_when: false
+      check_mode: true
+      changed_when: conf.found == 0
       register: conf
+      with_items:
+        - "^TLS_CACERT(.*){{ cert_dir }}"
+        - "^TLS_CIPHER_SUITE(.*)TLSv1.2:!NULL"
 
     - name: check exist certificates
       find:
@@ -23,14 +26,17 @@
         - name: disable LDAP TLS if it didn't configured
           set_fact:
             ldap_tls: false
+          delegate_to: "{{ item }}"
+          delegate_facts: true
+          loop: "{{ groups['postgres_nodes'] }}"
 
         - name: print that LDAP TLS is disabled
           debug:
             msg: "WARNING: LDAP TLS is disabled"
-            
+
       when: "cert_dir is match('TBF') or \
-             not conf.found or \
+             conf.changed or \
              files.matched == 0"
 
   become: true
-  when: inventory_hostname != 'etcd'
+  when: inventory_hostname != 'etcd' and cert_dir is defined and openldap_config is defined

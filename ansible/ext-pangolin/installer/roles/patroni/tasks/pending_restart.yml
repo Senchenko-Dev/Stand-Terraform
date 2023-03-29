@@ -22,10 +22,11 @@
         tasks_from: update_with_patronictl
       vars:
         endpoint_name: reload
+        PGHOME: "{{ current_pghome }}"
 
     - name: get parameters from patroni service for cluster
       uri:
-        url: "http://{{ current_master }}:{{ current_patroni_port }}"
+        url: "{{ protocol }}://{{ current_master }}:{{ current_patroni_port }}"
         return_content: yes
         status_code: 200
       register: patroni_parameters
@@ -47,7 +48,7 @@
 
         - name: get parameters from patroni service for standalone
           uri:
-            url: "http://{{ current_replica }}:{{ current_patroni_port }}"
+            url: "{{ protocol }}://{{ current_replica }}:{{ current_patroni_port }}"
             return_content: yes
             status_code: 503
           register: patroni_parameters
@@ -77,6 +78,7 @@
         tasks_from: update_with_patronictl
       vars:
         endpoint_name: restart
+        PGHOME: "{{ current_pghome }}"
       when: is_restart and is_master_replica
 
     - name: wait when pgsql open port

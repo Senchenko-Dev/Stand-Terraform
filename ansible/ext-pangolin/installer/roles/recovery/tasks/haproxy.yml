@@ -1,0 +1,40 @@
+- name: Recovery haproxy
+  block:
+
+    - name: define recovery available of haproxy for major
+      set_fact:
+        is_recovery_haproxy_major: "{% if action_type == 'update_major' \
+                                            and (inventory_hostname == 'master' \
+                                                or (update_errors.types.configuration.finally \
+                                                    or update_errors.hosts.replica \
+                                                        and ( update_errors.components.haproxy \
+                                                              or update_errors.types.pg_auth_reencrypt.finally \
+                                                              or update_errors.components.finally \
+                                                              or update_errors.components.tests ))) %}\
+                                          true\
+                                      {% else %}\
+                                          false\
+                                      {% endif %}"
+
+    - name: define recovery available of haproxy for minor
+      set_fact:
+        is_recovery_haproxy_minor: "{% if action_type == 'update_minor' \
+                                            and (inventory_hostname == 'replica' \
+                                                 or (update_errors.hosts.master \
+                                                     and update_errors.components.haproxy)) %}\
+                                          true\
+                                      {% else %}\
+                                          false\
+                                      {% endif %}"
+
+    - name: recovery haproxy
+      include_role:
+        name: HAProxy
+        tasks_from: revert.yml
+      when: "is_recovery_haproxy_minor \
+             or is_recovery_haproxy_major"
+
+
+  when: "haproxy \
+         and inventory_hostname != 'etcd' \
+         and is_recovery_haproxy"

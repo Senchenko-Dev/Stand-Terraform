@@ -1,18 +1,28 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+- name: Stop patroni service
+  systemd:
+    name: patroni
+    state: stopped
+  become: true
+
+- name: Loop wait for patroni stopped
+  systemd:
+    name: patroni
+  register: result
+  until: result.status.ActiveState != 'active'
+  retries: 6
+  delay: 10
+  become: true
+
 - name: Recovery patroni
   block:
-  
-    - name: Set python interpretator
-      set_fact:
-        ansible_python_interpreter: '{{ python.global_bin_2 }}'
-
-    - name: define name of patroni venv
-      set_fact:
-        _revertpatroni_patroni_venv_name: "postgres_venv"
 
     - name: define name of patroni venv
       set_fact:
         _revertpatroni_patroni_venv_name: "patroni_venv"
-      when: ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int != 0
 
     - name: compare prev and new patroni version
       block:
@@ -20,13 +30,13 @@
         - name: fetch patroni se version file from master
           fetch:
             src: '{{ backup.patroni }}/{{ _revertpatroni_patroni_venv_name }}/bin/se_version'
-            dest: '{{ REMOTE_TMP }}'
+            dest: '/tmp'
           when: ( [ pg_current_version, '4.5.0' ] | compare_pg_se_versions )|int != 0
 
         - name: get version of prev patroni 
           set_fact:
             _revertpatroni_prev_patroni_se_ver: "{%if ([ pg_current_version, '4.5.0' ] | compare_pg_se_versions)|int != 0 %} \
-                                                   {{ lookup('file', '{{ REMOTE_TMP }}/master/{{ backup.patroni }}/patroni_venv/bin/se_version') }} \
+                                                   {{ lookup('file', '/tmp/master/{{ backup.patroni }}/patroni_venv/bin/se_version') }} \
                                                  {% endif %}"
 
         - name: get new patroni se version from file
@@ -37,15 +47,10 @@
           set_fact:
             _revertpatroni_compare_versions: "{%if _revertpatroni_prev_patroni_se_ver != '' %}{{ [_revertpatroni_prev_patroni_se_ver, _revertpatroni_new_patroni_se_ver] | compare_versions }}{% else %}true{% endif %}"
 
-    - name: stop patroni service
-      service:
-        name: patroni
-        state: stopped
-
     - name: recovery prev version patroni from backup
       block:
         
-        - name: chech that {{ python.patroni_venv }}/bin/python exists
+        - name: check that {{ python.patroni_venv }}/bin/python exists
           stat: path="{{ python.patroni_venv }}/bin/python"
           register: is_python_patroni_venv
       
@@ -84,7 +89,12 @@
             remote_src: yes
             directory_mode: yes
 
-        - name: create symlink for new lib64
+        - name: check virtual environment lib64
+          stat:
+            path: "{{ PYTHON_VENV_OLD }}/lib64"
+          register: virtual_environment_lib64
+
+        - name: revert link lib64 if is not found
           file:
             src: '{{ PYTHON_VENV_OLD }}/lib'
             dest: '{{ PYTHON_VENV_OLD }}/lib64'
@@ -92,12 +102,25 @@
             force: yes
             owner: postgres
             group: postgres
+          when: not virtual_environment_lib64.stat.exists
 
       when: _revertpatroni_compare_versions
 
+    - name: define actual PGHOME
+      set_fact:
+        _patronirevert_pghome: "{% if not is_updated_pangolin_files %}\
+                                      {{ PGHOME_OLD }}\
+                                {% else %}\
+                                      {{ PGHOME }}\
+                                {% endif %}"
+
     - name: revert old patroni configuration file
       copy:
-        src: "{{ merge_cfg.result_pgse }}/postgres.yml"
+        src: "{% if not is_updated_pangolin_files %}\
+                  {{ backup.patroni }}{{ patroni_files.conf_dir }}/postgres.yml\
+              {% else %}\
+                  {{ merge_cfg.result_pgse }}/postgres.yml\
+              {% endif %}"
         dest: "{{ patroni_files.conf_dir }}/postgres.yml"
         owner: postgres
         group: postgres
@@ -107,39 +130,134 @@
 
     - name: revert old configuration of patroni service
       copy:
-        src: "{{ backup.patroni_intermediate }}{{ patroni_files.service_file }}"
+        src: "{{ backup.patroni }}{{ patroni_files.service_file }}"
         dest: "{{ patroni_files.service_file }}"
         remote_src: yes
+      when: not is_updated_pangolin_files
 
     - name: revert shell profile
       copy:
         dest: "{{ shell_profile_file }}"
-        src: "{{ backup.patroni_intermediate }}{{ shell_profile_file }}"
+        src: "{{ backup_root_dir }}{{ shell_profile_file }}"
         remote_src: yes
         owner: postgres
         group: postgres
+
+    - name: recovery sudoers
+      shell: "cp -p {{ backup_root_dir }}{{ sudoers_file }} {{ sudoers_file }}"
 
     - name: export path for old patroni directory
       lineinfile:
         path: "{{ shell_profile_file }}"
         insertafter: EOF
-        line: "export PATH={{ PYTHON_VENV_OLD }}/bin:$PATH"
+        line: "{{ item }}"
         state: present
+      with_items:
+        - "export PATH=$PATH:{{ PYTHON_VENV_OLD }}/bin:{{ _patronirevert_pghome }}/bin"
+        - "export LD_LIBRARY_PATH={{ _patronirevert_pghome }}/lib"
+        - "export PG_PLUGINS_PATH={{ _patronirevert_pghome }}/lib"
       become_user: postgres
 
-    - name: reload systemd and start service
+    - name: reload systemd and start patroni service
       systemd:
         name: patroni
         state: restarted
         daemon_reload: yes
         enabled: yes
 
+    - name: send reinit command to patroni
+      block:
+
+        - name: remove old directory PGDATA
+          file:
+            path: "{{ pgdata_old_string.stdout }}"
+            state: absent
+          register: _remove_pgdata_old
+          retries: 5
+          delay: 2
+          until: _remove_pgdata_old is success
+
+        - name: restore directory is PGDATA is link
+          block:
+
+            - name: restore directory
+              file:
+                path: "{{ pgdata_link.stat.lnk_source }}"
+                state: directory
+                owner: postgres
+                group: postgres
+
+            - name: restore old link if exist
+              file:
+                src: "{{ pgdata_link.stat.lnk_source }}"
+                dest: "{{ pgdata_link.stat.path }}"
+                state: link
+                force: yes
+                owner: postgres
+                group: postgres
+
+          when: "{{ pgdata_link.stat.islnk }}"
+
+        - name: restart patronictl
+          systemd:
+            name: patroni
+            state: restarted
+
+        - name: send reinit replica
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl
+          vars:
+            endpoint_name: reinit
+            current_replica_for_reinit: "{{ hostvars['replica'].ansible_fqdn }}"
+            PGHOME: "{{ _patronirevert_pghome }}"
+
+        - name: wait when pgsql open port
+          shell: '{{ _patronirevert_pghome }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ PGPORT_OLD }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 6
+          delay: 10
+          become_user: postgres
+
+      when: "inventory_hostname == 'replica' \
+             and action_type == 'update_major' \
+             and (update_errors.types.configuration.finally \
+                  or update_errors.types.pg_auth_reencrypt.finally \
+                  or update_errors.types.src.install_pg_probackup \
+                  or update_errors.components.finally \
+                  or update_errors.components.tests \
+                  or update_errors.hosts.replica \
+                     and (update_errors.types.pg.major_post \
+                          or update_errors.types.patroni.finally \
+                          or update_errors.components.pgbouncer \
+                          or update_errors.components.haproxy ))"
+
+    - name: turn off pause mode
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        change_params: "pause: false"
+        PGHOME: "{{ _patronirevert_pghome }}"
+      when: "action_type == 'update_major' \
+             or inventory_hostname == 'replica'"
+
     - name: wait when pgsql open port
-      shell: '{{ PGHOME }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ PGPORT_OLD }}'
+      shell: "{{ _patronirevert_pghome }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ ports.pg }}"
       register: result
       until: result.stdout.find("accepting connections") != -1
-      retries: 60
-      delay: 1
+      retries: 6
+      delay: 10
       become_user: postgres
+      when: action_type == 'update_major'
+
+    - name: loop wait for patroni started
+      systemd:
+        name: patroni
+      register: result
+      until: result.status.ActiveState == 'active'
+      retries: 6
+      delay: 10
 
   become: true

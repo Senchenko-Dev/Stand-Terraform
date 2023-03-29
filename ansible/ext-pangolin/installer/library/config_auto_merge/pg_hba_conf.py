@@ -48,13 +48,11 @@ def get_or_replace_pghba(old_conf_file, new_yml_data, result_file, pghba_mode, p
     else:
         return (1, [])
 
-def merge_pghba_conf(old_conf_file, new_conf_file, result_file, old_ver, new_ver, root_path, custom_cfg_name, pghba_mode):
+def merge_pghba_conf(old_conf_file, new_conf_file, result_file, root_path, custom_cfg_name, pghba_mode):
     """
     old_conf_file - пусть до postgres.yml файла для old_ver
     new_conf_file - пусть до postgres.yml файла для new_ver
     result_file - пусть до pg_hba.conf файла, полученного в ходе мержа
-    old_ver - версия старой версии PG SE postgres.yml файла, например, 4.2.5
-    new_ver - версия новой версии PG SE postgres.yml файла, например, 4.3.0
     root_path - путь до папки с diff_cfg.txt, с копией all.yml, где также будет создан diff_bootstrap_dcs.txt
     pghba_mode - режим мержа pg_hba части: megre - слияние pg_hba из старого и нового конфига, 
                  new - pg_hba из старого конфига полностью заменятся на pg_hba из нового конфига
@@ -62,32 +60,24 @@ def merge_pghba_conf(old_conf_file, new_conf_file, result_file, old_ver, new_ver
     """
     file_diff_name = root_path + "/diff_cfg.txt"
     
-    support_db_admin_user_list = pgutils.load_support_dm_admins_list(root_path, custom_cfg_name, False)
+    auth_methods_control_map, is_update_ldap_auth_methods = pgutils.load_control_info_from_custom_dev(root_path, custom_cfg_name)
 
     old_list = read_pghba_conf(old_conf_file)
     new_list = read_pghba_conf(new_conf_file)
 
-    pgutils.remove_duplicate_pghba(old_list)
+    result_removed, result_added = pgutils.read_diff_file(file_diff_name)
 
-    result_removed, result_added = pgutils.read_diff_file(old_ver, new_ver, file_diff_name)
-
-    if pghba_mode == "new":
-        old_list.clear()
-
-    for new_line in new_list:
-        if pghba_mode == "new":
-            old_list.append(new_line)
-        else:
-            pgutils.merge_list_elements(old_list, new_line, True, support_db_admin_user_list)
-    
-    pgutils.sort_pghba(old_list)
-    
     pgutils.clean_data(result_removed, old_list, "", True)
+
+    old_list = pgutils.merge_pghba(old_list, new_list, auth_methods_control_map, is_update_ldap_auth_methods)
 
     f = open(result_file, 'w')
     for old_line in old_list:
         if pgutils.CommentList.cmnt_only.value not in old_line:
-            res_str = str(old_line)
+            if old_line.strip():
+                res_str = str(old_line)
+            else:
+                continue
         else:
             old_line = re.sub("^({})".format(pgutils.CommentList.cmnt_only.value), '', old_line)
             res_str = '#' + str(old_line)

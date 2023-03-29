@@ -1,0 +1,146 @@
+- name: Installing/updating and configuring the pg_auth_reencrypt utility
+  block:
+
+    - name: remove pg_auth_reencrypt files, if update
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "{{ service_path_dir }}/pangolin_reencrypt@.service"
+        - "{{ PGETCDIR }}/enc_util.cfg"
+        - "{{ PGETCDIR }}/pg_auth_reencrypt"
+        - "{{ pg_auth_reencrypt_files.bin_path }}"
+        - "{{ PGETCDIR }}/start_reencrypt.sh"
+        - "{{ pg_auth_reencrypt_files.pid_dir }}"
+        - "{{ PGETCDIR }}/enc_params.cfg.kmadmin_pg"
+        - "{{ PGETCDIR }}/enc_params.cfg.postgres"
+        - "{{ PGETCDIR }}/enc_params.cfg"
+      when: "action_type in ['update_major', 'update_minor']"
+
+    - name: create pangolin-common directory
+      file:
+        path: "{{ item.src }}"
+        state: "{{ item.state }}"
+        owner: postgres
+        group: kmadmin_pg
+        mode: 0710
+      with_items:
+        - { src: "{{ pangolin_common_dir }}",     state: absent }
+        - { src: "{{ pangolin_common_dir }}",     state: directory }
+        - { src: "{{ pangolin_common_dir }}/bin", state: directory }
+
+    - name: сreate {{ service_path_dir }}/pangolin_reencrypt@.service service
+      template:
+        src: pangolin_reencrypt@.service.j2
+        dest: "{{ service_path_dir }}/pangolin_reencrypt@.service"
+      vars:
+        redefined_pgdata: "{{ _reencrypt_pgdata }}"
+
+    - name: create config enc_util.cfg
+      template:
+        src: enc_util.cfg.j2
+        dest: "{{ PGETCDIR }}/enc_util.cfg"
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: copy pg_auth_reencrypt utility and startup file
+      copy:
+        src: "{{ local_distr_path }}/pg_auth_reencrypt{{ pg_auth_reencrypt_files.bin_path }}"
+        dest: "{{ pangolin_common_dir }}/bin"
+        mode: 0755
+        owner: root
+        group: root
+
+    - name: disable service pangolin_reencrypt@.service if auth_reencrypt = false
+      systemd:
+        name: "{{ item }}"
+        daemon_reload: yes
+        enabled: no
+      with_items:
+        - "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+        - "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+      when: not auth_reencrypt
+
+    - name: reload systemd and start service pangolin_reencrypt@.service if auth_reencrypt = true
+      block:
+
+        - name: reload systemd and start service {{ service_path_dir }}/{{ pg_auth_reencrypt_files.service_file_name_postgres }}
+          block:
+
+            - name: reload systemd and start service {{ service_path_dir }}/{{ pg_auth_reencrypt_files.service_file_name_postgres }}
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+                state: started
+                daemon_reload: yes
+                enabled: yes
+
+            - name: loop wait for {{ pg_auth_reencrypt_files.service_file_name_postgres }} started
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_postgres }}"
+              register: result
+              until: result.status.ActiveState == 'active'
+              retries: 6
+              delay: 1
+
+        - name: reload systemd and start service {{ service_path_dir }}/{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}
+          block:
+
+            - name: reload systemd and start service {{ service_path_dir }}/{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+                state: started
+                daemon_reload: yes
+                enabled: yes
+
+            - name: loop wait for {{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }} started
+              systemd:
+                name: "{{ pg_auth_reencrypt_files.service_file_name_kmadmin_pg }}"
+              register: result
+              until: result.status.ActiveState == 'active'
+              retries: 6
+              delay: 1
+
+          when: tde or admin_protection
+
+      when: auth_reencrypt and auth_encrypt
+
+  rescue:
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            pg_auth_reencrypt: true
+          types:
+            pg_auth_reencrypt:
+              finally: true
+      run_once: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            pg_auth_reencrypt: true
+          types:
+            pg_auth_reencrypt:
+              finally: true
+      run_once: true
+      when: inventory_hostname == 'master'
+
+  become: true
+  become_user: root
+  when: inventory_hostname != 'etcd'

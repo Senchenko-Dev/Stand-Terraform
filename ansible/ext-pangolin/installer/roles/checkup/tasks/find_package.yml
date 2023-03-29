@@ -14,21 +14,23 @@
     - name: check package exist
       assert:
         that: postgresql_package.matched == 1
-        fail_msg: "package file PostgreSQL SE not found"
-        success_msg: "package file PostgreSQL SE found"
+        fail_msg: "{{ message_installer.fails.pangolin_distrib_found }}"
+        success_msg: "{{ message_installer.info.pangolin_distrib_found }}"
 
     - name: find package file
       set_fact:
         postgresql_package_file: "{{ item['path'].replace('/', ' ').split() | last }}"
       with_items: "{{ postgresql_package['files'] }}"
 
-    - name: define full and major version
+    - name: set full, major version and new Pangolin version without zeros
       set_fact:
-        pg_version: "{{ postgresql_package_file.split('-').3 }}"
-        pg_major_version: "{{ postgresql_package_file.split('-').3.split('.').0 }}"
-      with_items: "{{ postgresql_package['files'] }}"    
+        pg_version: "{{ postgresql_package_file.split('-').4 }}"
+        pg_major_version: "{{ postgresql_package_file.split('-').4.split('.').0 }}"
+        pg_new_version_without_zeros: "{{ postgresql_package_file.split('-').4.split('.').0 | int }}.\
+                                       {{ postgresql_package_file.split('-').4.split('.').1 | int }}.\
+                                       {{ postgresql_package_file.split('-').4.split('.').2 | int }}"
+      with_items: "{{ postgresql_package['files'] }}"
 
   delegate_to: localhost
-  become: no
   run_once: true
   when: pg_version is undefined

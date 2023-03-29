@@ -1,0 +1,103 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+- name: Finally recovery and smoke tests
+  block:
+
+    - name: save PGHOME_OLD to etcd host
+      set_fact:
+        PGHOME_OLD: "{{ PGHOME_OLD }}"
+      run_once: true
+
+    - name: loop wait for etcd start
+      shell: "etcdctl {{ endpoints_v2 }} {% if ssl_mode %}{{ etcdv2_ssl_connect }}{% endif %} cluster-health 2>&1"
+      environment:
+        ETCDCTL_API: 2
+      register: result
+      until: result.stdout.find("cluster is healthy") != -1
+      retries: 4
+      delay: 3
+      when: inventory_hostname == 'etcd'
+
+    - name: loop wait for pgsql started
+      shell: '{{ PGHOME_OLD }}/bin/pg_isready -h 127.0.0.1 -p {{ PGPORT_OLD }}'
+      register: result
+      until: result.stdout.find("accepting connections") != -1
+      retries: 60
+      delay: 1
+      become_user: postgres
+      when: inventory_hostname != 'etcd'
+
+    - name: wait cluster synchronization
+      include_role:
+        name: patroni
+        tasks_from: update_wait_cluster_synchronization.yml
+      vars:
+        PGHOME: "{{ PGHOME_OLD }}"
+      when: inventory_hostname == 'master'
+
+    - name: check encrypt space with actual user passwords
+      shell: "{{ PGHOME_OLD }}/bin/pg_auth_config check"
+      register: result
+      until: result.stdout.find("FATAL") == -1
+      retries: 5
+      environment:
+        PG_PLUGINS_PATH: "{{ PGHOME_OLD }}/lib"
+      become_user: postgres
+      when: "inventory_hostname != 'etcd' \
+             and ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int != 0"
+
+    - name: check structure tablespace
+      block:
+
+        - name: check old structure directory
+          find:
+            paths: "{{ tablespace_old_path }}"
+            recurse: yes
+            file_type: directory
+            depth: 2
+          register: tablespace_structure
+
+        - name: save list structure tablespace
+          set_fact:
+            tablespace_structure: "{{ tablespace_structure.files | map(attribute='path') | list }}"
+
+        - name: compare value tablespace
+          assert:
+            that: "{{ (tablespace_structure | sort) == (tablespace_structure_old | sort) }}"
+            fail_msg: "old structure tablespace not equals recovery structure\n old structure: \
+                      {{ tablespace_structure_old | sort }}\nnew structure: {{ tablespace_structure }}"
+
+      when: "inventory_hostname != 'etcd' \
+             and tablespace_old_path is defined \
+             and action_type == 'update_major'"
+
+    - name: make dump and calc dump checksums
+      include_role:
+        name: common
+        tasks_from: make_dump_and_calc_dump_checksums.yml
+      vars:
+        _mdacdc_pghome: "{{ PGHOME_OLD }}"
+        _mdacdc_pangolin_version: "{{ pg_current_version }}"
+        _mdacdc_python_venv: "{{ PGHOME_OLD }}/postgresql_venv/"
+      when: "is_compare_checksums \
+             and inventory_hostname == 'master' \
+             and is_recovery_test_mode \
+             and action_type == 'update_major'"
+
+    - name: check that checksums old and db dump after recovery is equal
+      assert:
+        that: _mdacdc_checksums_old_dump[ index ].stdout == _mdacdc_checksums_old_dump_after_recovery[ index ].stdout
+        fail_msg: "ERROR: checksums old and db dump after recovery is NOT equal"
+        success_msg: "OK: checksums old and db dump after recovery is equal"
+      loop: "{{ _mdacdc_checksums_old_dump }}"
+      loop_control:
+        index_var: index
+      when: "is_compare_checksums \
+             and inventory_hostname == 'master' \
+             and is_recovery_test_mode \
+             and action_type == 'update_major'"
+
+  become: true
+  when: update_errors.aggregate

@@ -1,46 +1,77 @@
 - name: Update etcd
   block:
 
-    - name: backup intermediate etcd values
+    - name: trigger revert check
       block:
 
-        - name: ensure {{ backup.etcd_intermediate }}
+        - name: touch trigger
           file:
-            path: "{{ backup.etcd_intermediate }}{{ PGUSERHOME }}"
-            state: directory
-            owner: postgres
-            group: postgres
-            mode: 0700
+            path: "{{ update_status_files.dir }}/.trigger_stop_update"
+            state: touch
+          become: true
+          when: is_recovery_test_mode and trigger_stop03m
 
-        - name: backup shell profile
-          copy:
-            src:  "{{ shell_profile_file }}"
-            dest: "{{ backup.etcd_intermediate }}{{ shell_profile_file }}"
-            remote_src: yes
-            owner: postgres
-            group: postgres
-        
+        - name: trigger stop updated
+          include_role:
+            name: common
+            tasks_from: trigger_stop_update
+
+      when: inventory_hostname == 'master'
+
+    - name: check key \"KillMode\" exists in patroni.service
+      reciter:
+        ANSIBLE_MODULE_ARGS:
+          src: "{{ patroni_files.service_file }}"
+          action: get
+          parameter: KillMode
+      register: is_killmode_exists
+      environment:
+        - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
+      become_user: postgres
       become: true
+      when: inventory_hostname != 'etcd'
 
-    - name: check that etcd cluster is healthy before update
-      command:
-        cmd:  etcdctl cluster-health
-      register: result
-      until: result.stdout.find("cluster is healthy") != -1
-      retries: 10
-      delay: 1
-
-    - name: get installed etcd version
-      uri:
-        url: "http://localhost:{{ ports.etcd_inner }}/version"
-      register: installed_version_etcd
-
-    - name: stop, update and start new version of etcd
+    - name: fix patroni service (pangolin has to work if patroni has pause mode)
       block:
 
-        - name: remove etcd configure
-          shell: etcdctl rm service/{{ clustername }}/initialize
-          ignore_errors: yes
+        - name: fix kill mode of patroni linux service
+          lineinfile:
+            path: "{{ patroni_files.service_file }}"
+            insertafter: '^Restart=on-failure'
+            line: KillMode=process
+
+        - name: just force systemd to reread configs (2.4 and above)
+          systemd:
+            daemon_reload: yes
+
+        - name: wait when pgsql open port
+          shell: '{{ PGHOME_OLD }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ ports.pg }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 6
+          delay: 10
+          become_user: postgres
+
+      become: true
+      when: inventory_hostname != 'etcd' and is_killmode_exists.message != 'process'
+
+    - name: turn on pause mode, because passwords in postgres.yml will be changed
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        change_params: "pause: true"
+        PGHOME: "{{ PGHOME_OLD }}"
+
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and etcd_error_um001m and inventory_hostname == 'master'
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and etcd_error_um001r and inventory_hostname == 'replica'
+    - debug: msg="{{ update_error_types_breakpoint_msg }}"
+      when: is_recovery_test_mode and etcd_error_um001e and inventory_hostname == 'etcd'
+
+    - name: stop, update version of etcd
+      block:
 
         - name: stop etcd service
           service:
@@ -48,29 +79,50 @@
             state: stopped
 
         - name: loop wait for etcd stopped
-          shell: "systemctl show -p ActiveState etcd | cut -d'=' -f2"
+          systemd:
+            name: etcd
           register: result
-          until: result.stdout == 'inactive'
-          retries: 60
-          delay: 1
+          until: result.status.ActiveState != 'active'
+          retries: 6
+          delay: 10
+
+        - debug: msg="{{ update_error_types_breakpoint_msg }}"
+          when: is_recovery_test_mode and etcd_error_um002m and inventory_hostname == 'master'
+        - debug: msg="{{ update_error_types_breakpoint_msg }}"
+          when: is_recovery_test_mode and etcd_error_um002r and inventory_hostname == 'replica'
+        - debug: msg="{{ update_error_types_breakpoint_msg }}"
+          when: is_recovery_test_mode and etcd_error_um002e and inventory_hostname == 'etcd'
 
         - name: remove etcd package
           yum:
             name: etcd
             state: absent
 
-        - name: remove etcd local data directory
+        - name: remove old directory/files, if exist
           file:
-            path: "{{ etcd_files.data_dir }}"
+            path: "{{ item }}"
             state: absent
+          with_items:
+            - "{{ etcd_files.conf_dir }}"
+            - "{{ etcd_files.data_dir }}"
+            - "{{ etcd_files.service_file }}"
+          become_user: root
 
         - name: register etcd service in systemd
           template:
             src: etcd.service.j2
-            dest: "{{ service_path_dir }}/etcd.service"
-            owner: root
-            group: root
+            dest: "{{ etcd_files.service_file }}"
+            owner: postgres
+            group: postgres
             mode: 0640
+
+        - name: install etcd
+          include_role:
+            name: common
+            tasks_from: install_versioned_package
+          vars:
+            _install_versioned_package_name: etcd
+            _install_versioned_package_version: "{{ versions.etcd }}"
 
         - name: make etcd config from template
           template:
@@ -79,78 +131,24 @@
 
         - name: change permissions for etcd directory
           file:
-            path: "{{ etcd_files.conf_dir }}"
+            path: "{{ item }}"
             recurse: yes
             owner: postgres
             group: postgres
             mode: 0700
-
-        - name: install new version of etcd
-          yum:
-            name: etcd-{{ versions.etcd }}
-            state: latest
-
-        - name: reload systemd and start service
-          systemd:
-            name: etcd
-            state: started
-            daemon_reload: yes
-            enabled: yes
-
-        - name: check that etcd cluster is healthy after update
-          command:
-            cmd:  etcdctl cluster-health
-          register: result
-          until: result.stdout.find("cluster is healthy") != -1
-          retries: 10
-          delay: 1
-
-        - name: wait when patroni insert cache from bootstrap to etcd db
-          uri:
-            url: http://{{ ansible_fqdn }}:{{ ports.patroni }}/cluster
-            timeout: 5
-            return_content: yes
-          register: result
-          until: result.status != -1
-          retries: 5
-          delay: 4
-          when: inventory_hostname != 'etcd'
-
-      become: true
-
-    - name: update auth params for etcd service
-      block:
-
-        - name: add roles and users in etcd
-          command:
-            cmd: '{{ item }}'
           with_items:
-            - "etcdctl user add root:'{{ etcd_root_pass }}'"
-            - "etcdctl user add patronietcd:'{{ patroni_etcd_pass }}'"
-            - "etcdctl -u root:'{{ etcd_root_pass }}' role add patroni"
-            - "etcdctl role grant patroni -path '/service/*' -readwrite"
-            - "etcdctl -u root:'{{ etcd_root_pass }}' user grant patronietcd -roles patroni"
-            - "etcdctl -u root:'{{ etcd_root_pass }}' auth enable"
-          no_log: "{{ nolog }}"
+            - "{{ etcd_files.conf_dir }}"
+            - "{{ etcd_files.data_dir }}"
 
-        - name: check that etcd cluster is healthy after adding roles and users
-          command:
-            cmd:  etcdctl cluster-health
-          register: result
-          until: result.stdout.find("cluster is healthy") != -1
-          retries: 10
-          delay: 1
-          
       become: true
-      when: inventory_hostname == 'master'
 
-    - name: Include_role
+    - name: update bash_profile
       include_role:
         name: common
         tasks_from: bash_profile
       vars:
         component_name: 'etcd'
-    
+
   rescue:
 
     - name: replica updated with error
@@ -164,6 +162,10 @@
             replica: true
           components:
             etcd: true
+          types:
+            etcd:
+              main: true
+      run_once: true
       when: inventory_hostname == 'replica'
 
     - name: master updated with error
@@ -177,6 +179,10 @@
             master: true
           components:
             etcd: true
+          types:
+            etcd:
+              main: true
+      run_once: true
       when: inventory_hostname == 'master'
     
     - name: etcd updated with error
@@ -190,6 +196,10 @@
             etcd: true
           components:
             etcd: true
+          types:
+            etcd:
+              main: true
+      run_once: true
       when: inventory_hostname == 'etcd'
 
   always:

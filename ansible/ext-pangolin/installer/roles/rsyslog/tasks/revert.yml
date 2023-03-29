@@ -1,0 +1,22 @@
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+- name: Restore rsyslog
+  block:
+
+    - name: restore {{ SOC_config_file }} cfg
+      synchronize:
+        src: "{{ backup.rsyslog }}/{{ SOC_config_file }}"
+        dest: "{{ SOC_config_file }}"
+      delegate_to: "{{ inventory_hostname }}"
+
+    - name: restart rsyslog service
+      systemd:
+        name: rsyslog
+        state: restarted
+        daemon_reload: yes
+        enabled: yes
+
+  become: true
+  when: inventory_hostname != 'etcd'

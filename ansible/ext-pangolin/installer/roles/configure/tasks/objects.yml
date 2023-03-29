@@ -148,10 +148,7 @@
 
     when: "schema_name|length > 0 and db_name|length > 0 and tablespace_name|length > 0"
 
-  environment:
-    - PGHOST: "{{ ansible_fqdn }}"
-    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
-    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  environment: "{{ db_connection_args }}"
   become: true
   become_user: postgres
   when: ansible_fqdn == current_master

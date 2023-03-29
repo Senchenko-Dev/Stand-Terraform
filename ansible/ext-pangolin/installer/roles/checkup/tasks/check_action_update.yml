@@ -1,0 +1,215 @@
+- name: Execute checkup if update
+  block:
+
+    - name: sync dictionary for each host
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: false
+
+    - name: check master before update and define ssl_mode
+      import_tasks: define_current_master.yml
+
+    - name: get old env values
+      import_tasks: 'prepare_update.yml'
+
+    - name: redefine ports
+      import_tasks: redefine_variables.yml
+      vars:
+        _redefinevars_pgport: "{{ PGPORT_OLD }}"
+
+    - name: redefine ports
+      import_tasks: redefine_variables.yml
+      vars:
+        _redefinevars_pgbouncer: "{{ PGBOUNCERPORT_OLD }}"
+      when: pgbouncer
+
+    - name: redefine ports
+      import_tasks: redefine_variables.yml
+      vars:
+        _redefinevars_haproxyport: "{{ HAPROXYPORT_OLD }}"
+      when: haproxy
+
+    - name: backup old files
+      include_role:
+        name: common
+        tasks_from: backup_all
+
+    - name: get current password_encryption
+      block:
+
+        - name: define version of current python interpreter
+          set_fact:
+            previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+        - name: set python interpretator
+          set_fact:
+            ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+        - name: request to get the status of password_encryption
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: show password_encryption;
+          register: query_current_password_encryption
+
+        - name: set password_encryption in prev ver of DB
+          set_fact:
+            actual_password_encryption: "{% if query_current_password_encryption.query_result[0].password_encryption == 'on' %}\
+                                              md5\
+                                           {% else %}\
+                                              {{ query_current_password_encryption.query_result[0].password_encryption }}\
+                                           {% endif %}"
+
+        - name: set python interpretator
+          set_fact:
+            ansible_python_interpreter: '{{ previous_python_interpreter }}'
+
+      run_once: true
+      environment: "{{ db_connection_args }}"
+      become: true
+      become_user: postgres
+      when: inventory_hostname == 'master'
+
+    - name: auto megre postgresql.conf, pg_hba.conf, postgres.yml
+      include_role:
+        name: common
+        tasks_from: merge_configs
+
+    - name: check database connect to PG SE (master and replica)
+      shell: '{{ PGHOME_OLD }}/bin/pg_isready -h 127.0.0.1 -p {{ ports.pg }}'
+      become: true
+      become_user: postgres
+      when: inventory_hostname != 'etcd'
+
+    - name: create update disallow file
+      file:
+        path: "{{ update_status_files.disallow_update }}"
+        owner: postgres
+        group: postgres
+        mode: '600'
+        state: touch
+      become: true
+      when: inventory_hostname != 'etcd'
+
+    - name: make dump and calc dump checksums
+      include_role:
+        name: common
+        tasks_from: make_dump_and_calc_dump_checksums.yml
+      vars:
+        _mdacdc_pghome: "{{ PGHOME_OLD }}"
+        _mdacdc_pangolin_version: "{{ pg_current_version }}"
+        _mdacdc_python_venv: "{{ python.postgresql_venv }}"
+      when: "is_compare_checksums \
+             and inventory_hostname == 'master' \
+             and is_recovery_test_mode"
+
+    - name: disable backup_user in database
+      include_role:
+        name: common
+        tasks_from: disable_backup_user
+      vars:
+        _dsblbckpusr_enable: false
+        _dsblscrpits: true
+        _python_postgresql_venv: "{{ python.postgresql_venv }}/bin/python3"
+      when: SRC and inventory_hostname == 'master'
+
+    - name: get current value security administrator and tde
+      block:
+
+        - name: define version of current python interpreter
+          set_fact:
+            previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+        - name: set python interpretator
+          set_fact:
+            ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+        - name: request to get the status of enabling the security administrator and tde
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: SELECT check_admin_protect_is_on(), check_tde_is_on();
+          ignore_errors: yes
+          register: query_current_admin_protect_and_tde
+
+        - name: set variables
+          set_fact:
+            admin_protect: "{% if query_current_admin_protect_and_tde.statusmessage is defined \
+                                  and query_current_admin_protect_and_tde.statusmessage == \"SELECT 1\" %}\
+                                    {{ query_current_admin_protect_and_tde.query_result.0.check_admin_protect_is_on }}\
+                            {% else %}false\
+                            {% endif %}"
+            tde: "{% if query_current_admin_protect_and_tde.statusmessage is defined \
+                                and query_current_admin_protect_and_tde.statusmessage == \"SELECT 1\" %}\
+                                  {{ query_current_admin_protect_and_tde.query_result.0.check_tde_is_on }}\
+                          {% else %}false\
+                          {% endif %}"
+
+        - name: set python interpretator
+          set_fact:
+            ansible_python_interpreter: '{{ previous_python_interpreter }}'
+
+      when: inventory_hostname == 'master'
+      environment: "{{ db_connection_args }}"
+      become: true
+      become_user: postgres
+
+    - name: select database for install pg_profile in update
+      block:
+
+        - name: define version of current python interpreter
+          set_fact:
+            previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+        - name: set python interpretator
+          set_fact:
+            ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+        - name: get list of databases
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: SELECT datname FROM pg_database WHERE datname NOT IN ('postgres', 'template0', 'template1') ORDER BY oid
+          register: _current_dbs
+
+        - name: check exists pg_profile in DBs
+          postgresql_query:
+            query: SELECT extname FROM pg_catalog.pg_extension WHERE extname='pg_profile'
+            db: "{{ item.datname }}"
+            port: "{{ ports.pg }}"
+          register: _pg_profile_db_exists
+          with_items: "{{ _current_dbs.query_result }}"
+
+        - name: define DBs with installed pg_profile
+          set_fact:
+            _pg_profile_installed_dbs: "{{ _pg_profile_installed_dbs|default([]) + [item.item.datname] }}"
+          loop_control:
+            label: DBs with pg_profile
+          loop: "{{ _pg_profile_db_exists.results }}"
+          when: item.rowcount != 0
+
+        - name: get oldest DB by oid for install pg_profile
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: SELECT datname FROM pg_catalog.pg_database WHERE datname NOT IN ('postgres', 'template0', 'template1') ORDER BY oid LIMIT 1
+          register: _pg_profile_db_not_exists
+          when: _pg_profile_installed_dbs is not defined
+
+        - name: set DB for pg_profile in update
+          set_fact:
+            _cfgpgprofile_selected_db_update: "{{ ( _pg_profile_installed_dbs[0] ) | default( _pg_profile_db_not_exists.query_result[0].datname ) }}"
+
+        - name: print warning
+          debug:
+            msg: "{{ update_control_msgs.warnings.pg_profile_db_update | replace('database',_cfgpgprofile_selected_db_update) }}"
+
+        - name: set python interpretator
+          set_fact:
+            ansible_python_interpreter: '{{ previous_python_interpreter }}'
+
+      environment: "{{ db_connection_args }}"
+      become: true
+      become_user: postgres
+      when: pg_profile.is_enable and inventory_hostname == 'master'
+
+  when: "action_type in ['update_major', 'update_minor']"

@@ -30,13 +30,21 @@
       block:
 
         - name: check exists patroni
-          stat: path="{{ PYTHON_VENV_OLD }}/bin/patroni"
+          stat: path="{{ patroni_files.service_file }}"
           register: patroni_exists
 
-        - name: patroni not exists
+        - name: solve update patroni as component or not update
           set_fact:
             patroni: False
           when: not patroni_exists.stat.exists
+
+        - name: check exist patroni files
+          set_fact:
+            is_patroni_exists: "{% if patroni_exists.stat.exists %}\
+                                  True\
+                                {% else %}\
+                                  False\
+                                {% endif %}"
 
     - name: check exists haproxy
       block:
@@ -57,7 +65,7 @@
           stat: path="{{ confd_files.path_dir }}/bin/confd"
           register: confd_exists
 
-        - name: confd not exists
+        - name: set confd
           set_fact:
             confd: False
           when: not confd_exists.stat.exists
@@ -73,6 +81,12 @@
           set_fact:
             documentations: False
           when: not doc_exists.stat.exists
+
+    - name: check exists SRC
+      include_role:
+        name: SRC
+        tasks_from: check_src_exists.yml
+      
 
   become: true
   when: inventory_hostname != 'etcd'
@@ -94,13 +108,19 @@
 - name: Define configuration type
   block:
 
+    - name: initial value for the configuration type
+      set_fact:
+        tag: unknown
+
     - name: configuration type has 'standalone-postgresql-only' name
       set_fact:
         tag: standalone-postgresql-only
       when: "installation_type == 'standalone' \
              and not pgbouncer_exists.stat.exists \
              and not patroni_exists.stat.exists \
-             and not etcd_exists.stat.exists"
+             and not etcd_exists.stat.exists \
+             and not confd_exists.stat.exists \
+             and not haproxy_exists.stat.exists"
 
     - name: configuration type has 'standalone-postgresql-pgbouncer' name
       set_fact:
@@ -108,7 +128,9 @@
       when: "installation_type == 'standalone' \
              and pgbouncer_exists.stat.exists \
              and not patroni_exists.stat.exists \
-             and not etcd_exists.stat.exists"
+             and not etcd_exists.stat.exists \
+             and not confd_exists.stat.exists \
+             and not haproxy_exists.stat.exists"
 
     - name: configuration type has 'standalone-patroni-etcd-pgbouncer' name
       set_fact:
@@ -116,7 +138,9 @@
       when: "installation_type == 'standalone' \
              and pgbouncer_exists.stat.exists \
              and patroni_exists.stat.exists \
-             and etcd_exists.stat.exists"
+             and etcd_exists.stat.exists \
+             and not confd_exists.stat.exists \
+             and not haproxy_exists.stat.exists"
 
     - name: configuration type has 'cluster-patroni-etcd-pgbouncer' name
       set_fact:
@@ -134,6 +158,8 @@
              and pgbouncer_exists.stat.exists \
              and patroni_exists.stat.exists \
              and etcd_exists.stat.exists \
+             and not confd_exists.stat.exists \
              and haproxy_exists.stat.exists"
 
+  run_once: true
   when: inventory_hostname != 'etcd'

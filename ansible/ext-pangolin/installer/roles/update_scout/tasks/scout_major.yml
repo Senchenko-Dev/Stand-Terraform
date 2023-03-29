@@ -1,0 +1,695 @@
+- name: Run scout major scripts 
+  block:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+    - name: Check directory {{ pgdata_new_string.stdout }} and {{ PGBACKUP }} not exist
+      block:
+
+        - name: error_list
+          set_fact:
+            list_error_exist: ["{{ scout_control_msgs.fails.new_pgdata_is_exists }}",
+                              "{{ scout_control_msgs.fails.new_pgbackup_is_exists }}"]
+          no_log: "{{ nolog }}"
+
+        - name: get directory is exists
+          stat:
+            path: "{{ item }}"
+          with_items:
+            - "{{ pgdata_new_string.stdout }}"
+            - "{{ PGBACKUP }}"
+          loop_control:
+            label: "{{ item }}"
+          register: exists_list
+
+        - name: adding an error to the scout_error_list_assert if directory is exists
+          set_fact:
+            scout_error_list_assert: "{{ scout_error_list_assert + [list_error_exist[item.0]] }}"
+          no_log: "{{ nolog }}"
+          run_once: true
+          with_indexed_items:
+            - "{{ exists_list.results }}"
+          loop_control:
+            label: "{{ item.1.item }}"
+          when: item.1.stat.exists
+
+        - name: print message if exist
+          assert:
+            that: not {{ item.stat.exists }}
+            fail_msg: "{{ item.item }} is exist"
+          run_once: true
+          with_items:
+            - "{{ exists_list.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+      become: true
+
+    - name: Check directory /pgdata/{{ pg_major_version }} and /{{ PGBACKUP.split('/').1 }}/{{ pg_major_version }} not exist
+      block:
+
+        - name: list_error
+          set_fact:
+            list_exists: ["{{ scout_control_msgs.fails.new_pgdata_link_is_exists }}",
+                        "{{ scout_control_msgs.fails.new_pgbackup_link_is_exists }}"]
+          no_log: "{{ nolog }}"
+
+        - name: get directory is exists
+          stat:
+            path: "{{ item }}"
+          with_items:
+            - "/pgdata/{{ pg_major_version }}"
+            - "/{{ PGBACKUP.split('/').1 }}/{{ pg_major_version }}"
+          loop_control:
+            label: "{{ item }}"
+          register: directory_exists
+
+        - name: adding an error to the scout_error_list_assert if directory is exists
+          set_fact:
+            scout_error_list_assert: "{{ scout_error_list_assert + [list_exists[item.0]] }}"
+          no_log: "{{ nolog }}"
+          run_once: true
+          with_indexed_items:
+            - "{{ directory_exists.results }}"
+          loop_control:
+            label: "{{ item.1.item }}"
+          when: item.1.stat.exists
+
+        - name: print message if exist
+          assert:
+            that: not {{ item.stat.exists }}
+            fail_msg: "{{ item.item }} is exist"
+          run_once: true
+          with_items:
+            - "{{ directory_exists.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+      become: true
+      when: ( [ pg_current_version, '5.1.0' ] | compare_pg_se_versions )|int == 0
+
+    - name: print warnings if confd exists
+      debug:
+        msg: "{{ scout_control_msgs.warnings.confd_exists }}"
+      when: confd
+
+    - name: print a set of actions required to be performed AFTER the completion of the major DBMS update process
+      debug:
+        msg: "{{ scout_control_msgs.todo_after.actions_after_major_update }}"
+
+    - name: print INFO not_hard_link if pg_upgrade_mode != 'hardlink'
+      debug:
+        msg: "{{ scout_control_msgs.info.not_hard_link }}"
+      when: pg_upgrade_mode != 'hardlink'
+
+    - name: print INFO dbms_is_not_available
+      debug:
+        msg: "{{ scout_control_msgs.info.dbms_is_not_available }}"
+        
+    - name: request to get all databases except template0 and template1
+      postgresql_query:
+        port: "{{ PGPORT_OLD }}"
+        query: SELECT datname FROM pg_database WHERE datname not in ('template0', 'template1');
+      register: query_list_database
+
+    - name: check installed extensions in public schema or in system directory
+      block:
+
+        - name: request extensions that are installed in the public schema or in the system directory
+          postgresql_query:
+            port: "{{ PGPORT_OLD }}"
+            db: "{{ item.datname }}"
+            query: SELECT format('%2$s.%1$s',extname,nspname) extname FROM pg_catalog.pg_extension ex
+                     JOIN pg_namespace ns ON ex.extnamespace =ns.oid
+                   WHERE (ns.nspname='public') OR (ns.nspname SIMILAR TO '(pg_|information_schema)%' AND ex.extrelocatable);
+          register: query_wrong_extension
+          with_items: "{{ query_list_database.query_result }}"
+
+        - name: wrong extensions in public schema or in system directory
+          set_fact:
+            wrong_extension: "{{ query_wrong_extension.results|
+                                 map('dict2items')|list|flatten|
+                                 json_query('[?key==`query_result`].value')|flatten|
+                                 map('dict2items')|list|
+                                 json_query('[*][?key==`extname`].value')|flatten|
+                                 join(', ') }}"
+
+        - name: print if wrong extension
+          debug:
+            msg: "{{ scout_control_msgs.warnings.wrong_extension | replace('extension_name',wrong_extension) }}"
+          when: wrong_extension|length != 0
+
+    - name: check deleted data types
+      block:
+
+        - name: request to get a list of data types that are not supported
+          postgresql_query:
+            port: "{{ PGPORT_OLD }}"
+            db: "{{ item.datname }}"
+            query: SELECT format('%1$s.%2$s(%3$s)',ns.nspname,cl.relname,att.attname) tbl_fld 
+                   FROM pg_attribute att
+                     JOIN pg_type tp ON att.atttypid =tp.oid 
+                     JOIN pg_class cl ON att.attrelid =cl.oid 
+                     JOIN pg_namespace ns ON cl.relnamespace = ns.oid 
+                   WHERE tp.typname IN ('abstime','reltime','tinterval') AND NOT (ns.nspname SIMILAR TO '(pg_|information_schema)%');
+          register: query_wrong_data_type
+          with_items: "{{ query_list_database.query_result }}"
+
+        - name: wrong data type
+          set_fact:
+            wrong_data_type: "{{ query_wrong_data_type.results|
+                                 map('dict2items')|list|flatten|
+                                 json_query('[?key==`query_result`].value')|flatten|
+                                 map('dict2items')|list|
+                                 json_query('[*][?key==`tbl_fld`].value')|flatten|
+                                 join(', ') }}"
+
+        - name: adding an error to the scout_error_list if wrong data type
+          set_fact:
+            scout_error_list: "{{ scout_error_list + [item] }}"
+          no_log: "{{ nolog }}"
+          with_items:
+            - "{{ scout_control_msgs.fails.wrong_data_type | replace('table_name',wrong_data_type) }}"
+          when: wrong_data_type|length != 0
+
+    - name: check unsupported arrays of types from information_schema
+      block:
+
+        - name: request to get an array of data types that are not supported
+          postgresql_query:
+            port: "{{ PGPORT_OLD }}"
+            db: "{{ item.datname }}"
+            query: SELECT format('%1$s.%2$s(%3$s)',ns.nspname,cl.relname,att.attname) tbl_fld
+                   FROM pg_attribute att
+                     JOIN pg_type tp ON att.atttypid =tp.oid
+                     JOIN pg_class cl ON att.attrelid =cl.oid
+                     JOIN pg_namespace ns ON cl.relnamespace = ns.oid
+                   WHERE tp.typname IN ('cardinal_number','character_data','sql_identifier','time_stamp','yes_or_no') 
+                         AND NOT (ns.nspname SIMILAR TO '(pg_|information_schema)%');
+          register: query_unsupported_arrays_of_types
+          with_items: "{{ query_list_database.query_result }}"
+
+        - name: unsupported arrays of types
+          set_fact:
+            unsupported_arrays_of_types: "{{ query_unsupported_arrays_of_types.results|
+                                             map('dict2items')|list|flatten|
+                                             json_query('[?key==`query_result`].value')|flatten|
+                                             map('dict2items')|list|
+                                             json_query('[*][?key==`tbl_fld`].value')|flatten|
+                                             join(', ') }}"
+
+        - name: adding an error to the scout_error_list if unsupported arrays of types
+          set_fact:
+            scout_error_list: "{{ scout_error_list + [item] }}"
+          no_log: "{{ nolog }}"
+          with_items:
+            - "{{ scout_control_msgs.fails.unsupported_arrays_of_types | replace('table_name',unsupported_arrays_of_types) }}"
+          when: unsupported_arrays_of_types|length != 0
+
+    - name: checking for procedures using Python 2.x
+      block:
+
+        - name: request for procedures using Python 2.x
+          postgresql_query:
+            port: "{{ PGPORT_OLD }}"
+            db: "{{ item.datname }}"
+            query: SELECT format('%1$s.%2$s',ns.nspname,pp.proname) pr_name
+                   FROM pg_proc pp
+                     JOIN pg_catalog.pg_language pl ON pp.prolang =pl.oid
+                     JOIN pg_namespace ns ON pp.pronamespace =ns.oid AND pl.lanname SIMILAR TO 'plpython2?u%';
+          register: query_wrong_procedure_python2
+          with_items: "{{ query_list_database.query_result }}"
+
+        - name: wrong procedures using Python 2.x
+          set_fact:
+            wrong_procedure_python2: "{{ query_wrong_procedure_python2.results|
+                                         map('dict2items')|list|flatten|
+                                         json_query('[?key==`query_result`].value')|flatten|
+                                         map('dict2items')|list|
+                                         json_query('[*][?key==`pr_name`].value')|flatten|
+                                         join(', ') }}"
+
+        - name: adding an error to the scout_error_list if wrong procedures using Python 2.x
+          set_fact:
+            scout_error_list: "{{ scout_error_list + [item] }}"
+          no_log: "{{ nolog }}"
+          with_items:
+            - "{{ scout_control_msgs.fails.wrong_procedure_python2 | replace('procedure_name',wrong_procedure_python2) }}"
+          when: wrong_procedure_python2|length != 0
+
+    - name: define name package
+      set_fact:
+        pg_package_name: "{{ postgresql_package_file.split('-').0 }}-\
+                          {{ postgresql_package_file.split('-').1 }}-\
+                          {{ postgresql_package_file.split('-').2 }}-\
+                          {{ postgresql_package_file.split('-').3 }}"
+
+    - name: check installed new package and check folder scout_temp_data
+      block:
+
+        - name: check package {{ pg_package_name }} installed
+          block:
+
+            - name: adding an error to the scout_error_list if package {{ pg_package_name }} installed
+              set_fact:
+                scout_error_list: "{{ scout_error_list + [item] }}"
+              no_log: "{{ nolog }}"
+              with_items:
+                - "{{ scout_control_msgs.fails.rpm_package_and_version_found | replace('package_name',postgresql_package_file) }}"
+              when: "ansible_facts.packages[pg_package_name][0].version == pg_version"
+
+          when: "pg_package_name in ansible_facts.packages"
+
+        - name: remove directory {{ local_backup_path }}/scout_temp_data exists, if exist
+          file:
+            path: "{{ local_backup_path }}/scout_temp_data"
+            state: absent
+          become_user: root
+
+        - name: check if {{ local_backup_path }}/scout_temp_data exists
+          stat:
+            path: "{{ local_backup_path }}/scout_temp_data"
+          register: scout_temp_data_exists
+
+        - name: adding an error to the scout_error_list if {{ local_backup_path }}/scout_temp_data exists
+          set_fact:
+            scout_error_list: "{{ scout_error_list + [item] }}"
+          no_log: "{{ nolog }}"
+          with_items:
+            - "{{ scout_control_msgs.fails.scout_temp_data_path_is_exists | replace('local_backup_path',local_backup_path) }}"
+          when: scout_temp_data_exists.stat.exists
+
+    - name: check pg_upgrade
+      block:
+
+        - name: set pg_scout_log_link
+          set_fact:
+            pg_scout_log_link: "{{ local_backup_path }}/pg_scout_log_{{ ansible_date_time.date }}-T{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}"
+
+        - name: create scout_temp_data dir and scout_temp_data/install, scout_temp_data/pgdata
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0700'
+            owner: 'postgres'
+            group: 'postgres'
+            recurse: yes
+          with_items:
+            - "{{ local_backup_path }}/scout_temp_data"
+            - "{{ local_backup_path }}/scout_temp_data/install"
+            - "{{ local_backup_path }}/scout_temp_data/pgdata"
+            - "{{ pg_scout_log_link }}"
+            - "{{ pg_scout_log_link }}/pg_upgrade"
+            - "{{ pg_scout_log_link }}/config_auto_merge"
+            - "{{ pg_scout_log_link }}/backup_current_configs"
+
+        - name: copy rpm file {{ postgresql_package_file }} to {{ local_backup_path }}/scout_temp_data/install
+          copy:
+            src: "{{ local_distr_path }}/{{ postgresql_package_file }}"
+            dest: "{{ local_backup_path }}/scout_temp_data/install"
+            owner: postgres
+            group: postgres
+
+        - name: copy backup current configs to {{ pg_scout_log_link }}/backup_current_configs
+          copy:
+            src: "{{ item.src }}"
+            dest: "{{ item.dest }}"
+            owner: postgres
+            group: postgres
+            remote_src: yes
+          with_items:
+            - { src: '{{ PGDATA_OLD }}/pg_hba.conf',          dest: '{{ pg_scout_log_link }}/backup_current_configs/pg_hba.conf' }
+            - { src: '{{ PGDATA_OLD }}/postgresql.conf',      dest: '{{ pg_scout_log_link }}/backup_current_configs/postgresql.conf' }
+
+        - name: install package to {{ local_backup_path }}/scout_temp_data/install
+          shell: "sudo rpm -ivh --noscripts --prefix={{ local_backup_path }}/scout_temp_data/install {{ local_backup_path }}/scout_temp_data/install/{{ postgresql_package_file }}"
+          become_user: root
+          when: ansible_os_family == "RedHat" or ansible_os_family == "Altlinux"
+
+        - name: initializate new standalone database for pg_upgrade
+          shell: "{{ local_backup_path }}/scout_temp_data/install/bin/pg_ctl -D {{ local_backup_path }}/scout_temp_data/pgdata initdb -o --data-checksums"
+          environment:
+            PG_PLUGINS_PATH: "{{ local_backup_path }}/scout_temp_data/install/lib"
+            LD_LIBRARY_PATH: "{{ local_backup_path }}/scout_temp_data/install/lib"
+
+        - name: merge configs and setting parameters in configuration files for {{ local_backup_path }}/scout_temp_data/pgdata/postgresql.conf and {{ local_backup_path }}/scout_temp_data/pgdata/pg_hba.conf
+          block:
+
+            - name: run merge configs
+              block:
+
+                - name: generate random patroni_etcd_pass, etcd_root_pass passwords
+                  block:
+
+                    - name: generate passwords for patroni_etcd_pass, etcd_root_pass
+                      password_generator:
+                        ANSIBLE_MODULE_ARGS:
+                          min_length: '{{ password_policy_params.min_length }}'
+                          alpha_numeric: '{{ password_policy_params.alpha_numeric }}'
+                          min_alpha_chars: '{{ password_policy_params.min_alpha_chars }}'
+                          min_special_chars: '{{ password_policy_params.min_special_chars }}'
+                          min_uppercase: '{{ password_policy_params.min_uppercase }}'
+                          min_lowercase: '{{ password_policy_params.min_lowercase }}'
+                          max_rpt_chars: '{{ password_policy_params.max_rpt_chars }}'
+                      register: new_pass
+                      environment:
+                        - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
+                      loop: [patroni_etcd_pass, etcd_root_pass]
+
+                    - name: save passwords for patroni_etcd_pass and etcd_root_pass
+                      set_fact:
+                        patroni_etcd_pass: '{{ new_pass.results[0].message }}'
+                        etcd_root_pass: '{{ new_pass.results[1].message }}'
+                      
+                  no_log: "{{ nolog }}"
+                  when: patroni
+
+                - name: redefine merge_cfg_root_dir
+                  set_fact:
+                    current_merge_cfg_root_dir: "{{ merge_cfg_root_dir }}"
+                    merge_cfg_root_dir: "{{ pg_scout_log_link }}/config_auto_merge"
+
+                - name: update merge for scout
+                  set_fact:
+                    merge_cfg: "{{ merge_cfg | combine(update_item, recursive=true) }}"
+                  vars:
+                    update_item:
+                        old_cfg_patroni: "{{ patroni_files.conf_dir }}"
+                        old_cfg_pgse: "{{ PGDATA_OLD }}"
+                        old_cfg_pgbouncer: "{{ pgbouncer_files.conf_dir }}"
+                        old_cfg_confd: "{{ confd_files.conf_dir }}"
+
+                - name: auto megre postgresql.conf, pg_hba.conf, postgres.yml
+                  include_role:
+                    name: common
+                    tasks_from: merge_configs
+
+              always:
+
+                - name: redefine merge_cfg_root_dir
+                  set_fact:
+                    merge_cfg_root_dir: "{{ current_merge_cfg_root_dir }}"
+
+            - name: copying merge configs to {{ local_backup_path }}/scout_temp_data/pgdata
+              copy:
+                src: "{{ item.src }}"
+                dest: "{{ item.dest }}"
+                owner: postgres
+                group: postgres
+                remote_src: yes
+              with_items:
+                - { src: '{{ pg_scout_log_link }}/config_auto_merge/result_pgse/pg_hba.conf',     dest: '{{ local_backup_path }}/scout_temp_data/pgdata/pg_hba.conf' }
+                - { src: '{{ pg_scout_log_link }}/config_auto_merge/result_pgse/postgresql.conf', dest: '{{ local_backup_path }}/scout_temp_data/pgdata/postgresql.conf' }
+
+            - name: adding the necessary parameters in {{ local_backup_path }}/scout_temp_data/pgdata/pg_hba.conf
+              lineinfile:
+                path:         "{{ local_backup_path }}/scout_temp_data/pgdata/pg_hba.conf"
+                line:         "{{ item }}"
+                state:        present
+                insertbefore: BOF
+              with_items:
+                - local all postgres trust
+                - host all all 127.0.0.1/32 trust
+
+            - name: deleting parameters that we will set in {{ local_backup_path }}/scout_temp_data/pgdata/postgresql.conf
+              lineinfile:
+                path:   "{{ local_backup_path }}/scout_temp_data/pgdata/postgresql.conf"
+                regexp: "{{ item }}"
+                state:   absent
+              with_items:
+                - enabled_extra_auth_methods
+                - password_policy.allow_hashed_password
+                - pg_plugins_path
+                - hba_file
+                - ident_file
+                - log_directory
+                - include
+                - ^unix_socket_directories
+                - ^port
+                - ^authentication_port
+                - ^synchronous_commit
+                - ^synchronous_standby_names
+
+            - name: adding the necessary parameters in {{ local_backup_path }}/scout_temp_data/pgdata/postgresql.conf
+              lineinfile:
+                path:        "{{ local_backup_path }}/scout_temp_data/pgdata/postgresql.conf"
+                line:        "{{ item }}"
+                state:       present
+                insertafter: EOF
+              with_items:
+                - enabled_extra_auth_methods = 'trust'
+                - password_policy.allow_hashed_password = 'on'
+                - pg_plugins_path = '{{ local_backup_path }}/scout_temp_data/install/lib'
+                - hba_file = '{{ local_backup_path }}/scout_temp_data/pgdata/pg_hba.conf'
+                - ident_file = '{{ local_backup_path }}/scout_temp_data/pgdata/pg_ident.conf'
+                - log_directory = '{{ pg_scout_log_link }}'
+                - port = '50433'
+                - authentication_port = '50544'
+                - unix_socket_directories = '{{ local_backup_path }}/scout_temp_data/pgdata/'
+
+        - name: setting parameters in configuration files for {{ PGDATA_OLD }}
+          block:
+
+            - name: adding the necessary parameters in {{ PGDATA_OLD }}/pg_hba.conf
+              lineinfile:
+                path:         "{{ PGDATA_OLD }}/pg_hba.conf"
+                line:         "local all postgres trust"
+                state:        present
+                insertbefore: BOF
+
+            - name: adding the necessary parameters in {{ PGDATA_OLD }}/postgresql.conf if version >= 5.1.0
+              block:
+
+                - name: request enabled_extra_auth_methods in current db
+                  postgresql_query:
+                    port: "{{ PGPORT_OLD }}"
+                    query: SHOW enabled_extra_auth_methods;
+                  register: query_current_enabled_extra_auth_methods
+
+                - name: set current_enabled_extra_auth_methods
+                  set_fact:
+                    current_enabled_extra_auth_methods: "{{ query_current_enabled_extra_auth_methods.query_result.0.enabled_extra_auth_methods }}"
+
+                - name: set new_current_enabled_extra_auth_methods
+                  set_fact:
+                    new_current_enabled_extra_auth_methods: "{{ current_enabled_extra_auth_methods }},trust"
+
+                - name: replace enabled_extra_auth_methods in {{ PGDATA_OLD }}/postgresql.conf
+                  lineinfile:
+                    path: "{{ PGDATA_OLD }}/postgresql.conf"
+                    regexp: "enabled_extra_auth_methods"
+                    line: "enabled_extra_auth_methods = '{{ new_current_enabled_extra_auth_methods }}'"
+
+              when: ( [ pg_current_version, '5.1.0' ] | compare_pg_se_versions )|int != 0
+
+            - name: send reload command to postgresql
+              shell: "{{ PGHOME_OLD }}/bin/pg_ctl reload -D {{ PGDATA_OLD }}"
+
+            - name: loop wait for pgsql started
+              shell: '{{ PGHOME_OLD }}/bin/pg_isready -h 127.0.0.1 -p {{ PGPORT_OLD }}'
+              register: result
+              until: result.stdout.find("accepting connections") != -1
+              retries: 60
+              delay: 1
+
+        - name: get max_worker_process from new cfg
+          reciter:
+            ANSIBLE_MODULE_ARGS:
+              src: "{{ local_backup_path }}/scout_temp_data/pgdata/postgresql.conf"
+              action: get
+              parameter: max_worker_processes
+          register: _sctmjr_max_worker_processes
+          environment:
+            - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
+
+        - name: check that free number of bgworkers > 0
+          set_fact:
+            scout_error_list: "{{ scout_error_list + [item] }}"
+          no_log: "{{ nolog }}"
+          with_items:
+            - "{{ scout_control_msgs.fails.max_worker_processes_small_value }}"
+          when: _sctmjr_max_worker_processes.message|int <= max_used_worker_process|int
+
+        - name: run pg_upgrade check
+          shell: "cd {{ pg_scout_log_link }}/pg_upgrade; \
+                  {{ local_backup_path }}/scout_temp_data/install/bin/pg_upgrade -c \
+                                                                                 -b {{ PGHOME_OLD }}/bin \
+                                                                                 -B {{ local_backup_path }}/scout_temp_data/install/bin \
+                                                                                 -d {{ PGDATA_OLD }} \
+                                                                                 -D {{ local_backup_path }}/scout_temp_data/pgdata \
+                                                                                 -p {{ PGPORT_OLD }} \
+                                                                                 -P 50433 \
+                                                                                 -r \
+                                                                                 -j {% if ansible_processor_vcpus >= 4 %}\
+                                                                                    {{ ansible_processor_vcpus - 2 }}\
+                                                                                    {% else %}1{% endif %}" # -v \
+          register: stdout_pg_upgrade_check
+          environment:
+            PGHOST: "127.0.0.1"
+            LD_LIBRARY_PATH: "{{ local_backup_path }}/scout_temp_data/install/lib"
+          ignore_errors: yes
+          no_log: "{{ nolog }}"
+
+        - name: adding an error to the scout_error_list if pg_upgrade_check failed
+          set_fact:
+            scout_error_list: "{{ scout_error_list + [item] }}"
+          no_log: "{{ nolog }}"
+          with_items:
+            - "{{ scout_control_msgs.fails.upgrade_check_failed  \
+               | replace('pg_scout_log_link',pg_scout_log_link + '/pg_upgrade') }}"
+          when: stdout_pg_upgrade_check.failed
+
+        - name: journal pg_upgrade
+          include_role:
+            name: postgresql
+            tasks_from: pg_upgrade_log_print
+          vars:
+             _pgupgrdlogprnt_log_dir: "{{ pg_scout_log_link }}/pg_upgrade"
+          when: is_print_pg_upgrade_logs
+
+        - name: check pg_dumpall --schema-only --no-tablespaces --no-privileges
+          block:
+
+            - name: creating a schema dump of the current database pg_dumpall --schema-only
+              shell: "{{ PGHOME_OLD }}/bin/pg_dumpall --schema-only --no-tablespaces --no-privileges --file={{ pg_scout_log_link }}/currentdb.sql"
+              environment:
+                LD_LIBRARY_PATH: "{{ PGHOME_OLD }}/lib"
+                PGPORT: "{{ PGPORT_OLD }}"
+                PGHOST: "{{ ansible_fqdn }}"
+
+            - name: removing false errors from the scheme
+              lineinfile:
+                path: "{{ pg_scout_log_link }}/currentdb.sql"
+                regexp: "{{ item }}"
+                state: absent
+              with_items:
+                - "{{ false_error_filter_for_data_schema_default }}"
+                - "{{ false_error_filter_for_data_schema  }}"
+
+            - name: start new standalone database
+              block:
+
+                - name: start new standalone database
+                  shell: "{{ local_backup_path }}/scout_temp_data/install/bin/pg_ctl -D {{ local_backup_path }}/scout_temp_data/pgdata start"
+                  register: stdout_start_new_db
+                  environment:
+                    LD_LIBRARY_PATH: "{{ local_backup_path }}/scout_temp_data/install/lib"
+                    PGPORT: 50433
+                    PGHOST: "127.0.0.1"
+
+              rescue:
+
+                - name: adding an error to the scout_error_list_assert if an unexpected error occurs when starting a new database
+                  set_fact:
+                    scout_error_list_assert: "{{ scout_error_list_assert + [item] }}"
+                  no_log: "{{ nolog }}"
+                  with_items:
+                    - "{{ scout_control_msgs.fails.unexpected_start_new_db | replace('list_errors',stdout_start_new_db.stdout) }}"
+                  when: stdout_start_new_db.stdout
+
+                - name: print message if an unexpected error occurs when starting a new database
+                  assert:
+                    that: not stdout_start_new_db.stdout
+                    fail_msg: "an unexpected error occurs when starting a new database"
+
+            - name: upload schema to a new database
+              block:
+
+                - name: upload schema to a new database
+                  shell: "{{ local_backup_path }}/scout_temp_data/install/bin/psql -f {{ pg_scout_log_link }}/currentdb.sql -o {{ pg_scout_log_link }}/stdout.log"
+                  register: stdout_upload_schema_new_db
+                  environment:
+                    LD_LIBRARY_PATH: "{{ local_backup_path }}/scout_temp_data/install/lib"
+                    PGPORT: 50433
+                    PGHOST: "127.0.0.1"
+
+                - name: adding an error to the scout_error_list if stdout_upload_schema_new_db failed
+                  set_fact:
+                    scout_error_list: "{{ scout_error_list + [item] }}"
+                  no_log: "{{ nolog }}"
+                  with_items:
+                    - "{{ scout_control_msgs.fails.failed_upload_schema_new_db \
+                         | replace('ansible_fqdn',ansible_fqdn)
+                         | replace('pg_scout_log_link',pg_scout_log_link)
+                         | replace('list_errors',stdout_upload_schema_new_db.stderr_lines)}}"
+                  when: stdout_upload_schema_new_db.stderr_lines|length != 0
+
+              rescue:
+
+                - name: adding an error to the scout_error_list_assert if an unexpected error occurs when performing upload schema to a new database
+                  set_fact:
+                    scout_error_list_assert: "{{ scout_error_list_assert + [item] }}"
+                  no_log: "{{ nolog }}"
+                  with_items:
+                    - "{{ scout_control_msgs.fails.unexpected_upload_schema_new_db | replace('list_errors',stdout_upload_schema_new_db.stderr_lines) }}"
+                  when: stdout_upload_schema_new_db.stderr_lines
+
+                - name: print message if an unexpected error occurs when performing upload schema to a new database
+                  assert:
+                    that: not stdout_upload_schema_new_db.stderr_lines
+                    fail_msg: "an unexpected error occurs when performing upload schema to a new database"
+
+          always:
+
+            - name: stop new standalone database
+              shell: "{{ local_backup_path }}/scout_temp_data/install/bin/pg_ctl -D {{ local_backup_path }}/scout_temp_data/pgdata stop"
+              environment:
+                LD_LIBRARY_PATH: "{{ local_backup_path }}/scout_temp_data/install/lib"
+                PGPORT: 50433
+                PGHOST: "127.0.0.1"
+              ignore_errors: yes
+
+      always:
+
+        - name: restoring the pg_hba.conf file from the backup for the current database
+          copy:
+            src: "{{ pg_scout_log_link }}/backup_current_configs/pg_hba.conf"
+            dest: "{{ PGDATA_OLD }}/pg_hba.conf"
+            owner: postgres
+            group: postgres
+            remote_src: yes
+
+        - name: restoring the postgresql.conf file from the backup for the current database
+          copy:
+            src: "{{ pg_scout_log_link }}/backup_current_configs/postgresql.conf"
+            dest: "{{ PGDATA_OLD }}/postgresql.conf"
+            owner: postgres
+            group: postgres
+            remote_src: yes
+          when: ( [ pg_current_version, '5.1.0' ] | compare_pg_se_versions )|int != 0
+
+        - name: remove package {{ postgresql_package_file }}
+          shell: "sudo rpm -e {{ pg_package_name }}-{{ pg_version }}"
+          become_user: root
+          when: ansible_os_family == "RedHat" or ansible_os_family == "Altlinux"
+
+        - name: remove {{ local_backup_path }}/scout_temp_data, if exist
+          file:
+            path: "{{ local_backup_path }}/scout_temp_data"
+            state: absent
+
+        - name: send reload command to postgresql
+          shell: "{{ PGHOME_OLD }}/bin/pg_ctl reload -D {{ PGDATA_OLD }}"
+
+        - name: loop wait for pgsql started
+          shell: '{{ PGHOME_OLD }}/bin/pg_isready -h 127.0.0.1 -p {{ PGPORT_OLD }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 60
+          delay: 1
+
+      when: "not scout_temp_data_exists.stat.exists \
+             and (pg_package_name not in ansible_facts.packages or ansible_facts.packages[pg_package_name][0].version != pg_version)"
+
+  always:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+  become: true
+  become_user: postgres
+  environment: "{{ db_connection_args }}"
+  when: ansible_fqdn == current_master

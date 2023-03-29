@@ -1,0 +1,11 @@
+list_versions_to_update: ["4.3.0", "4.3.1", "4.3.2", "4.4.0", "4.4.1", "4.5.0", "4.6.0", "4.6.1", "5.1.0", "5.2.0", "5.2.1"]
+
+update_version_matrix: {
+  "table":[
+  {"to": "5.2.2", "from": ["4.3.0", "4.3.1", "4.3.2", "4.4.0", "4.4.1", "4.5.0", "4.6.0", "4.6.1", "5.1.0"], "admin_protection": false, "tde": false, "update_type": "update_major", "pg_upgrade_mode": "hardlink"},
+  {"to": "5.2.2", "from": ["4.3.0", "4.3.1", "4.3.2", "4.4.0", "4.4.1", "4.5.0", "4.6.0", "4.6.1", "5.1.0", "5.2.0", "5.2.1"], "admin_protection": true, "tde": false, "update_type": "unsupported", "pg_upgrade_mode": "not defined"},
+  {"to": "5.2.2", "from": ["4.3.0", "4.3.1", "4.3.2", "4.4.0", "4.4.1", "4.5.0", "4.6.0", "4.6.1", "5.1.0", "5.2.0", "5.2.1"], "admin_protection": true, "tde": true, "update_type": "unsupported", "pg_upgrade_mode": "not defined"},
+  {"to": "5.2.2", "from": ["4.3.0", "4.3.1", "4.3.2", "4.4.0", "4.4.1", "4.5.0", "4.6.0", "4.6.1", "5.1.0", "5.2.0", "5.2.1"], "admin_protection": false, "tde": true, "update_type": "unsupported", "pg_upgrade_mode": "not defined"},
+  {"to": "5.2.2", "from": ["5.2.0", "5.2.1"], "admin_protection": false, "tde": false, "update_type": "update_minor", "pg_upgrade_mode": "not defined"},
+          ]
+}

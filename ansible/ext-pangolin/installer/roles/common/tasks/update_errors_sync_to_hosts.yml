@@ -31,14 +31,41 @@
             pgbouncer: "{{ hostvars[host_name].update_errors.components.pgbouncer }}"
             haproxy: "{{ hostvars[host_name].update_errors.components.haproxy }}"
             configuration: "{{ hostvars[host_name].update_errors.components.configuration }}"
+            src: "{{ hostvars[host_name].update_errors.components.src }}"
+            checkup: "{{ hostvars[host_name].update_errors.components.checkup }}"
+            rsyslog: "{{ hostvars[host_name].update_errors.components.rsyslog }}"
+            pg_auth_reencrypt: "{{ hostvars[host_name].update_errors.components.pg_auth_reencrypt }}"
+            finally: "{{ hostvars[host_name].update_errors.components.finally }}"
+            tests: "{{ hostvars[host_name].update_errors.components.tests }}"
           types:
             pg:
-              not_started_db: "{{ hostvars[host_name].update_errors.types.pg.not_started_db }}"
-              started_db: "{{ hostvars[host_name].update_errors.types.pg.started_db }}"
-              role_switched: "{{ hostvars[host_name].update_errors.types.pg.role_switched }}"
-              bootstrap: "{{ hostvars[host_name].update_errors.types.pg.bootstrap }}"
-              remove_pgaudit: "{{ hostvars[host_name].update_errors.types.pg.remove_pgaudit }}"
-              
+              minor_before_first_db_started: "{{ hostvars[host_name].update_errors.types.pg.minor_before_first_db_started }}"
+              minor_before_bin_updated: "{{ hostvars[host_name].update_errors.types.pg.minor_before_bin_updated }}"
+              minor_after_first_db_started: "{{ hostvars[host_name].update_errors.types.pg.minor_after_first_db_started }}"
+              minor_before_first_switchover: "{{ hostvars[host_name].update_errors.types.pg.minor_before_first_switchover }}"
+              minor_before_second_switchover: "{{ hostvars[host_name].update_errors.types.pg.minor_before_second_switchover }}"
+              minor_bootstrap: "{{ hostvars[host_name].update_errors.types.pg.minor_bootstrap }}"
+              major_pre: "{{ hostvars[host_name].update_errors.types.pg.major_pre }}"
+              major_main_migrate_master_db: "{{ hostvars[host_name].update_errors.types.pg.major_main_migrate_master_db }}"
+              major_main_migrate_replica_db: "{{ hostvars[host_name].update_errors.types.pg.major_main_migrate_replica_db }}"
+              major_main_start_after_migrate_db: "{{ hostvars[host_name].update_errors.types.pg.major_main_start_after_migrate_db }}"
+              major_post: "{{ hostvars[host_name].update_errors.types.pg.major_post }}"
+            patroni:
+              main: "{{ hostvars[host_name].update_errors.types.patroni.main }}"
+              finally: "{{ hostvars[host_name].update_errors.types.patroni.finally }}"
+            etcd:
+              main: "{{ hostvars[host_name].update_errors.types.etcd.main }}"
+              finally: "{{ hostvars[host_name].update_errors.types.etcd.finally }}"
+            src:
+              install_pg_probackup: "{{ hostvars[host_name].update_errors.types.src.install_pg_probackup }}"
+              main: "{{ hostvars[host_name].update_errors.types.src.main }}"
+            configuration:
+              main: "{{ hostvars[host_name].update_errors.types.configuration.main }}"
+              finally: "{{ hostvars[host_name].update_errors.types.configuration.finally }}"
+            pg_auth_reencrypt:
+              check_and_stop: "{{ hostvars[host_name].update_errors.types.pg_auth_reencrypt.check_and_stop }}"
+              finally: "{{ hostvars[host_name].update_errors.types.pg_auth_reencrypt.finally }}"
+
   run_once: true
 
   # TODO добавить синхронизацию для статуса обновления: patroni_is_updated: true/false и тд

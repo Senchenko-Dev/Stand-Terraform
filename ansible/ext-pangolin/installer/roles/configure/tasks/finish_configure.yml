@@ -1,0 +1,320 @@
+- name: Set default PGHOME
+  set_fact: 
+    _finishcfg_pghome: "{{ '' | default('{{ PGHOME }}', true) }}"
+  when: "_finishcfg_pghome is undefined or _finishcfg_pghome in ['null','']"
+
+- name: Finish configure
+  block:
+
+  - name: update patroni user and create/update encrypt space for patroni user
+    block:
+
+      - name: prepare patroni user
+        include_role:
+          name: postgresql
+          tasks_from: add_and_configure_db_user_with_enc_space.yml
+        vars:
+          _addcfgdbuserenc_pghome: "{{ _finishcfg_pghome }}"
+          _addcfgdbuserenc_user: patroni
+          _addcfgdbuserenc_dbnames: ["postgres", "replication"]
+          _addcfgdbuserenc_privs: 'LOGIN SUPERUSER REPLICATION NOINHERIT'
+          _addcfgdbuserenc_input_user_pass: '{% if patroni_user_pass is defined %}{{ patroni_user_pass }}{% endif %}'
+
+      - name: save patroni user pass
+        set_fact:
+          patroni_user_pass: "{{ _addcfgdbuserenc_output_user_pass }}"
+        no_log: "{{ nolog }}"
+        run_once: true
+        when: patroni_user_pass is undefined
+
+      - name: set user authentication to patroni
+        block:
+
+          - name: remove ssl params for patroni authentication
+            lineinfile:
+              path: "{{ patroni_files.conf_dir }}/postgres.yml"
+              state: absent
+              regexp: "{{ item.rexexp }}"
+            loop:
+              - { rexexp: ".*sslmode:.*"}
+              - { rexexp: ".*sslkey:.*$" }
+              - { rexexp: ".*sslcert:.*$" }
+              - { rexexp: ".*sslrootcert:.*$" }
+
+          - name: set user authentication to patroni
+            reciter:
+              ANSIBLE_MODULE_ARGS:
+                src: "{{ patroni_files.conf_dir }}/postgres.yml"
+                action: set
+                parameter: "{{ item.path }}"
+                inner_parameter: "{{ item.key }}"
+                new_val: "{{ item.val }}"
+            environment:
+              - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
+            loop:
+              - { path: "postgresql.authentication.replication", key: "username", val: "patroni" }
+              - { path: "postgresql.authentication.replication", key: "database", val: "replication" }
+              - { path: "postgresql.authentication.superuser",   key: "username", val: "patroni" }
+
+        become: true
+        become_user: postgres
+        when: "'update' in action_type and ([ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0"
+
+    when: inventory_hostname != 'etcd' and is_patroni_exists
+
+  - name: create or update encrypt space for pg_backup
+    block:
+
+      - name: set python interpretator
+        set_fact:
+          ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+      - name: check exist pg_probackup
+        postgresql_query:
+          port: "{{ ports.pg }}"
+          query: SELECT pg_roles.rolname FROM pg_roles WHERE rolname='backup_user'
+        register: is_backup_user
+
+      - name: sync pg_backup_user_passwd between hosts
+        set_fact:
+          pg_backup_user_passwd: "{{ pg_backup_user_passwd }}"
+        no_log: "{{ nolog }}"
+        run_once: true
+        when: is_backup_user.rowcount|int != 0
+
+      - name: create encrypt space for backup_user
+        include_role:
+          name: postgresql
+          tasks_from: create_encrypt_space
+        vars:
+          username: "backup_user"
+          database: "postgres"
+          password: "{{ pg_backup_user_passwd }}"
+          address:  "{{ item }}"
+          curr_pghome: "{{ _finishcfg_pghome }}"
+        with_items:
+          - "{{ hostvars['master'].ansible_fqdn }}"
+          - "{{ hostvars['replica'].ansible_fqdn }}"
+          - "{{ hostvars['master'].ansible_default_ipv4.address }}"
+          - "{{ hostvars['replica'].ansible_default_ipv4.address }}"
+          - "localhost"
+          - "127.0.0.1"
+        no_log: "{{ nolog }}"
+        when: "installation_type == 'cluster' and is_backup_user.rowcount|int != 0"
+
+      - name: create encrypt space for backup_user
+        include_role:
+          name: postgresql
+          tasks_from: create_encrypt_space
+        vars:
+          username: "backup_user"
+          database: "postgres"
+          password: "{{ pg_backup_user_passwd }}"
+          address:  "{{ item }}"
+          curr_pghome: "{{ _finishcfg_pghome }}"
+        with_items:
+          - "{{ hostvars['master'].ansible_fqdn }}"
+          - "{{ hostvars['master'].ansible_default_ipv4.address }}"
+          - "localhost"
+          - "127.0.0.1"
+        no_log: "{{ nolog }}"
+        when: "installation_type == 'standalone' and is_backup_user.rowcount|int != 0"
+
+    environment: "{{ db_connection_args }}"
+    become: true
+    become_user: postgres
+    when: inventory_hostname != 'etcd'
+
+  - name: create encrypt space and db user profile_tuz on replica
+    include_role:
+      name: postgresql
+      tasks_from: add_and_configure_db_user_with_enc_space.yml
+    vars:
+      _addcfgdbuserenc_pghome: "{{ _finishcfg_pghome }}"
+      _addcfgdbuserenc_user: profile_tuz
+      _addcfgdbuserenc_dbnames: ["postgres", "{{ _cfgpgprofile_install_db }}"]
+      _addcfgdbuserenc_input_user_pass: '{{ pg_profile_tuz_pass }}'
+      _addcfgdbuserenc_privs: 'NOINHERIT'
+    when: inventory_hostname == 'replica' and pg_profile.is_enable
+
+  - name: import enable LDAP TLS
+    include_role:
+      name: tls
+      tasks_from: enable_tls.yml
+    when: action_type == 'install' and ldap_tls is defined and ldap_tls
+
+  - name: encrypt passwords for ldap, patroni api and etcd
+    block:
+
+      - name: encrypt passwords for ldap
+        block:
+
+        - name: delete newline symbol from tuz_password
+          set_fact:
+            ldap_bind_tuz_password: "{{ ldap_bind_tuz_password | replace('\n', '')}}"
+
+        - name: encrypt ldap passwords
+          include_role:
+            name: postgresql
+            tasks_from: create_encrypt_password
+          vars:
+            password: "{{ ldap_bind_tuz_password }}"
+
+        - name: update ldap password
+          set_fact:
+            encpassword_ldap: "{{ _createencryptpass_password[0:-1] }}"
+
+        - name: define config with pg_hba
+          set_fact:
+            _finish_cfg_name: "{% if is_patroni_exists %}\
+                                      {{ patroni_files.conf_dir }}/postgres.yml\
+                                    {% else %}\
+                                      {{ PGDATA }}/pg_hba.conf\
+                                    {% endif %}"
+
+        - name: change pg_hba ldap password
+          shell: "sed -i '/{{ ldap_bind_tuz_name }}/s@ldapbindpasswd=.*[\\w+/]* @ldapbindpasswd=\"{{ encpassword_ldap }}\" @g' {{ _finish_cfg_name }}"
+          become_user: postgres
+          when: ldap_bind_tuz_name is defined
+
+        when: ldap_bind_tuz_password is defined
+
+      - name: encrypt passwords for patroni api and etcd
+        block:
+
+          - name: encrypt patroni_yml_pass
+            block:
+
+              - name: encrypt patroni_yml_pass
+                include_role:
+                  name: postgresql
+                  tasks_from: create_encrypt_password
+                vars:
+                  password: "{{ patroni_yml_pass }}"
+
+              - name: update patroni_yml_pass
+                set_fact:
+                  encpassword_restapi: "{{ _createencryptpass_password[0:-1] }}"
+
+          - name: encrypt patroni_etcd_pass
+            block:
+
+              - name: encrypt patroni_etcd_pass
+                include_role:
+                  name: postgresql
+                  tasks_from: create_encrypt_password
+                vars:
+                  password: "{{ patroni_etcd_pass }}"
+
+              - name: update patroni_etcd_pass
+                set_fact:
+                  encpassword_etcd: "{{ _createencryptpass_password[0:-1] }}"
+
+          - name: replace open passwords to enc passwords for etcd and patroni api passwords
+            reciter:
+              ANSIBLE_MODULE_ARGS:
+                src: "{{ patroni_files.conf_dir }}/postgres.yml"
+                action: set
+                parameter: "{{ item.path }}"
+                inner_parameter: "{{ item.key }}"
+                new_val: "{{ item.val }}"
+            environment:
+              - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
+            no_log: "{{ nolog }}"
+            become: true
+            loop:
+              - { path: "etcd",                   key: "password", val: "{{ encpassword_etcd }}" }
+              - { path: "restapi.authentication", key: "password", val: "{{ encpassword_restapi }}" }
+
+          - name: send reload command to patroni
+            include_role:
+              name: patroni
+              tasks_from: update_with_patronictl
+            vars:
+              endpoint_name: reload
+            run_once: true
+            when: action_type == 'install'
+
+        when: patroni
+
+    no_log: "{{ nolog }}"
+    become: true
+    when: auth_encrypt and inventory_hostname != 'etcd'
+
+  - debug: msg="{{ update_error_types_breakpoint_msg }}"
+    when: is_recovery_test_mode and configure_error_um004m and inventory_hostname == 'master'
+  - debug: msg="{{ update_error_types_breakpoint_msg }}"
+    when: is_recovery_test_mode and configure_error_um004r and inventory_hostname == 'replica'
+
+  - name: wait cluster synchronization
+    include_role:
+      name: patroni
+      tasks_from: update_wait_cluster_synchronization.yml
+    vars:
+      PGHOME: "{{ _finishcfg_pghome }}"
+    when: inventory_hostname == 'master' and is_patroni_exists
+
+  - name: import create dynamic message
+    include_role:
+      name: configure
+      tasks_from: welcome_message.yml
+
+  - name: disable {{ as_group }} connection in pg_hba
+    include_role:
+      name: common
+      tasks_from: update_edit_pghba
+    vars:
+      the_remove_params: [ '^(.*)host all {{ as_group }} 0.0.0.0/0 scram-sha-256(.*)$' ]
+      pghba_action: 'remove'
+    when: inventory_hostname != 'etcd' and action_type == 'install'
+
+  - name: unset default PGHOME
+    set_fact:
+      _finishcfg_pghome: 'null'
+
+  rescue:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+    - name: replica updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            replica: true
+          components:
+            configuration: true
+          types:
+            configuration:
+              finally: true
+      run_once: true
+      when: inventory_hostname == 'replica'
+
+    - name: master updated with error
+      set_fact:
+        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+        cacheable: yes
+      vars:
+        data:
+          aggregate: true
+          hosts:
+            master: true
+          components:
+            configuration: true
+          types:
+            configuration:
+              finally: true
+      run_once: true
+      when: inventory_hostname == 'master'
+
+  always:
+
+    - name: to stop install process if error
+      fail: msg='Install process must be stopped by error'
+      when: "action_type == 'install' and \
+            hostvars['master' or 'replica'].update_errors.aggregate"

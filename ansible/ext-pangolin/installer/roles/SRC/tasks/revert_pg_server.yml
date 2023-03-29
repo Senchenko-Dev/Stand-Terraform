@@ -1,0 +1,20 @@
+- name: Recovery files whose use in src process
+  copy:
+    src: "{{ backup.src }}/{{ item.file_name }}"
+    dest: "{{ item.path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: 0751
+  with_items:
+    - { file_name: "{{ path_to_manage_backup_sh_file.split('/')[-1] }}",
+        path: "{{ manage_backup_bin }}/original_scripts_{{ path_to_manage_backup_sh_file.split('/')[-1] }}" }
+    - { file_name: "{{ path_to_pg_se_archlogs_sh_file.split('/')[-1] }}",
+        path: "{{ manage_backup_bin }}/original_scripts_{{ path_to_pg_se_archlogs_sh_file.split('/')[-1] }}" }
+    - { file_name: "{{ path_to_manage_backup_module.split('/')[-1] }}",
+        path: "{{ path_to_manage_backup_module }}" }
+  become: true
+  when: "inventory_hostname != 'etcd' \
+         and SRC \
+         and is_src_exists \
+         and not is_src_exists_and_not_correct"

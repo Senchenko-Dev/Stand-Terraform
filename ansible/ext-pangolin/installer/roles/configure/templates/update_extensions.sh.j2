@@ -4,6 +4,6 @@ for ii in $({{ the_configure_pghome }}/bin/psql -h 127.0.0.1 -p {{ ports.pg }} -
 do
 {{ the_configure_pghome }}/bin/psql -h 127.0.0.1 -p {{ ports.pg }} -tc "SELECT 'psql -ac \"alter extension ' || e.extname || ' update\"'
                 FROM pg_catalog.pg_extension e\
-                WHERE e.extname in ('plpgsql', 'pgse_backup', 'pg_cron', 'pg_pathman', 'pg_repack', 'pgstattuple', 'pg_stat_statements', 'auto_explain')" \
+                WHERE e.extname in ('plpgsql', 'pgse_backup', 'pg_cron', 'dblink', 'pg_pathman', 'pg_repack', 'pgstattuple', 'pg_stat_statements', 'auto_explain', 'pg_profile', 'pg_outline')" \
         $ii
 done

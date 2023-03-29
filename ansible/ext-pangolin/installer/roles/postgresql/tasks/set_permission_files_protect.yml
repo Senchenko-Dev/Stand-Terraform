@@ -1,0 +1,120 @@
+- name: Create kmadmin_pg user in linux
+  block:
+
+    - name: сreate kmadmin_pg user in linux if not exist
+      user: 
+        name: kmadmin_pg
+        state: present
+      register: create_user_kmadmin_pg
+
+    - name: сhange the password for the user kmadmin_pg in linux, if it did not exist before
+      shell: "printf '{{ kmadmin_pg_linux_pass }}' | chpasswd --encrypted"
+      no_log: "{{ nolog }}"
+      when: create_user_kmadmin_pg.changed
+
+  become: true
+
+- name: Install or update bashrc for kmadmin_pg
+  block:
+
+    - name: set path to bashrc
+      set_fact:
+        shell_bashrc_file_kmadmin_pg: "/home/kmadmin_pg/.bashrc"
+
+    - name: remove old exports for kmadmin_pg
+      lineinfile:
+        path:   "{{ shell_bashrc_file_kmadmin_pg }}"
+        regexp: "{{ item}}"
+        state:   absent
+      with_items:
+        - ^export PG_PLUGINS_PATH=
+        - ^export LD_LIBRARY_PATH=
+
+    - name: write new exports to bashrc for kmadmin_pg
+      lineinfile:
+        path: "{{ shell_bashrc_file_kmadmin_pg }}"
+        line: "{{ item }}"
+        state: present
+        insertafter: EOF
+        create: yes
+        mode: 0600
+      with_items:
+        - export PG_PLUGINS_PATH={{ PGHOME }}/lib
+        - export LD_LIBRARY_PATH={{ PGHOME }}/lib
+
+  become: true
+
+- name: Change files/directory ownership, group and permissions
+  block:
+
+    - name: check the exist config files for tde
+      stat: 
+        path: '{{ item }}'
+      register: config_files_exists
+      with_items:
+        - "{{ KMS_CONFIG }}"
+        - "{{ PGETCDIR }}/kms_dynamic_params.cfg"
+        - "{{ PGETCDIR }}/kms_static_params.cfg"
+
+    - name: change config files ownership and group for tde
+      file:
+        path: "{{ item.item }}"
+        owner: kmadmin_pg
+        group: kmadmin_pg
+      with_items: "{{ config_files_exists.results }}"
+      when: item.stat.exists
+
+    - name: change file ownership and group
+      file:
+        path: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+      with_items:
+        - { path: "{{ PGHOME }}/bin/encrypt_params_file", owner: kmadmin_pg, group: kmadmin_pg }
+        - { path: "{{ PGHOME }}/bin/generate_encryption_key", owner: kmadmin_pg, group: kmadmin_pg }
+        - { path: "{{ PGHOME }}/bin/setup_kms_credentials", owner: kmadmin_pg, group: kmadmin_pg }
+        - { path: "{{ PGHOME }}/bin/initprotection", owner: root, group: kmadmin_pg }
+
+    - name: change permissions initprotection and lib files
+      file:
+        path: "{{ item.path }}"
+        mode: "{{ item.mode }}"
+      with_items:
+        - { path: "{{ PGHOME }}/bin/initprotection", mode: "g+rx" }
+        - { path: "{{ PGHOME }}/lib/libfe_elog.so", mode: "o+r" }
+
+    - name: change permissions for plugins files
+      file:
+        path: "{{ PGHOME }}/lib/plugins"
+        state: directory
+        mode: o+r
+        recurse: yes
+
+    - name: change directory "{{ PGETCDIR }}" ownership and group
+      file:
+        path: "{{ PGETCDIR }}"
+        owner: postgres
+        group: kmadmin_pg
+        state: directory
+
+    - name: change directory permissions
+      file:
+        path: "{{ item.path }}"
+        mode: "{{ item.mode }}"
+      with_items:
+        - { path: "{{ PGHOME }}", mode: "o+x" }
+        - { path: "{{ PGHOME }}/bin", mode: "o+x" }
+        - { path: "{{ PGHOME }}/lib", mode: "o+rx" }
+        - { path: "{{ PGHOME }}/lib/plugins", mode: "o+x" }
+        - { path: "{{ PGETCDIR }}", mode: "o+x,g+wx" }
+
+  become: true
+
+- name: Add kmadmin_pg rules into sudoers
+  lineinfile:
+    path: /etc/sudoers
+    state: present
+    insertafter: '^#includedir /etc/sudoers.d'
+    line: "kmadmin_pg ALL = (postgres : kmadmin_pg) NOPASSWD: /bin/bash -c {{ PGHOME.split('-').0 }}/bin/initprotection"
+    validate: /usr/sbin/visudo -cf %s
+  become: true

@@ -1,0 +1,19 @@
+- name: Start {{ operation_type }} operation
+  block:
+
+    - name: start {{ operation_type }} operation
+      include_tasks: "{{ operation_type }}.yml"
+
+    - name: to stop install process if error
+      fail: msg='Install process must be stopped by master host error'
+      when: "action_type == 'install' and \
+            hostvars['master'].update_errors.aggregate"
+
+    - name: to stop install process if error
+      fail: msg='Install process must be stopped by replica host error'
+      when: "action_type == 'install' and \
+            installation_type == 'cluster' and \
+            inventory_hostname == 'replica' and \
+            hostvars['replica'].update_errors.aggregate"
+
+  when: inventory_hostname != 'etcd'

@@ -1,13 +1,13 @@
 #!/bin/bash
 set -e
-export PYTHONPATH="/usr/pgsql-se-04/postgresql_venv/lib/python3.6/site-packages/"
-export PGHOME="/usr/pgsql-se-04/"
-export PATH="${PATH}:/usr/pgsql-se-04/postgres_venv/bin:/usr/pgsql-se-04/bin/"
-export LD_LIBRARY_PATH="/usr/pgsql-se-04/lib"
-export PG_PLUGINS_PATH="/usr/pgsql-se-04/lib"
+export PYTHONPATH="{{ python.postgresql_venv }}/lib/python3.6/site-packages/"
+export PGHOME="{{ PGHOME }}/"
+export PATH="${PATH}:{{ python.postgresql_venv }}/bin:{{ PGHOME }}/bin/"
+export LD_LIBRARY_PATH="{{ PGHOME }}/lib"
+export PG_PLUGINS_PATH="{{ PGHOME }}/lib"
 
 action=$1
- {{ manage_backup_bin }}/{{ pg_major_version }}_manage_backup.bin --host 127.0.0.1  -p {{ ports.pg }} -U backup_user -d postgres -B {{ PGBACKUP }} --session-id=$SESSIONID $action
+  {{ manage_backup_bin }}/{{ src_bin_version }}_manage_backup.bin --host 127.0.0.1  -p {{ ports.pg }} -U backup_user -d postgres -B /{{ PGBACKUP.split('/').1 }}/{{ pg_major_version }} --session-id=$SESSIONID $action
 if [ $? = 0 ] && [ "$action" == "start" ]; then
-    {{ manage_backup_bin }}/{{ pg_major_version }}_manage_backup.bin --host 127.0.0.1 -p {{ ports.pg }} -U backup_user -d postgres -B {{ PGBACKUP }} --session-id=$SESSIONID wait-start
+    {{ manage_backup_bin }}/{{ src_bin_version }}_manage_backup.bin --host 127.0.0.1 -p {{ ports.pg }} -U backup_user -d postgres -B /{{ PGBACKUP.split('/').1 }}/{{ pg_major_version }} --start-timeout=600 --session-id=$SESSIONID wait-start
 fi

@@ -31,26 +31,29 @@
 - name: Block {{ the_current_pg_port }} port for input traffic but {{ the_accepted_ip_list }}
   block:
 
-    - name: block {{ the_current_haproxy_port }} port for input traffic for {{ the_accepted_ip_list }}
-      shell: "iptables -A INPUT -p tcp -m tcp -s {{ item }} --dport {{ the_current_haproxy_port }} -j ACCEPT"
-      loop: "{{ the_accepted_ip_list }}"
+    - name: block ports for input traffic for {{ the_accepted_ip_list }}
+      iptables:
+        chain: INPUT
+        protocol: tcp
+        match: tcp
+        source: "{{ item.0 }}"
+        destination_port: "{{ item.1 }}"
+        jump: ACCEPT
+        state: present
+      with_nested:
+        - "{{ the_accepted_ip_list }}"
+        - [ "{{ the_current_haproxy_port }}", "{{ the_current_pgbouncer_port }}", "{{ the_current_pg_port }}" ]
 
-    - name: block {{ the_current_pgbouncer_port }} port for input traffic for {{ the_accepted_ip_list }}
-      shell: "iptables -A INPUT -p tcp -m tcp -s {{ item }} --dport {{ the_current_pgbouncer_port }} -j ACCEPT"
-      loop: "{{ the_accepted_ip_list }}"
-
-    - name: block {{ the_current_pg_port }} port for input traffic for {{ the_accepted_ip_list }}
-      shell: "iptables -A INPUT -p tcp -m tcp -s {{ item }} --dport {{ the_current_pg_port }} -j ACCEPT"
-      loop: "{{ the_accepted_ip_list }}"
-
-    - name: block {{ the_current_haproxy_port }} port for input traffic for other ip
-      shell: "iptables -A INPUT -p tcp -m tcp --dport {{ the_current_haproxy_port }} -j DROP"
-
-    - name: block {{ the_current_pgbouncer_port }} port for input traffic for other ip
-      shell: "iptables -A INPUT -p tcp -m tcp --dport {{ the_current_pgbouncer_port }} -j DROP"
-
-    - name: block {{ the_current_pg_port }} port for input traffic for other ip
-      shell: "iptables -A INPUT -p tcp -m tcp --dport {{ the_current_pg_port }} -j DROP"
+    - name: block ports for input traffic for other ip
+      iptables:
+        chain: INPUT
+        protocol: tcp
+        match: tcp
+        destination_port: "{{ item }}"
+        jump: DROP
+        state: present
+      with_items:
+        - ["{{ the_current_haproxy_port }}", "{{ the_current_pgbouncer_port }}", "{{ the_current_pg_port }}"]
 
     - name: wait to apply rule for block traffic
       pause:
@@ -62,7 +65,7 @@
         tasks_from: control_monitoring_operations
       vars:
         operation: disable
-      when: "monitoring_zabbix is defined and monitoring_zabbix"
+      when: "inventory_hostname == 'master' and monitoring_zabbix is defined and monitoring_zabbix"
 
   become: true
   when: block_traffic
@@ -70,32 +73,29 @@
 - name: Open {{ the_current_pg_port }} port for input traffic
   block:
 
-    - name: unblock {{ the_current_pg_port }} port for input traffic for other ip
-      shell: "iptables -D INPUT -p tcp --dport {{ the_current_pg_port }} -j DROP"
-      ignore_errors: yes
+    - name: unblock ports for input traffic for {{ the_accepted_ip_list }}
+      iptables:
+        chain: INPUT
+        protocol: tcp
+        match: tcp
+        source: "{{ item.0 }}"
+        destination_port: "{{ item.1 }}"
+        jump: ACCEPT
+        state: absent
+      with_nested:
+        - "{{ the_accepted_ip_list }}"
+        - [ "{{ the_current_haproxy_port }}", "{{ the_current_pgbouncer_port }}", "{{ the_current_pg_port }}" ]
 
-    - name: unblock {{ the_current_pgbouncer_port }} port for input traffic for other ip
-      shell: "iptables -D INPUT -p tcp --dport {{ the_current_pgbouncer_port }} -j DROP"
-      ignore_errors: yes
-
-    - name: unblock {{ the_current_haproxy_port }} port for input traffic for other ip
-      shell: "iptables -D INPUT -p tcp --dport {{ the_current_haproxy_port }} -j DROP"
-      ignore_errors: yes
-
-    - name: unblock {{ the_current_pg_port }} port for input traffic for {{ the_accepted_ip_list }}
-      shell: "iptables -D INPUT -p tcp -s {{ item }} --dport {{ the_current_pg_port }} -j ACCEPT"
-      loop: "{{ the_accepted_ip_list }}"
-      ignore_errors: yes
-
-    - name: unblock {{ the_current_pgbouncer_port }} port for input traffic for {{ the_accepted_ip_list }}
-      shell: "iptables -D INPUT -p tcp -s {{ item }} --dport {{ the_current_pgbouncer_port }} -j ACCEPT"
-      loop: "{{ the_accepted_ip_list }}"
-      ignore_errors: yes
-
-    - name: unblock {{ the_current_haproxy_port }} port for input traffic for {{ the_accepted_ip_list }}
-      shell: "iptables -D INPUT -p tcp -m tcp -s {{ item }} --dport {{ the_current_haproxy_port }} -j ACCEPT"
-      loop: "{{ the_accepted_ip_list }}"
-      ignore_errors: yes
+    - name: unblock ports for input traffic for other ip
+      iptables:
+        chain: INPUT
+        protocol: tcp
+        match: tcp
+        destination_port: "{{ item }}"
+        jump: DROP
+        state: absent
+      with_items:
+        - ["{{ the_current_haproxy_port }}", "{{ the_current_pgbouncer_port }}", "{{ the_current_pg_port }}"]
 
     - name: wait to apply rule for block traffic
       pause:
@@ -150,7 +150,7 @@
         tasks_from: control_monitoring_operations
       vars:
         operation: enable
-      when: "monitoring_zabbix is defined and monitoring_zabbix"
+      when: "inventory_hostname == 'master' and monitoring_zabbix is defined and monitoring_zabbix"
       
   become: true
   when: not block_traffic

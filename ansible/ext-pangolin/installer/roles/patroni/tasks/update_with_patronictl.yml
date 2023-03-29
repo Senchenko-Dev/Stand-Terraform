@@ -1,7 +1,7 @@
 - name: Update parameter with patronictl
   block:
-    
-    - name: define default command for patronictl 
+  
+    - name: define default command for patronictl
       set_fact:
         endpoint: config
       when: endpoint_name is undefined
@@ -10,16 +10,25 @@
       set_fact:
         endpoint: "{{ endpoint_name }}"
       when: endpoint_name is defined
-    
+
     - name: check directory with new patroni
       stat:
         path: "{{ python.patroni_venv }}/bin/patronictl"
       register: patronictl_file
 
+    - name: set patroni venv
+      set_fact:
+        _updatepatronictl_set_patroni_venv: "{% if not patronictl_file.stat.exists %}{{ PYTHON_VENV_OLD }}{% else %}{{ python.patroni_venv }}{% endif %}"
+
     - name: change params with patronictl
       block:
-        
-        - name: create temp config file 
+
+        - name: drop temp config file "{{ REMOTE_TMP }}/patronictlconf.yml"
+          file:
+            path: "{{ REMOTE_TMP }}/patronictlconf.yml"
+            state: absent
+
+        - name: create temp config file "{{ REMOTE_TMP }}/patronictlconf.yml"
           file:
             path: "{{ REMOTE_TMP }}/patronictlconf.yml"
             owner: postgres
@@ -32,88 +41,45 @@
             path: "{{ REMOTE_TMP }}/patronictlconf.yml"
             line: "{{ change_params }}"
 
-        - name: execute patronictl
+        - name: execute patronictl for change params
           shell: |
-            {% if not patronictl_file.stat.exists %}{{ PYTHON_VENV_OLD }}\
-            {% else %}{{ python.patroni_venv }}{% endif %}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml  edit-config --apply \
+            {{ _updatepatronictl_set_patroni_venv }}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml edit-config --apply \
             {{ REMOTE_TMP }}/patronictlconf.yml --force
 
-        - name: wait when patroni reload configuration file
-          pause:
-            seconds: 20
-
-        - name: drop temp config file 
-          file:
-            path: "{{ REMOTE_TMP }}/patronictlconf.yml"
-            state: absent
-
+      run_once: true
       when: endpoint == 'config'
-      
-    - name: reload patroni with patronictl
+
+    - name: cluster forced commands
       block:
 
-        - name: execute patronictl
-          shell: "{% if not patronictl_file.stat.exists %}{{ PYTHON_VENV_OLD }}\
-                  {% else %}{{ python.patroni_venv }}{% endif %}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml reload {{ clustername }} --force"
-  
-        - name: wait when patroni reload configuration file
-          pause:
-            seconds: 20
-      
-      when: endpoint == 'reload'
+      - name: reload patroni with patronictl
+        shell: "{{ _updatepatronictl_set_patroni_venv }}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml reload {{ clustername }} --force"
+        when: endpoint == 'reload'
 
-    - name: restart patroni with patronictl
-      block:
+      - name: restart patroni with patronictl
+        shell: "{{ _updatepatronictl_set_patroni_venv }}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml restart {{ clustername }} --force"
+        when: endpoint == 'restart'
 
-        - name: execute patronictl
-          shell: "{% if not patronictl_file.stat.exists %}{{ PYTHON_VENV_OLD }}\
-                  {% else %}{{ python.patroni_venv }}{% endif %}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml restart   {{ clustername }} --force"
+      - name: switch patroni with patronictl
+        shell: "{{ _updatepatronictl_set_patroni_venv }}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml switchover {{ clustername }} --force"
+        when: endpoint == 'switch'
 
-        - name: wait when patroni reload configuration file
-          pause:
-            seconds: 20
-      
-      when: endpoint == 'restart'
+      - name: reinit patroni with patronictl
+        shell: "{{ _updatepatronictl_set_patroni_venv }}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml reinit {{ clustername }} {{ current_replica_for_reinit }} --force"
+        when: endpoint == 'reinit'
 
-    - name: switch patroni with patronictl
-      block:
+      run_once: true
 
-      - name: send switchover command
-        shell: "{% if not patronictl_file.stat.exists %}{{ PYTHON_VENV_OLD }}\
-                {% else %}{{ python.patroni_venv }}{% endif %}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml switchover {{ clustername }} --force"
-      
-      - name: wait when patroni reload configuration file
-        pause:
-          seconds: 20
-    
-      when: endpoint == 'switch'
+    - name: wait when patroni reload configuration file
+      pause:
+        seconds: "{{ patroni_wait_seconds }}"
+      run_once: true
 
-    - name: reinit patroni with patronictl
-      block:
-
-        - name: send reinit command
-          shell: "{% if not patronictl_file.stat.exists %}{{ PYTHON_VENV_OLD }}\
-                  {% else %}{{ python.patroni_venv }}{% endif %}/bin/patronictl -c {{ patroni_files.conf_dir }}/postgres.yml reinit {{ clustername }} --force"
-      
-        - name: wait when patroni reload configuration file
-          pause:
-            seconds: 20
-
-      when: endpoint == 'reinit'
-
-    - name: check temp file exist
-      stat:
-        path: "{{ REMOTE_TMP }}/patronictlconf.yml"
-      register: temp_file_exist
-
-    - name: drop temp config file
+    - name: drop temp config file "{{ REMOTE_TMP }}/patronictlconf.yml" after patroni config reload
       file:
         path: "{{ REMOTE_TMP }}/patronictlconf.yml"
         state: absent
-      become: true
-      become_user: postgres
-      when: temp_file_exist.stat.exists
-  
+
   become: true
   become_user: postgres
   environment:
