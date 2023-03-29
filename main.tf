@@ -13,10 +13,11 @@ locals {
     #---------CentOs7-----------#
     #template_name = "CentOS7_64-bit"
     #catalog_name = "Linux Templates"
-    #---------CentOs-8.4--------#
+
+    #-------------CentOs-8.4----------------#
     template_name = "SBT-SPO-RHEL84-latest"
     catalog_name = "SBT_CREATOR_TEMPLATES"
-
+    #---------------------------------------#
     network_type = "org"
     ip_allocation_mode = "POOL"
 
@@ -89,8 +90,8 @@ locals {
 module "NginxG1" {
   source = "./modules/spo_nginx"
   # VM properties
-  count = 0
-  vm_count = 0
+  count = 1
+  vm_count = 1
   cpu = 1
   memory = 512
   vm_disk_data = [
@@ -139,7 +140,7 @@ module "KAFKA_Corex_standalone" {
 
 module "ELK_standalone1" {
 
-  count = 1
+  count = 0
 
   vm_count = 1
   # TF module properties
@@ -165,8 +166,9 @@ module "ELK_standalone1" {
 }
 
 # PG
+
 module "PGSE_standalone01" {
-  count = 0
+  count = 1
   source = "./modules/spo_pangolin"
   # VM properties
   vm_props = local.vm_props_default
