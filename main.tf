@@ -90,7 +90,7 @@ locals {
 module "NginxG1" {
   source = "./modules/spo_nginx"
   # VM properties
-  count = 1
+  count = 0
   vm_count = 1
   cpu = 1
   memory = 512
