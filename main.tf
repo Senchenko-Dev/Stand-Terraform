@@ -1,29 +1,18 @@
 locals {
-
-
-  stand_name = "silim-premerge" # TODO Имя стенда
+  stand_name = "Bystrov" # TODO Имя стенда
   network_name = "main_VDC02"
   vault_file = "secrets.yml" # todo внимание, хардкод в Jenkinsfile!
   # Для setup_vm. Публичные ключи для входа на хосты.
   ssh_keys_list = [
-    { username = "user", ssh_key = local.secrets.ssh.user},
-    { username = "provuser", ssh_key = local.secrets.ssh.provuser, sudo = true},
-    { username = "sentsov", ssh_key = local.secrets.ssh.sentsov, sudo = true},
+    { username = "senchenko", ssh_key = local.secrets.ssh.sentsov, sudo = true},
     { username = "root", ssh_key = local.secrets.ssh.root},
   ]
   # параметры для VCD_VM
   vm_props_default = {
-    #---------CentOs---------#
-    template_name = "SBT-SPO-RHEL84-latest"
-    catalog_name = "SBT_CREATOR_TEMPLATES"
+    #---------CentOs7-----------#
+    template_name = "CentOS7_64-bit"
+    catalog_name = "Linux Templates"
 
-    #--------AltLinux--------#
-    # template_name = "altlinux-sp8-5.4.145.c9f1.old"
-    # catalog_name = "ALTLINUX"
-
-    #--------SberLinux-------#
-    #template_name = "SBT-SPO-SBEL86-latest"
-    #catalog_name = "SBT_CREATOR_TEMPLATES"
     network_type = "org"
     ip_allocation_mode = "POOL"
 
@@ -65,13 +54,13 @@ locals {
 }
 
 module "AWX" {
-  # count = 0
-  # vm_count = 0
+   count = 0
+   vm_count = 0
   # TF path to the module
   source = "./modules/awx"
   # VM settings
-//  cpu = 6
-//  memory = 12288
+  //  cpu = 6
+  //  memory = 12288
   # VM properties
   vm_props = local.vm_props_default
   # Ansible properties
@@ -82,197 +71,69 @@ module "AWX" {
 
 locals {
   //  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
-   awx_props = merge(local.install_awx_props,
-        { 
-          awx_host = module.AWX.awx_host_ip
-          awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
-          awx_k8s_sa_name = local.globals.devopsSaName
-          awx_k8s_sa_project = local.globals.devopsProject
-         }
-    )
+  awx_props = merge(local.install_awx_props,
+#    {
+#      awx_host = module.AWX.awx_host_ip
+#      awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
+#      awx_k8s_sa_name = local.globals.devopsSaName
+#      awx_k8s_sa_project = local.globals.devopsProject
+#    }
+  )
 }
 
 # NGINX
 module "NginxG1" {
   source = "./modules/spo_nginx"
-# VM properties
+  # VM properties
   count = 0
   vm_count = 0
   cpu = 1
   memory = 512
   vm_disk_data = [
- //  { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
-//   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
+    //  { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
+    //   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
   ]
   vm_props = local.vm_props_default
   awx_props = local.awx_props
 
-# Ansible properties
+  # Ansible properties
   force_ansible_run = "0"
   inventory_group_name = "nginx_ssl" // для связи с group_vars/group_name.yml
   spo_role_name = "nginx"
   vault_file = local.vault_file
 }
 
-module "Nginx_iag" {
-  source = "./modules/spo_nginx_iag"
-  ## VM properties
-  count = 0
-  vm_count = 0
-  vm_props = local.vm_props_default
 
-  # Ansible properties
-  nginx_iag_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI01536898_APIGATE/D-02.020.00-1390_iag_release_19_4_rhel7.x86_64/CI01536898_APIGATE-D-02.020.00-1390_iag_release_19_4_rhel7.x86_64-distrib.zip"
-  inventory_group_name = "nginx_iag" // для связи с group_vars/group_name.yml
-  spo_role_name = "spo_nginx_iag"
-  vault_file = local.vault_file
-}
+module "KAFKA_Corex_standalone" {
+  count = 1
 
-
- module "KAFKA_Corex_standalone" {
-   # depends_on = [module.AWX]
-   count = 0
-   vm_count = 0
-   # TF module properties
-   source = "./modules/kafka_corex"
-
-   # Ansible properties
-   inventory_group_name = "kafka-corex"
-   force_ansible_run = ""
-   #000_${timestamp()}" #  "_${timestamp()}"
-
-   kafka_url = "http://10.42.4.125/mirror/docker/images/kafka/KFK-6.zip"
-
-   # VM properties
-   memory = 4024 #16*1024
-   cpu = 4
-#   vm_disk_data = [
-#     { size: "350G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
-#   ]
-
-   vm_props = local.vm_props_default
-   vault_file = local.vault_file
-   spo_role_name = "kafka" # На самом деле эта роль KAFKA COREX из за зависимости от имени роли пришлось оставить по умолчанию kafka
-   awx_props = local.awx_props
-
- }
- 
-# NGINX_IAG
-module "Nginx_IAG" {
-  source = "./modules/spo_nginx_iag"
-
-  count = 0
-  vm_count = 0
-
-  ## VM properties
-  vm_props = local.vm_props_default
-
-  # Ansible properties
-  nginx_iag_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI01536898_APIGATE/D-02.020.00-1390_iag_release_19_4_rhel7.x86_64/CI01536898_APIGATE-D-02.020.00-1390_iag_release_19_4_rhel7.x86_64-distrib.zip"
-  inventory_group_name = "nginx_iag" // для связи с group_vars/group_name.yml
-  vault_file = local.vault_file
-}
-
-
-
-# NGINX_SGW
-module "Nginx_SGW" {
-  source = "./modules/spo_nginx_sgw"
-
-  count = 0
-  vm_count = 0
-
-  ## VM properties
-  vm_props = local.vm_props_default
-
-  # Ansible properties
-  nginx_sgw_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000178_sgwx/D-02.021.03-11_release_19_5_1_sgw_nginx_1_20_1_dzo_rhel7.x86_64/CI90000178_sgwx-D-02.021.03-11_release_19_5_1_sgw_nginx_1_20_1_dzo_rhel7.x86_64-distrib.zip"
-  inventory_group_name = "nginx_sgw" // для связи с group_vars/group_name.yml
-  vault_file = local.vault_file
-
-   # VM properties
-   memory = 2*1024
-   cpu = 2
-   vm_disk_data = [
- //    { size: "350G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
-   ]
-}
-  
- 
- #
-module "PGSE_standalone_test" {
-   count = 0
-   # TF module properties
-   source = "./modules/spo_pangolin"
-
-   # Ansible properties
-   # inventory_group_name = "pangolin_test" # заполнить group_vars
-   inventory_group_name = "Pangolin_alone-1" # заполнить group_vars
-   force_ansible_run = "0"
-
-   # Download and unpack
-   pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"
-   unpack_exclude = ["installer"]
-   # Install
-   installation_type = "standalone"
-   installation_subtype = "standalone-postgresql-only"
-   vault_file = local.vault_file
-   vm_props = local.vm_props_default
-
-} 
-
-
-# KAFKA
-module "KAFKA1" {
-   count = 0
-   source = "./modules/spo_kafka_se"
-   # VM properties
-   cpu = 2
-   memory = 1024*3
-   vm_count = 0
-   vm_props = local.vm_props_default
-   vm_disk_data = [
-//     { size: "50G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
-   ]
-   # Ansible properties
-   inventory_group_name = "Kafka1"
-   vault_file = local.vault_file
-
- //  vm_etcd_disk_data = [
- //    { size : "2G", mnt_dir : local.pgdata_dir },  # только для postgres nodes
- //  ]
-
-   # Download
-    kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
- }
-
-
-module "Kafka303" {
-  count = 0
-  vm_count = 0
-
+  vm_count = 1
   # TF module properties
-  source = "./modules/spo_kafka_se"
+  source = "./modules/kafka_corex"
 
   # Ansible properties
-  inventory_group_name = "Kafka1"
+  inventory_group_name = "kafka-corex"
   force_ansible_run = ""
+  #000_${timestamp()}" #  "_${timestamp()}"
 
-  kafka_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_nexus_prod/Nexus_PROD/CI02556575_KAFKA_SE/3.0.3/CI02556575_KAFKA_SE-3.0.3-distrib.zip"
+  kafka_url = "http://10.42.4.125/mirror/docker/images/kafka/KFK-6.zip"
 
   # VM properties
-  memory = 8*1024
+  memory = 4024 #16*1024
   cpu = 4
-  vm_disk_data = [
-    {size: "35G", mnt_dir: "/KAFKA", owner: "kafka", group: "kafka", mode: "0755"}
-  ]
+  #   vm_disk_data = [
+  #     { size: "350G", mnt_dir: "/KAFKA" , owner: "kafka", group: "kafka", mode: "0755"}
+  #   ]
 
   vm_props = local.vm_props_default
   vault_file = local.vault_file
+  spo_role_name = "kafka" # На самом деле эта роль KAFKA COREX из за зависимости от имени роли пришлось оставить по умолчанию kafka
+  awx_props = local.awx_props
+
 }
 
-module "ELK_standalone1" {
 
+module "ELK_standalone1" {
 
   count = 0
   vm_count = 0
@@ -288,7 +149,7 @@ module "ELK_standalone1" {
   cpu = 6
 
   vm_disk_data = [
-   { size: "40G", mnt_dir: "/opt/elastic" , owner: "nginx"},
+    { size: "40G", mnt_dir: "/opt/elastic" , owner: "nginx"},
   ]
 
   vm_props = local.vm_props_default
@@ -297,6 +158,7 @@ module "ELK_standalone1" {
   awx_props = local.awx_props
 
 }
+
 # PG
 module "PGSE_standalone01" {
   count = 0
@@ -307,7 +169,7 @@ module "PGSE_standalone01" {
   cpu = 2
   memory = 4*1024
   vm_pg_disk_data = [
-//        { size : "20G", mnt_dir : "/pgdata" },
+    //        { size : "20G", mnt_dir : "/pgdata" },
   ]
   # Ansible properties
   inventory_group_name = "Pangolin_alone-1"
@@ -320,4 +182,4 @@ module "PGSE_standalone01" {
   # Install
   installation_type = "standalone"
   installation_subtype = "standalone-postgresql-only"
- }
+}
