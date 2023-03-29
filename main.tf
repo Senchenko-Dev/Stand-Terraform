@@ -109,7 +109,7 @@ module "NginxG1" {
 
 
 module "KAFKA_Corex_standalone" {
-  count = 1
+  count = 0
 
   vm_count = 1
   # TF module properties
@@ -139,7 +139,7 @@ module "KAFKA_Corex_standalone" {
 
 module "ELK_standalone1" {
 
-  count = 0
+  count = 1
 
   vm_count = 1
   # TF module properties
