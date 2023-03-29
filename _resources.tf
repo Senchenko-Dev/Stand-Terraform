@@ -34,6 +34,12 @@ locals {
           userName = "sentsov.a.a"
         },
         {
+          roleType = "ClusterRole"
+          roleName = "admin"
+          userKind = "User"
+          userName = "aigorebelyaev"
+        },
+        {
           roleType  = "ClusterRole"
           roleName  = local.devopsSaRole
           userKind  = "ServiceAccount"
@@ -71,30 +77,44 @@ locals {
         }
         cp = {
           name: local.globals.controlPlaneName
-          template: "cp-2.0.2.yml"
+          template: "cp-basic.yml"
         }
       }
     }
   }
 }
 
+module "diOpenshiftServiceCore"  {
+  source = "./modules/ansible_project_init"
+  //  count = 0
+  for_each = {} #local.diOpenshiftServiceCore_projects
+  managment_system_type = var.managment_system_type
+  project_name = each.value.oseProjectName
+  kubeconfig = local.oc_kubeconfig
+  #  awx_props = local.awx_props
+  values = merge(
+    local.globals.values,
+    each.value.values
+  )
+  vault_password = var.vault_password
+}
 
 # Рабочие проекты
 locals {
   empty = {}
-  common_projects = {
+  group1 = {
     diOpenshiftSessionSector = {
       projects = {
-        coreplatform  = {
-          fpi_name = "coreplatform"
+        dyncontent2  = {
+          fpi_name = "dyncontent2"
           values   = {
             quota    = {
-              cpu = 20
-              mem = 30
+              cpu = 2
+              mem = 4
             }
             labels     = {
-              id_fp = "coreplatform",
-              fpname = "coreplatform",
+              id_fp = "UFTM2",
+              fpname = "dyncontent2",
               segment = "${local.globals.solution}",
               stand = "${local.globals.stand}"
             }
@@ -108,61 +128,14 @@ locals {
             ]
           }
         },
-        sentsov  = {
-          fpi_name = "sentsov"
-          values   = {
-            quota    = {
-              cpu = 30
-              mem = 40
-            }
-            labels     = {
-              id_fp = "sentsov",
-              fpname = "sentsov",
-              segment = "${local.globals.solution}",
-              stand = "${local.globals.stand}"
-            }
-            bindings = [
-              {
-                roleType = "ClusterRole"
-                roleName = "view"
-                userKind = "Group"
-                userName = "ose-trb-db"
-              }
-            ]
-          }
-        },
-//
-//        entrance  = {
-//          fpi_name = "entrance"
-//          values   = {
-//            quota    = {
-//              cpu = 2
-//              mem = 4
-//            }
-//            labels     = {
-//              id_fp = "entrance",
-//              fpname = "entrance",
-//              segment = "${local.globals.solution}",
-//              stand = "${local.globals.stand}"
-//            }
-//            bindings = [
-//              {
-//                roleType = "ClusterRole"
-//                roleName = "view"
-//                userKind = "Group"
-//                userName = "ose-trb-db"
-//              }
-//            ]
-//          }
-//        },
       }
       vars = {
         sector = "ses"
         values = {
-          sm       = {
-            cpNamespace = local.globals.stashedControlPlaneNamespace
-            cpName      = local.globals.controlPlaneName
-          }
+          //          sm       = {
+          //            cpNamespace = local.globals.stashedControlPlaneNamespace
+          //            cpName      = local.globals.controlPlaneName
+          //          }
           bindings = [
             {
               roleType = "ClusterRole"
@@ -177,28 +150,13 @@ locals {
   }
 }
 
-module "diOpenshiftServiceCore"  {
-  source = "./modules/ansible_project_init"
-//  for_each = {}
-  for_each = local.diOpenshiftServiceCore_projects
-  managment_system_type = var.managment_system_type
-  project_name = each.value.oseProjectName
-  kubeconfig = local.oc_kubeconfig
-  #  awx_props = local.awx_props
-  values = merge(
-    local.globals.values,
-    each.value.values
-  )
-  vault_password = var.vault_password
-}
-
 module "diOpenshiftgroup1" {
   source = "./modules/ansible_group_project_init"
   depends_on = [module.diOpenshiftServiceCore]
-//    for_each = {}
-  for_each = local.common_projects
+  //  count = 0
+  for_each = {} #local.group1
   managment_system_type = var.managment_system_type
-#  awx_props = local.awx_props
+  #  awx_props = local.awx_props
   kubeconfig = local.oc_kubeconfig
   group = each.key
   specs = each.value
@@ -209,12 +167,11 @@ module "diOpenshiftgroup1" {
 module "config_awx_k8s_templates" {
   depends_on = [module.AWX, module.diOpenshiftgroup1]
   count = 0
- # count = "${length(local.awx_props) != 0 ? 1 : 0}"
+  # count = "${length(local.awx_props) != 0 ? 1 : 0}"
   meta = fileset(path.root, "ansible/project_vars/*.yml")
   source = "./modules/awx_config_k8s_templates"
   kubeconfig = local.oc_kubeconfig
   awx_props = local.awx_props
   vault_file = local.vault_file
 }
-
 
