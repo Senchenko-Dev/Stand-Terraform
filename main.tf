@@ -11,8 +11,11 @@ locals {
   # параметры для VCD_VM
   vm_props_default = {
     #---------CentOs7-----------#
-    template_name = "CentOS7_64-bit"
-    catalog_name = "Linux Templates"
+    #template_name = "CentOS7_64-bit"
+    #catalog_name = "Linux Templates"
+    #---------CentOs---------#
+    template_name = "SBT-SPO-RHEL84-latest"
+    catalog_name = "SBT_CREATOR_TEMPLATES"
 
     network_type = "org"
     ip_allocation_mode = "POOL"
@@ -106,7 +109,7 @@ module "NginxG1" {
 
 
 module "KAFKA_Corex_standalone" {
-  count = 0
+  count = 1
 
   vm_count = 1
   # TF module properties
@@ -136,7 +139,7 @@ module "KAFKA_Corex_standalone" {
 
 module "ELK_standalone1" {
 
-  count = 1
+  count = 0
 
   vm_count = 1
   # TF module properties
