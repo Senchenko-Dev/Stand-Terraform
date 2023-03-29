@@ -40,6 +40,9 @@ export KUBECONFIG=$kubeconfig
 
 if [ "$token" == "none" ]
 then
+  password=$KUBE_PASSWORD #переменная с паролем от OpenShift из Jenkins файла
+  echo $password > login.txt
+
   oc login --username $username --password $password  $host --insecure-skip-tls-verify=true > /dev/null 2>&1
   token=$(oc whoami -t)
   echo -e "{\n  \"apiVersion\": \"client.authentication.k8s.io/v1beta1\",\n  \"kind\": \"ExecCredential\",\n  \"status\": {\n      \"token\": \"${token}\"\n  }\n}"
