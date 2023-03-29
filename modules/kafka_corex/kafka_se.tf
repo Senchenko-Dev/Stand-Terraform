@@ -58,10 +58,10 @@ resource "vcd_vm" "kafka" {
                    echo "ansible  ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
                    mkdir -p /home/ansible/.ssh
                    echo "${var.vm_props.guest_properties.ansible_auth_pub_key}" >> /home/ansible/.ssh/authorized_keys
-                   echo "${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}" > /etc/hostname
-                   sed -i "s/127\.0\.1\.1.*/127\.0\.1\.1  ${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}/g" /etc/hosts
+                   hostnamectl set-hostname "${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}"
+                   echo "127.0.1.1  ${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}" >> /etc/hosts
                    echo "nameserver ${var.vm_props.guest_properties.dnsserver}" > /etc/resolv.conf
-                   sed -i "s/#PermitRootLogin no/PermitRootLogin yes/g" /etc/ssh/sshd_config
+                   sed -i "s/PermitRootLogin no/PermitRootLogin yes/g" /etc/ssh/sshd_config
                    systemctl restart sshd
                    EOF
   }

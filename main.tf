@@ -13,7 +13,7 @@ locals {
     #---------CentOs7-----------#
     #template_name = "CentOS7_64-bit"
     #catalog_name = "Linux Templates"
-    #---------CentOs---------#
+    #---------CentOs-8.4--------#
     template_name = "SBT-SPO-RHEL84-latest"
     catalog_name = "SBT_CREATOR_TEMPLATES"
 
