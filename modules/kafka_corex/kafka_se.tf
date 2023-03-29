@@ -61,6 +61,8 @@ resource "vcd_vm" "kafka" {
                    echo "${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}" > /etc/hostname
                    sed -i "s/127\.0\.1\.1.*/127\.0\.1\.1  ${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}/g" /etc/hosts
                    echo "nameserver ${var.vm_props.guest_properties.dnsserver}" > /etc/resolv.conf
+                   sed -i "s/#PermitRootLogin no/PermitRootLogin yes/g" /etc/ssh/sshd_config
+                   systemctl restart sshd
                    EOF
   }
 
@@ -202,13 +204,13 @@ resource "local_file" "kafka-corex-inventory" {
   }
 }
 
-module "config_awx_ansible" {
-  count = "${length(var.awx_props) != 0 ? 1 : 0}"
-  source = "../awx_config_group"
-  inventory_path = local_file.kafka-corex-inventory.filename
-  inventory_group_name = var.inventory_group_name
-  spo_role_name = var.spo_role_name
-  awx_props = var.awx_props
-  vault_file = var.vault_file
-  hosts = vcd_vm.kafka
-}
+#module "config_awx_ansible" {
+#  count = "${length(var.awx_props) != 0 ? 1 : 0}"
+#  source = "../awx_config_group"
+#  inventory_path = local_file.kafka-corex-inventory.filename
+#  inventory_group_name = var.inventory_group_name
+#  spo_role_name = var.spo_role_name
+#  awx_props = var.awx_props
+#  vault_file = var.vault_file
+#  hosts = vcd_vm.kafka
+#}
