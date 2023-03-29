@@ -2,7 +2,6 @@
 node(env.NODE) {
     def gitUrl = scm.userRemoteConfigs[0].url
 //    def ocHome = tool(name: 'oc-4.5.0', type: 'oc')
-    def uniq_job_name_md5=sh(returnStdout: true, script: 'echo  "$JOB_NAME" | md5sum | awk \'{print $1}\' ').trim()
 
     cleanWs()
     ansiColor('xterm') {
@@ -15,7 +14,8 @@ node(env.NODE) {
             withCredentials([
                     [$class: 'UsernamePasswordMultiBinding', credentialsId: 'auto_test', usernameVariable: 'GIT_NAME', passwordVariable: 'GIT_PASSWORD'],
                     [$class: 'UsernamePasswordMultiBinding', credentialsId: 'cloudDevOpsEFSPGterraform', usernameVariable: 'PG_NAME', passwordVariable: 'PG_PASSWORD'],
-                    [$class: 'StringBinding', credentialsId: ' cloudDevOpsEFSAnsibleVaultPassword', variable: 'ANSIBLE_VAULT_PASSWORD']
+                    [$class: 'StringBinding', credentialsId: ' cloudDevOpsEFSAnsibleVaultPassword', variable: 'ANSIBLE_VAULT_PASSWORD'],
+                    [$class: 'StringBinding', credentialsId: 'passwordOpenshift', variable: 'PASSWORD_OPENSHIFT']
             ]) {
                 if (env.BITBUCKET_PAYLOAD) {
                     def payload = readJSON text: env.BITBUCKET_PAYLOAD
@@ -29,7 +29,8 @@ node(env.NODE) {
                               "TF_VAR_scm_password=${GIT_PASSWORD}",
                               "TF_VAR_scm_url=${gitUrl}",
                               "TF_VAR_scm_branch=master",
-                              "TF_VAR_vault_password=${ANSIBLE_VAULT_PASSWORD}"]) {
+                              "TF_VAR_vault_password=${ANSIBLE_VAULT_PASSWORD}",
+                              "KUBE_PASSWORD=${PASSWORD_OPENSHIFT}"]) {
                             //gitClone('auto_test', gitUrl, branch)
                             gitClone('auto_test', gitUrl, 'master')
                             createSecretsYaml()
@@ -40,9 +41,13 @@ node(env.NODE) {
                             sh("set +x; curl --request POST --url ${prHref}/comments --header 'Accept: application/json' --header 'Content-Type: application/json' -u ${GIT_NAME}:${GIT_PASSWORD} -d @comment.json")
 
                             try {
-                                sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
-                                sh("set +x; ./terraform workspace new ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
+                                sh ("set +x; chmod +x terraform")
+                               // sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
+                                sh("set +x; ./terraform init -no-color -plugin-dir=./plugins")
+                                sh("set +x; ./terraform workspace new ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
+
                                 sh("set +x; ./terraform apply -no-color -var-file=ansible/values.tfvars -var=\"vault_password=${ANSIBLE_VAULT_PASSWORD}\" -auto-approve")
+                                //sh("set +x; ./terraform state pull -no-color -var-file=ansible/values.tfvars -var=\"vault_password=${ANSIBLE_VAULT_PASSWORD}\" ")
                                 sh("set +x; rm -rf .terraform* comment.json ansible/*_kubeconfig")
                                 sh("set +x; find . -name '*.pyc' -delete")
 
@@ -66,14 +71,17 @@ node(env.NODE) {
                               "TF_VAR_scm_password=${GIT_PASSWORD}",
                               "TF_VAR_scm_url=${gitUrl}",
                               "TF_VAR_scm_branch=${branch}",
-                              "TF_VAR_vault_password=${ANSIBLE_VAULT_PASSWORD}"]) {
+                              "TF_VAR_vault_password=${ANSIBLE_VAULT_PASSWORD}",
+                              "KUBE_PASSWORD=${PASSWORD_OPENSHIFT}"]) {
                             gitClone('auto_test', gitUrl, branch)
                             createSecretsYaml()
                             echo "Запуск по событию. PR - ${jobMode}"
                             sh("git merge -s ours origin/master --no-edit")
                             try {
-                                sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
-                                sh("set +x; ./terraform workspace new ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
+                                sh ("set +x; chmod +x terraform")
+                               // sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
+                                sh("set +x; ./terraform init -no-color -plugin-dir=./plugins")
+                                sh("set +x; ./terraform workspace new ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
                                 sh("set +x; ./terraform plan -no-color -var-file=ansible/values.tfvars -var=\"vault_password=${ANSIBLE_VAULT_PASSWORD}\" > plan")
                                 sh("set +x; cat plan | sed 's/\"//g' | sed 's/#//g' | sed 's/  //g' > form_plan; rm -f plan")
                             } catch (e) {
@@ -114,13 +122,16 @@ node(env.NODE) {
                                   "TF_VAR_scm_password=${GIT_PASSWORD}",
                                   "TF_VAR_scm_url=${gitUrl}",
                                   "TF_VAR_scm_branch=master",
-                                  "TF_VAR_vault_password=${ANSIBLE_VAULT_PASSWORD}"]) {
+                                  "TF_VAR_vault_password=${ANSIBLE_VAULT_PASSWORD}",
+                                  "KUBE_PASSWORD=${PASSWORD_OPENSHIFT}"]) {
                         gitClone('auto_test', gitUrl, 'master')
                         createSecretsYaml()
                         echo "Применение конфигурации без события"
                         try {
-                            sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
-                            sh("set +x; ./terraform workspace new ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${uniq_job_name_md5}_${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
+                            sh ("set +x; chmod +x terraform")
+                            //sh("set +x; ./terraform init -no-color -plugin-dir=./plugins -backend-config=\"conn_str=postgres://${PG_NAME}:${PG_PASSWORD}@${env.TERRAFORM_PG_REMOTE_CONN_STR}\"")
+                            sh("set +x; ./terraform init -no-color -plugin-dir=./plugins")
+                            sh("set +x; ./terraform workspace new ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color || ./terraform workspace select ${env.COLLECTIVE_TERRAFORM_WORKSPACE} -no-color")
                             //sh("set +x; terraform apply -no-color -var-file=ansible/values.tfvars -var=\"vault_password=${ANSIBLE_VAULT_PASSWORD}\" -var=\"nexususer=${GIT_NAME}\" -var=\"nexuspass=${GIT_PASSWORD}\" -auto-approve" )
                             sh("set +x; ./terraform destroy -no-color -var-file=ansible/values.tfvars -var=\"vault_password=${ANSIBLE_VAULT_PASSWORD}\" -auto-approve")
                             sh("set +x; rm -rf .terraform* ansible/*_kubeconfig")
@@ -144,6 +155,8 @@ def gitClone(creds, url, branch) {
     checkout([$class    : 'GitSCM', branches: [[name: branch]],
               extensions: [], userRemoteConfigs: [[credentialsId: creds, url: url]]])
 }
+
+
 
 def gitCommit(creds, url, repoBranch, commitMessage = "Jenkins apply job commit") {
     withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: creds, usernameVariable: 'GIT_NAME', passwordVariable: 'GIT_PASSWORD']]) {
@@ -171,9 +184,9 @@ def createSecretsYaml() {
         def secrets = new File("ansible/secrets.yml")
         if (env.HASHICORP.toBoolean() == true || !secrets.exists()) {
             if (env.HASHICORP_URL && env.HASHICORP_PATH && HASHICORP_VAULT_TOKEN) {
-                sh "echo Run with Hashicorp Vault"
-                sh "python secman_yaml.py --url ${env.HASHICORP_URL} --path ${env.HASHICORP_PATH} --token ${HASHICORP_VAULT_TOKEN} --output_file ansible/secrets.yml"
-                sh "echo ${ANSIBLE_VAULT_PASSWORD} > vpass.txt && ansible-vault encrypt --vault-id @vpass.txt ansible/secrets.yml"
+            sh "echo Run with Hashicorp Vault"
+            sh "python secman_yaml.py --url ${env.HASHICORP_URL} --path ${env.HASHICORP_PATH} --token ${HASHICORP_VAULT_TOKEN} --output_file ansible/secrets.yml"
+            sh "echo ${ANSIBLE_VAULT_PASSWORD} > vpass.txt && ansible-vault encrypt --vault-id @vpass.txt ansible/secrets.yml"
             } else {
                 sh("Error")
             }
