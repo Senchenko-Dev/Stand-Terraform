@@ -233,14 +233,14 @@ resource "local_file" "pangolin-inventory" {
     }
 
     // Настройка install-deps
-    plays {
-      playbook {
-        file_path = "${local.playbook_path}/playbook_install_deps.yaml"
-      }
-      extra_vars = {}
-      inventory_file = local_file.pangolin-inventory.filename
-      become = true
-    }
+#    plays {
+#      playbook {
+#        file_path = "${local.playbook_path}/playbook_install_deps.yaml"
+#      }
+#      extra_vars = {}
+#      inventory_file = local_file.pangolin-inventory.filename
+#      become = true
+#    }
     // Скачивание дистрибутива СПО
     // Закоментировал так как роль не по стандарту std11 и затирает изменения по получению серкетов из валта
     # plays {
