@@ -10,18 +10,15 @@ locals {
   ]
   # параметры для VCD_VM
   vm_props_default = {
-    #---------CentOs7-----------#
-    #template_name = "CentOS7_64-bit"
-    #catalog_name = "Linux Templates"
-
-    #---------CentOs7.9-----------#
-    #template_name = SBT-SPO-RHEL79-latest
-    #catalog_name = RHEL7
-
     #-------------CentOs-8.4----------------#
     template_name = "SBT-SPO-RHEL84-latest"
     catalog_name = "SBT_CREATOR_TEMPLATES"
     #---------------------------------------#
+
+    #---------CentOs7-----------#
+    #template_name = "CentOS7_64-bit"
+    #catalog_name = "Linux Templates"
+
     network_type = "org"
     ip_allocation_mode = "POOL"
 
@@ -94,7 +91,8 @@ locals {
 module "NginxG1" {
   source = "./modules/spo_nginx"
   # VM properties
-  count = 0
+  count = 1
+
   vm_count = 1
   cpu = 1
   memory = 512
@@ -172,7 +170,8 @@ module "ELK_standalone1" {
 # PG
 
 module "PGSE_standalone01" {
-  count = 1
+  count = 0
+
   source = "./modules/spo_pangolin"
   # VM properties
   vm_props = local.vm_props_default

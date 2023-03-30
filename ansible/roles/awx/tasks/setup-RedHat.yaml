@@ -48,15 +48,16 @@
       - selinux-policy-base
     state: present
 
-# - name: Enable Docker
-#   systemd:
-#     name: docker
-#     enabled: yes
+ - name: Enable Docker
+   systemd:
+     name: docker
+     enabled: yes
 
-# - name: Start Docker
-#   systemd:
-#     name: docker
-#     state: started
+ - name: Start Docker
+   systemd:
+     name: docker
+     state: started
+
 
 - name: Download k3s
   get_url:
@@ -89,13 +90,6 @@
     INSTALL_K3S_BIN_DIR: /usr/bin
     INSTALL_K3S_SKIP_DOWNLOAD: "true"
 
-- name: create /etc/docker
-  file:
-    path: /etc/docker
-    state: directory
-    owner: root
-    group: root
-
 - name: settings docker
   template:
     src: daemon.json.j2
@@ -106,6 +100,8 @@
   file:
     path: /etc/rancher/k3s/registries.yaml
     state: touch
+
+
 
 - name: add in file register.yaml settings
   blockinfile:
@@ -142,8 +138,6 @@
 - debug:
     msg: "Имя кластера: {{node.stdout}}"
 
-- name: Download images nginx
-  shell: docker pull 10.42.4.125:5000/nginx
 
 - name: Download AWX
   get_url:

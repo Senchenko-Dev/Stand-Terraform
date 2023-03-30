@@ -20,10 +20,10 @@
       when: hostvars[item].ansible_host is defined
       with_items: "{{ groups.all }}"
 
-    - name: setup mirror for yum
-      include_role:
-        name: setup_yum_repos
-      when: setup_yum_repos | bool | default(false)
+#    - name: setup mirror for yum
+#      include_role:
+#        name: setup_yum_repos
+#      when: setup_yum_repos | bool | default(false)
 
     - name: Disable firewalld
       service:
