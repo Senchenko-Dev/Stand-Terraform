@@ -27,7 +27,6 @@ resource "vcd_independent_disk" "disks" {
 }
 
 
-
 resource "vcd_vm" "VM-nginx" {
 
   depends_on = [vcd_independent_disk.disks]
