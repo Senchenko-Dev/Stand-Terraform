@@ -177,7 +177,7 @@ module "PGSE_standalone" {
   cpu = 2
   memory = 8*1024
   vm_pg_disk_data = [
-            { size : "20G", mnt_dir : "/pgdata" },
+    #    { size : "20G", mnt_dir : "/pgdata" },
   ]
   # Ansible properties
   inventory_group_name = "Pangolin_alone-1"
