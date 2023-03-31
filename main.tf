@@ -187,7 +187,7 @@ module "PGSE_standalone01" {
   force_ansible_run = "master"
 
   # Download
-  pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/PSQ-05.002.02-159/CI90000013_pangolin-PSQ-05.002.02-159-distrib.zip"
+  pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"
 
   # Install
   installation_type = "standalone"
