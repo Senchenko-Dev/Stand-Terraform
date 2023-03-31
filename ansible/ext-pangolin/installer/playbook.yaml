@@ -1,11 +1,3 @@
-- name: Vault secrets
-  hosts: all
-  tasks:
-    - name: Import secrets
-      include_vars: "../../{{ vault_file }}"
-      when: vault_file is defined
-  tags: always
-
 - name: Get ping response and gather packages info
   hosts: localhost:all
   tasks:
