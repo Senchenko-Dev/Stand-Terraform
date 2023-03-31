@@ -88,8 +88,8 @@ locals {
   )
 }
 
-# NGINX
-module "NginxG1" {
+
+module "Nginx" {
   source = "./modules/spo_nginx"
   # VM properties
   count = 0
@@ -110,7 +110,6 @@ module "NginxG1" {
   spo_role_name = "nginx"
   vault_file = local.vault_file
 }
-
 
 module "KAFKA_Corex_standalone" {
   count = 0
@@ -140,8 +139,7 @@ module "KAFKA_Corex_standalone" {
 
 }
 
-
-module "ELK_standalone1" {
+module "ELK_standalone" {
 
   count = 0
 
@@ -168,9 +166,8 @@ module "ELK_standalone1" {
 
 }
 
-#123
-# PG
-module "PGSE_standalone01" {
+module "PGSE_standalone" {
+
   count = 1
 
   source = "./modules/spo_pangolin"
