@@ -3,8 +3,8 @@ GROUP "DININFRA"
 DESCRIPTION PostgreSQL_SE"
 RECONNECT
 DYNAMIC 2 2
-PREEXEC "{{ pg_major_version }}_pg_se_archlogs.sh -o start" -on_host "{{ master_fqdn }}"
-POSTEXEC "{{ pg_major_version }}_pg_se_archlogs.sh -o stop" -on_host "{{ master_fqdn }}"
+PREEXEC "{{ pg_version }}_pg_se_archlogs.sh -o start" -on_host "{{ master_fqdn }}"
+POSTEXEC "{{ pg_version }}_pg_se_archlogs.sh -o stop" -on_host "{{ master_fqdn }}"
 DEFAULTS
 {
     FILESYSTEM

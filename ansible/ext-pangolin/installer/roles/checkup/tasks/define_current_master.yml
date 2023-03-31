@@ -1,78 +1,24 @@
-- name: Check exists patroni
-  stat: path="{{ patroni_files.service_file }}"
-  register: patroni_exists
-  become: true
-  when: inventory_hostname == 'master'
-
 - name: Define role of the specified host
   block:
 
     - name: check connection parameter in patroni config
       reciter:
-        ANSIBLE_MODULE_ARGS:
-          src: "{{ patroni_files.conf_dir }}/postgres.yml"
-          action: get
-          parameter: restapi
-          inner_parameter: connect_address
+        src: "{{ patroni_files.conf_dir }}/postgres.yml"
+        action: get
+        parameter: restapi
+        inner_parameter: connect_address
       register: patroni_connect_address
-      environment:
-        - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
       become_user: postgres
       become: true
 
-    - name: get status code via patroni rest api
+    - name: get status code via patroni api
       uri:
         url: "http://{{ patroni_connect_address.message }}"
-        status_code: [ 503, 200, -1 ]
-      register: _defcurrmaster_result
+        status_code: [ 503, 200 ]
+      register: result
 
-    - name: get status code via patroni rest api https
-      uri:
-        url: "https://{{ patroni_connect_address.message }}"
-        status_code: [ 503, 200, -1 ]
-      register: _defcurrmaster_result_https
-
-    - name: print rlm error message for define master
+    - name: сheck if host is master
       assert:
-        that: _defcurrmaster_result.status == 200 or _defcurrmaster_result_https.status == 200
-        fail_msg: "{{ message_installer.fails.find_master }}"
-
-    - name: save current ssl_mode state for update
-      set_fact:
-        ssl_mode: "{% if _defcurrmaster_result_https.status == 200 %}true{% else %}false{% endif %}"
-        cacheable: yes
-      delegate_to: "{{ item }}"
-      delegate_facts: true
-      loop: "{{ groups['all'] }}"
-
-  when: inventory_hostname == 'master' and patroni_exists.stat.exists
-
-#TODO PANGOLIN-1554
-- name: Check exists pgbouncer
-  stat:
-    path: "{{ pgbouncer_files.bin_path }}"
-  register: pgbouncer_exists
-  become: true
-  when: inventory_hostname == 'master'
-
-- name: Define ssl_mode if standalone
-  block:
-
-    - name: check active tls params in pgbouncer config
-      lineinfile:
-        name: "{{ pgbouncer_files.conf_dir }}/pgbouncer.ini"
-        regexp: "^server_tls(.*)$"
-        state: absent
-      check_mode: true
-      register: _tls_pgbouncer_config
-
-    - name: save current ssl_mode state for update
-      set_fact:
-        ssl_mode: "{% if _tls_pgbouncer_config.changed == 200 %}true{% else %}false{% endif %}"
-
-  when: inventory_hostname == 'master' and pgbouncer_exists.stat.exists and not patroni_exists.stat.exists
-
-- name: Save current ssl_mode state for standalone-postgresql-only
-  set_fact:
-    ssl_mode: false
-  when: inventory_hostname == 'master' and not pgbouncer_exists.stat.exists and not patroni_exists.stat.exists
+        that: result.status == 200
+        fail_msg: "Host is not a master. Please enter the correct host for master node"
+        success_msg: "Host is a master"

@@ -4,15 +4,12 @@
   copy:
     src: "{{ local_distr_path }}/{{ postgresql_package_file }}"
     dest: "{{ REMOTE_TMP }}"
-  become: true
 
 - name: Make sure previous package isn't installed
   package:
-    name:  "{{ item }}"
+    name:  postgresql-sber-edition
     state: absent
-  with_items:
-    - postgresql-sber-edition
-    - platform-v-pangolin-dbms
+  become_user: root
   become: true
 
 - name: Install package
@@ -29,15 +26,6 @@
   become: true
   when: ansible_os_family == "Altlinux"
 
-- name: Copy product version file
-  copy:
-    src: "{{ playbook_dir }}/files/version"
-    dest: "{{ PGHOME }}/share/version"
-    owner: postgres
-    group: postgres
-    mode: u=rw,g=r,o=r
-  become: true
-
 - name: Change permissions postgresql python bin
   file:
     path: "{{ python.postgresql_venv }}/bin/"
@@ -51,13 +39,6 @@
 
 - name: Copy 3rdparty extensions
   import_tasks: copy_3rdparty_extensions.yml
-
-- name: Copy utilities
-  include_tasks: utilities.yml
-
-- name: Copy documentation
-  include_role:
-    name: doc
 
 - name: Copy timescaledb to PGHOME
   copy:
@@ -86,34 +67,26 @@
   vars:
     component_name: postgresql
 
-- name: Remove dirs if exists
-  file:
-    path: "{{ item }}"
-    state: absent
-  with_items:
-    - '{{ PGDATA }}/'
-    - '{{ PGLOGS }}/'
-    - '{{ PGBACKUP }}'
-    - '{{ PGETCDIR }}/'
-  become: true
-
 - name: Ensure data and log dirs exists
   file:
-    path: "{{ item }}"
-    state: directory
+    path: "{{ item.path }}"
+    state: "{{ item.state }}"
     owner: postgres
     group: postgres
     mode: 0700
-    recurse: yes
   with_items:
-    - '{{ PGUSERHOME }}/'
-    - "/{{ PGDATA.replace('/', ' ').split().0 }}"
-    - "/{{ PGLOGS.replace('/', ' ').split().0 }}"
-    - '{{ PGDATA }}/'
-    - '{{ PGLOGS }}/'
-    - '{{ PGBACKUP }}'
-    - '/var/run/postgresql/'
-    - '{{ PGETCDIR }}/'
+    - { path: '{{ PGUSERHOME }}/', state: 'directory' }
+    - { path: '{{ PGDATA }}/', state: 'absent' }
+    - { path: '{{ PGLOGS }}/', state: 'absent' }
+    - { path: '{{ PGBACKUP }}', state: 'absent' }
+    - { path: '{{ PGETCDIR }}/', state: 'absent' }
+    - { path: "/{{ PGDATA.replace('/', ' ').split().0 }}", state: 'directory'}
+    - { path: "/{{ PGLOGS.replace('/', ' ').split().0 }}", state: 'directory'}
+    - { path: '{{ PGDATA }}/', state: 'directory' }
+    - { path: '{{ PGLOGS }}/', state: 'directory' }
+    - { path: '{{ PGBACKUP }}', state: 'directory' }
+    - { path: '/var/run/postgresql/', state: 'directory' }
+    - { path: '{{ PGETCDIR }}/', state: 'directory' }
   become: true
 
 - name: Change owner for sos file
@@ -143,11 +116,18 @@
       environment:
         PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
 
-    - name: initialize protection
-      shell:
-        cmd: "{{ PGHOME }}/bin/initprotection -D {{ PGDATA }}\ 
-             -U {{ admin_protection_users.sec_admin_backup.user_name }},{{ admin_protection_users.sec_admin.user_name }}\ 
-             -P '{{ admin_protection_users.sec_admin_backup.password }}','{{ admin_protection_users.sec_admin.password }}'"
+    - name: initializate standalone protect
+      shell: |
+        set timeout -1
+        spawn {{ PGHOME }}/bin/initprotection -D {{ PGDATA }} -U {{ sec_admin }}
+        match_max 100000
+        expect "Enter new security admin password:"
+        send -- "{{ sec_password }}\r"
+        expect "Enter it again:"
+        send -- "{{ sec_password }}\r"
+        expect eof
+      args:
+        executable: "expect"
       environment:
         PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
       when: "admin_protection is defined and admin_protection"
@@ -165,6 +145,21 @@
         group: postgres
         mode: 0600
         trim_blocks: False
+
+    - name: encrypt ldap
+      block:
+
+        - name: encrypt ldap passwords 
+          shell: >
+            {{ PGHOME }}/bin/pg_auth_password enc -W "{{ ldap_bind_tuz_password }}" 
+          register: encpassword_ldap
+    
+        - name: update ldap password
+          set_fact:
+            ldap_bind_tuz_password: '{{ encpassword_ldap.stdout[0:-1] }}'
+            
+      no_log: "{{ nolog }}"
+      when: "action_type == 'install' and 'patroni' not in tag"
 
     - name: Configure pg_hba.conf
       template:
@@ -199,59 +194,38 @@
   include_role:
     name: postgresql
     tasks_from: generate_certs.yml
-  when: not ssl_mode
 
-- name: initialize kms configuration
-  block:
-
-    - name: execute shell command for initializing KMS config
-      shell: |
-        set timeout -1
-        spawn {{ PGHOME }}/bin/setup_kms_credentials
-        match_max 100000
-        expect "Choose credentials domain:"
-        send -- "1\r"
-        expect "Enter Pangolin cluster ID:"
-        send -- "{{ KMS_CLUSTER_ID }}\r"
-        expect "Enter IP address:"
-        send -- "{{ KMS_HOST }}\r"
-        expect "Enter port:"
-        send -- "{{ KMS_PORT }}\r"
-        expect "Choose credentials type:"
-        send -- "1\r"
-        expect "Enter login:"
-        send -- "{{ KMS_LOGIN }}\r"
-        expect "Enter password:"
-        send -- "{{ KMS_PASSWORD }}\r"
-        expect "Confirm password:"
-        send -- "{{ KMS_PASSWORD }}\r"
-        expect "Do you want to add another KMS credentials? (yes/no)?:"
-        send -- "no\r"
-        expect eof
-      args:
-        executable: "expect"
-      environment:
-        PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
-      become_user: postgres
-      register: kms_initialize_command
-
-    - name: check created kms config
-      stat:
-        path: "{{ KMS_CONFIG }}"
-      register: kms_config_file
-
-    - name: check that config created
-      assert:
-        that: kms_config_file.stat.exists
-        fail_msg: "KMS config doesn't exists. May be result of setup_kms_credentials command has errors"
-
-    - name: check that kms config created without errors
-      assert:
-        that: not "Error" in kms_initialize_command.stdout
-        fail_msg: "KMS configuration created with errors"
-
-  become: true
+- name: Create configutation file for KMS
+  shell: |
+    set timeout -1
+    spawn {{ PGHOME }}/bin/setup_kms_credentials
+    match_max 100000
+    expect "Choose credentials domain:"
+    send -- "1\r"
+    expect "Enter PostgreSQL cluster ID:"
+    send -- "{{ KMS_CLUSTER_ID }}\r"
+    expect "Enter IP address:"
+    send -- "{{ KMS_HOST }}\r"
+    expect "Enter port:"
+    send -- "{{ KMS_PORT }}\r"
+    expect "Choose credentials type:"
+    send -- "1\r"
+    expect "Enter login:"
+    send -- "{{ KMS_LOGIN }}\r"
+    expect "Enter password:"
+    send -- "{{ KMS_PASSWORD }}\r"
+    expect "Confirm password:"
+    send -- "{{ KMS_PASSWORD }}\r"
+    expect "Do you want to add another KMS credentials? (yes/no)?:"
+    send -- "no\r"
+    expect eof
+  args:
+    executable: "expect"
+  environment:
+    PG_PLUGINS_PATH: "{{ PGHOME }}/lib"
   when: "(tde is defined and tde) or (admin_protection is defined and admin_protection)"
+  become: true
+  become_user: postgres
 
 - name: Start database and check process of postgresql
   block:
@@ -293,25 +267,7 @@
   when: "'postgresql-sber-edition' in ansible_facts.packages"
 
 - name: Add and configure patroni db user
-  block:
-
-    - name: add and configure patroni db user
-      include_role:
-        name: postgresql
-        tasks_from: add_and_configure_db_user_with_enc_space.yml
-      vars:
-        _addcfgdbuserenc_pghome: "{{ PGHOME }}"
-        _addcfgdbuserenc_user: patroni
-        _addcfgdbuserenc_dbnames: ["postgres", "replication"]
-        _addcfgdbuserenc_privs: 'LOGIN SUPERUSER REPLICATION NOINHERIT'
-        _addcfgdbuserenc_input_user_pass: '{% if patroni_user_pass is defined and patroni_user_pass|length > 0 %}{{ patroni_user_pass }}{% endif %}'
-
-    - name: save patroni user pass
-      set_fact:
-        patroni_user_pass: "{{ _addcfgdbuserenc_output_user_pass }}"
-
-  no_log: "{{ nolog }}"
+  include_role:
+    name: postgresql
+    tasks_from: add_and_configure_patroni_db_user.yml
   when: patroni and action_type == 'install'
-
-- name: Set permission files protect
-  import_tasks: set_permission_files_protect.yml

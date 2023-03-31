@@ -11,9 +11,7 @@
       with_items:
         - { src: "{{ merge_cfg.new_cfg }}",                     state: "directory" }
         - { src: "{{ merge_cfg.result_pgse }}",                 state: "directory" }
-        - { src: "{{ merge_cfg.result_patroni }}",              state: "directory" }
         - { src: "{{ merge_cfg.result_pgse_patroni }}",         state: "directory" }
-        - { src: "{{ merge_cfg.pgbouncer }}",                   state: "directory" }
 
     - name: fill new pgse configs
       template:
@@ -28,65 +26,6 @@
         - { src: "pg_hba.conf.j2",           dest: "pg_hba.conf" }
       become_user: postgres
 
-    - name: automerges pgbouncer configs
-      block:
-
-        - name: fill new pgbouncer.ini configs
-          template:
-            src: "{{ playbook_dir }}/roles/pgbouncer/templates/pgbouncer.ini.j2"
-            dest: "{{ merge_cfg.new_cfg }}/pgbouncer.ini"
-            owner: postgres
-            group: postgres
-            mode: 0640
-            trim_blocks: False
-      
-        - name: define version of current python interpreter
-          set_fact:
-            previous_python_interpreter: "{{ ansible_python_interpreter }}"
-
-        - name: set python interpretator
-          set_fact:
-            ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
-
-        - name: get recomend params
-          postgresql_query:
-            port: "{{ ports.pg }}"
-            query: show max_connections
-          register: recomend_value
-          environment: "{{ db_connection_args }}"
-
-        - name: update recomend value
-          set_fact:
-            default_recommend_base_db: "{{ recomend_value.query_result.0.max_connections|int - pg_coef_conns }}"
-
-        - name: define previous python interpreter
-          set_fact:
-            ansible_python_interpreter: "{{ previous_python_interpreter }}"
-
-        - name: change parameters for pgbouncer config
-          lineinfile:
-            path: "{{ merge_cfg.new_cfg }}/pgbouncer.ini"
-            insertafter: "[pgbouncer]"
-            regexp: ".*{{ item.param_name }}.*"
-            line: " {{ item.param_name  }} = {{ default_recommend_base_db }}"
-          with_items: 
-            - { param_name: "default_pool_size"}
-            - { param_name: "max_db_connections"}
-            - { param_name: "max_user_connections"}
-
-        - name: auto merge old configs with new pgbouncer.ini
-          include_role:
-            name: common
-            tasks_from: use_pgbouncer_merge
-          vars:
-            _useamerge_old_cfg_file: "{{ merge_cfg.old_cfg_pgbouncer }}/pgbouncer.ini"
-            _useamerge_new_cfg_file: "{{ merge_cfg.new_cfg }}/pgbouncer.ini"
-            _useamerge_result_cfg_file: "{{ merge_cfg.pgbouncer }}/pgbouncer.ini"
-            _useamerge_root_path: "{{ merge_cfg.dir_path }}"
-        
-      become_user: root
-      when: pgbouncer
-
     - name: auto merge old configs with new postgresql.conf, pg_hba.conf
       include_role:
         name: common
@@ -95,7 +34,10 @@
         _useamerge_old_cfg_file: "{{ merge_cfg.old_cfg_pgse }}/{{ item.old_cfg }}"
         _useamerge_new_cfg_file: "{{ merge_cfg.new_cfg }}/{{ item.new_cfg }}"
         _useamerge_result_cfg_file: "{{ item.save_file }}"
+        _useamerge_old_ver: "{{ merge_cfg.old_ver }}"
+        _useamerge_new_ver: "{{ merge_cfg.new_ver }}"
         _useamerge_root_path: "{{ merge_cfg.dir_path }}"
+        _useamerge_only_pgse: "False"
         _useamerge_pghba_mode: "merge"
       loop:
         - { old_cfg: 'postgresql.conf',    new_cfg: 'postgresql.conf', save_file: '{{ merge_cfg.result_pgse }}/postgresql.conf',}
@@ -113,11 +55,6 @@
             mode: 0640
             trim_blocks: False
 
-        # TODO (https://jira.sberbank.ru/browse/PGSQL-5499)
-        # when we turn on etcd v3
-        #- name: test change section etcd for automerge
-        #  shell: 'sed -i "s|etcd:|etcd3:|g" {{ merge_cfg.old_cfg_patroni }}/postgres.yml'
-
         - name: merge old configs with new postgres.yml
           include_role:
             name: common
@@ -126,38 +63,17 @@
             _useamerge_old_cfg_file: "{{ merge_cfg.old_cfg_patroni }}/{{ item.old_cfg }}"
             _useamerge_new_cfg_file: "{{ merge_cfg.new_cfg }}/{{ item.new_cfg }}"
             _useamerge_result_cfg_file: "{{ item.save_file }}"
+            _useamerge_old_ver: "{{ merge_cfg.old_ver }}"
+            _useamerge_new_ver: "{{ merge_cfg.new_ver }}"
             _useamerge_root_path: "{{ merge_cfg.dir_path }}"
-            _useamerge_yml_cfg_sections: "{{ item._useamerge_yml_cfg_sections }}"
+            _useamerge_only_pgse: "{{ item.only_pgse }}"
             _useamerge_pghba_mode: "merge"
           loop:
-              - { old_cfg: 'postgres.yml', new_cfg: 'postgres.yml', save_file: '{{ merge_cfg.result_pgse }}/postgres.yml',
-                  _useamerge_yml_cfg_sections: 'postgresql, bootstrap' }
-              - { old_cfg: 'postgres.yml', new_cfg: 'postgres.yml', save_file: '{{ merge_cfg.result_patroni }}/postgres.yml',
-                  _useamerge_yml_cfg_sections: 'restapi, etcd, scope, tags, name, bootstrap' }
-              - { old_cfg: 'postgres.yml', new_cfg: 'postgres.yml', save_file: '{{ merge_cfg.result_pgse_patroni }}/postgres.yml', 
-                  _useamerge_yml_cfg_sections: 'all' }
-
-        # TODO (https://jira.sberbank.ru/browse/PGSQL-5499)
-        # when we turn on etcd v3
-        #- name: test revert change section etcd for automerge
-        #  shell: 'sed -i "s|etcd3:|etcd:|g" {{ merge_cfg.old_cfg_patroni }}/postgres.yml'
-
-        # TODO (https://jira.sberbank.ru/browse/PGSQL-5499)
-        # when we turn on etcd v3
-        #- name: test revert change section etcd for automerge
-        #  shell: 'sed -i "s|etcd3:|etcd:|g" {{ merge_cfg.result_pgse }}/postgres.yml'
-
-        - name: removing empty lines from a postgres.yml
-          lineinfile:
-            path: "{{ item.0 }}"
-            regexp: "{{ item.1 }}"
-            state: absent
-          with_nested:
-            - [ '{{ merge_cfg.result_pgse }}/postgres.yml', '{{ merge_cfg.result_patroni }}/postgres.yml', '{{ merge_cfg.result_pgse_patroni }}/postgres.yml' ]
-            - [ '^\n', '^(\s+)\n' ]
+              - { old_cfg: 'postgres.yml', new_cfg: 'postgres.yml', save_file: '{{ merge_cfg.result_pgse }}/postgres.yml',         only_pgse: True}
+              - { old_cfg: 'postgres.yml', new_cfg: 'postgres.yml', save_file: '{{ merge_cfg.result_pgse_patroni }}/postgres.yml', only_pgse: False}
 
       become_user: postgres
-      when: is_patroni_exists
-
+      when: patroni
+      
   become: true   
   when: inventory_hostname != 'etcd'

@@ -28,7 +28,10 @@
         port: "{{ ports.pg }}"
         query: ALTER ROLE "{{ as_group }}" LOGIN;
 
-  environment: "{{ db_connection_args }}"
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
   become: true
   become_user: postgres
   when: "ansible_fqdn == current_master"
@@ -38,8 +41,8 @@
     name: common
     tasks_from: update_edit_pghba
   vars:
-    the_insert_params: [ [ '^(.*)(hostssl) all.*127.0.0.1/32 cert(.*)$', '        - host all tuz_for_test 0.0.0.0/0 md5' ], 
-                          [ '^(.*)(hostssl) all.*127.0.0.1/32 cert(.*)$', '        - host all {{ as_group }} 0.0.0.0/0 scram-sha-256'] ]
+    the_insert_params: [ [ '^(.*)(host) all.*0.0.0.0/0 md5(.*)$', '        - host all tuz_for_test 0.0.0.0/0 md5' ], 
+                          [ '^(.*)(hostssl) all postgres 127.0.0.1/32 cert(.*)$', '        - host all {{ as_group }} 0.0.0.0/0 scram-sha-256'] ]
     pghba_action: 'add'
   when: ansible_fqdn != 'etcd'
 
@@ -89,9 +92,8 @@
 
   environment:
     - PGHOST: "{{ ansible_fqdn }}"
-    - PGSSLCERT: "{{ pg_certs_pwd.postgres_cert }}"
-    - PGSSLKEY: "{{ pg_certs_pwd.postgres_key }}"
-    - PGSSLROOTCERT: "{{ pg_certs_pwd.root_ca }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
   become: true
   become_user: postgres
   when: "ansible_fqdn == current_master"

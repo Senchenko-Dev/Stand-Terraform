@@ -11,19 +11,9 @@
 - name: Remember current PG SE version from service info
   block:
 
-    - name: remember current Pangoli version
+    - name: remember current PG SE version
       set_fact:
-        pg_current_version: "{% if 'platform-v-pangolin-dbms' in ansible_facts.packages %}\
-                            {{ ansible_facts.packages['platform-v-pangolin-dbms'][0].version }}\
-                            {% else %}\
-                            {{ ansible_facts.packages['postgresql-sber-edition'][0].version }}\
-                            {% endif %}"
-    
-    - name: remember current Pangolin  full version without zeros
-      set_fact: 
-        pg_current_full_version_without_zeros: "{{ pg_current_version.split('.').0 | int }}.\
-                                                {{ pg_current_version.split('.').1 | int }}.\
-                                                {{ pg_current_version.split('.').2 | int }}"
+        pg_current_version: "{{ ansible_facts.packages['postgresql-sber-edition'][0].version }}"
 
     - name: create cache update dir
       file:
@@ -60,7 +50,7 @@
     - name: check that {{ update_status_files.prev_pgse_version }} file is exists
       assert:
         that: file_with_prev_pgse_ver_created.stat.exists
-        fail_msg: "{{ message_installer.fails.find_version_pangolin }}"
+        fail_msg: "Информация о текущей версии PG SE не была записана в файл."
 
   become: true
   when: "inventory_hostname != 'etcd' and not json_with_prev_pgse_ver.stat.exists and 'update' in action_type"
@@ -71,7 +61,7 @@
     - name: fetch {{ update_status_files.prev_pgse_version }} file from master
       fetch:
         src: '{{ update_status_files.dir }}/{{ update_status_files.prev_pgse_version }}'
-        dest: '/tmp'
+        dest: '{{ REMOTE_TMP }}'
 
     - name: define dir name for host_name
       set_fact:
@@ -80,7 +70,7 @@
 
     - name: read json file with pg_current_version
       include_vars:
-        file: "/tmp/{{ _prepareupdate_dir_name }}/{{ update_status_files.dir }}/{{ update_status_files.prev_pgse_version }}"
+        file: "{{ REMOTE_TMP }}/{{ _prepareupdate_dir_name }}/{{ update_status_files.dir }}/{{ update_status_files.prev_pgse_version }}"
 
     - name: print pg_current_version
       debug: 
@@ -96,28 +86,12 @@
       set_fact: 
         pg_current_version: "{{ pg_current_version }}"
 
-    - name: sync current Pangolin full version without zeros between hosts
-      set_fact: 
-        pg_current_full_version_without_zeros: "{{ pg_current_version.split('.').0 | int }}.\
-                                                {{ pg_current_version.split('.').1 | int }}.\
-                                                {{ pg_current_version.split('.').2 | int }}"
-
     - name: print pg_current_version
       debug: 
         msg: "{{ pg_current_version }}"
 
-    - name: print current Pangolin full version without zeros
-      debug: 
-        msg: "{{ pg_current_full_version_without_zeros }}"
-
   run_once: true
-  when: "action_type in ['update_major', 'update_minor']"
-
-- name: Save backup dir path
-  set_fact:
-    backup_root_dir: "{{ backup_main_dir }}/{{ pg_current_version }}/{{ ansible_date_time.date }}-T{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}"
-    cacheable: yes
-  run_once: true
+  when: "'update' in action_type"
 
 - name: Get PGDATA_OLD, PGHOME_OLD
   block:
@@ -145,20 +119,18 @@
 
         - name: get PGDATA_OLD
           reciter:
-            ANSIBLE_MODULE_ARGS:
-              src: "{{ patroni_files.conf_dir }}/postgres.yml"
-              action: get
-              parameter: postgresql
-              inner_parameter: data_dir
+            src: "{{ patroni_files.conf_dir }}/postgres.yml"
+            action: get
+            parameter: postgresql
+            inner_parameter: data_dir
           register: pgdata_old
 
         - name: get PGHOME_OLD
           reciter:
-            ANSIBLE_MODULE_ARGS:
-              src: "{{ patroni_files.conf_dir }}/postgres.yml"
-              action: get
-              parameter: postgresql
-              inner_parameter: bin_dir
+            src: "{{ patroni_files.conf_dir }}/postgres.yml"
+            action: get
+            parameter: postgresql
+            inner_parameter: bin_dir
           register: pghome_old
 
         - name: define some variables
@@ -166,8 +138,6 @@
             PGDATA_OLD: "{{ pgdata_old.message }}"
             PGHOME_OLD: "{{ pghome_old.message | replace('/bin', '') }}"
 
-      environment:
-        - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
       when: "installation_type =='cluster' or patroni_config_files"
 
     - name: get PGDATA_OLD and define some variables if patroni not installed
@@ -175,51 +145,35 @@
 
         - name: get PGDATA_OLD
           reciter:
-            ANSIBLE_MODULE_ARGS:
-              src: "{{ postgresql_files.service_file }}"
-              action: get
-              parameter: ExecStart
+            src: "{{ postgresql_files.service_file }}"
+            action: get
+            parameter: ExecStart
           register: pgdata_old
 
         - name: get PGHOME_OLD
           reciter:
-            ANSIBLE_MODULE_ARGS:
-              src: "{{ postgresql_files.service_file }}"
-              action: get
-              parameter: WorkingDirectory
+            src: "{{ postgresql_files.service_file }}"
+            action: get
+            parameter: WorkingDirectory
           register: pghome_old
 
-        - name: define some variables
+        - name: save PGDATA_OLD
           set_fact:
-            PGDATA_OLD: "{{ pgdata_old.message.split('-D ')[-1] }}"
+            PGDATA_OLD: "{{ pgdata_old.message.split('-D ')[-1]}}"
             PGHOME_OLD: "{{ pghome_old.message }}"
-      
-      environment:
-        - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
+            
       become_user: root
       when: "installation_type =='standalone' and not patroni_config_files "
-
-    - name: check if pgdata_old is link
-      stat:
-        path: "{{ (PGDATA_OLD | regex_replace('/$', '')).split('/')[0:-1] | join ('/') }}"
-      register: pgdata_link
-
-    - name: save PGDATA_OLD main
-      set_fact:
-        PGDATA_OLD: "{% if pgdata_link.stat.islnk %}{{ pgdata_link.stat.lnk_source }}/data{% else %}{{ PGDATA_OLD }}{% endif %}"
 
     - name: grep PYTHON_VENV_OLD
       block:
 
         - name: get PYTHON_VENV_OLD
           reciter:
-            ANSIBLE_MODULE_ARGS:
-              src: "{{ patroni_files.service_file }}"
-              action: get
-              parameter: ExecStart
+            src: "{{ patroni_files.service_file }}"
+            action: get
+            parameter: ExecStart
           register: python_venv_old
-          environment:
-            - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
           become_user: root
 
         - name: save PYTHON_VENV_OLD
@@ -260,32 +214,46 @@
 
     - name: get PGPORT_OLD
       reciter:
-        ANSIBLE_MODULE_ARGS:
-          src: "{{ PGDATA_OLD }}/postgresql.conf"
-          action: get
-          parameter: port
+        src: "{{ PGDATA_OLD }}/postgresql.conf"
+        action: get
+        parameter: port
       register: pgport_old
-      environment:
-        - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
 
     - name: save old PGPORT
       set_fact:
         PGPORT_OLD: "{{ pgport_old.message }}"
 
-    - name: get CLNAME_OLD
-      shell: echo $CLNAME
-      register: clname_old
-      become_flags: "-i"
+    - name: get CLNAME_OLD by not patroni
+      block:
 
-    - name: print message if clustername not found
-      assert:
-        that: clname_old.stdout|length > 0
-        fail_msg: "{{ update_control_msgs.fails.cluster_name_found }}"
+        - name: get CLNAME_OLD without patroni
+          reciter:
+            src: "{{ PGDATA_OLD }}/postgresql.conf"
+            action: get
+            parameter: archive_command
+          register: clname_old
 
-    - name: save current clustername
-      set_fact:
-        clustername: "{{ clname_old.stdout }}"
-      run_once: true
+        - name: save old CLNAME_OLD
+          set_fact:
+            CLNAME_OLD: "{{ clname_old.message.split('--instance')[-1].split()[0] }}"
+      
+      when: not patroni_exists.stat.exists
+
+    - name: get CLNAME_OLD by patroni
+      block:
+
+        - name: get CLNAME_OLD without patroni
+          reciter:
+            src: "{{ patroni_files.conf_dir }}/postgres.yml"
+            action: get
+            parameter: scope
+          register: clname_old
+
+        - name: save old CLNAME_OLD
+          set_fact:
+            CLNAME_OLD: "{{ clname_old.message }}"
+      
+      when: patroni_exists.stat.exists
 
     - name: save PGHOME directory name
       set_fact:
@@ -300,13 +268,10 @@
 
         - name: check current port of pgbouncer
           reciter:
-            ANSIBLE_MODULE_ARGS:
-              src: "{{ pgbouncer_files.conf_dir }}/pgbouncer.ini"
-              action: get
-              parameter: listen_port
+            src: "{{ pgbouncer_files.conf_dir }}/pgbouncer.ini"
+            action: get
+            parameter: listen_port
           register: pgbouncerport_old
-          environment:
-            - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
 
         - name: save old PGBOUNCERPORT_OLD
           set_fact:
@@ -337,106 +302,8 @@
   become_user: postgres
   when: inventory_hostname != 'etcd'
 
-- name: Check PGPORT is opened and DB work
-  shell: '{{ PGHOME_OLD }}/bin/pg_isready -h {{ ansible_fqdn }} -p {{ PGPORT_OLD }}'
-  register: db_status_work
-  ignore_errors: true
-  become: true
-  become_user: postgres
-  when: inventory_hostname != 'etcd'
-
-- name: Generate certs for version below 4.2.1 and version without certs
-  import_tasks: 'prepare_update_certs.yml'
-  when: "inventory_hostname != 'etcd' and not db_status_work.failed"
-
-- name: Get and save current certificates
+- name: Check variables
   block:
-
-    - name: check currents certs
-      shell: "{{ item_cmd }}"
-      loop:
-        - grep -E 'PGSSLCERT|sslcert' {{ PGUSERHOME }}/.bash_profile | grep -v '^#'
-        - grep -E 'PGSSLKEY|sslkey' {{ PGUSERHOME }}/.bash_profile | grep -v '^#'
-        - grep -E 'PGSSLROOTCERT|sslrootcert' {{ PGUSERHOME }}/.bash_profile | grep -v '^#'
-      loop_control:
-        loop_var: item_cmd
-      register: ssl_client_certs
-      ignore_errors: true
-
-    - name: define current certs
-      set_fact:
-        client_cert: "{{ ssl_client_certs.results[ 0 ].stdout | get_cert_path('PGSSLCERT|sslcert') }}"
-        client_key: "{{ ssl_client_certs.results[ 1 ].stdout | get_cert_path('PGSSLKEY|sslkey') }}"
-        client_ca: "{{ ssl_client_certs.results[ 2 ].stdout | get_cert_path('PGSSLROOTCERT|sslrootcert') }}"
-
-    - name: list client certificates
-      set_fact:
-        list_client_certs: [ "{% if client_cert|length > 0 %}{{ client_cert }}{% else %}PGSSLCERT{% endif %}",
-                             "{% if client_key|length > 0 %}{{ client_key }}{% else %}PGSSLKEY{% endif %}",
-                             "{% if client_ca|length > 0 %}{{ client_ca }}{% else %}PGSSLROOTCERT{% endif %}" ]
-
-    - name: check that cerificates exists
-      stat:
-        path: "{{ item }}"
-      loop: "{{ list_client_certs }}"
-      register: cert_stat
-
-    - name: print message if certificates not exits
-      assert:
-        that: cert_stat.results[ index ].stat.exists
-        fail_msg: "{{ update_control_msgs.fails.found_cert.format(item) }}"
-      loop: "{{ list_client_certs }}"
-      loop_control:
-        index_var: index
-
-    - name: redefine client certificates
-      import_tasks: redefine_variables.yml
-      vars:
-        _redefinevars_client_cert: "{{ client_cert }}"
-        _redefinevars_client_key: "{{ client_key }}"
-        _redefinevars_client_ca: "{{ client_ca }}"
-
-  become: true
-  become_user: postgres
-  when: inventory_hostname != 'etcd'
-
-- name: Check variables and check configuration type
-  block:
-
-    - name: check cluster configuration and component installed
-      block:
-
-        - name: set python interpretator
-          set_fact:
-            ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
-
-        - name: save PGBACKUP_OLD query
-          postgresql_query:
-            query: SELECT setting FROM backup.settings
-            port: "{{ PGPORT_OLD }}"
-          register: pgbackup_old_query
-          become: true
-          become_user: postgres
-          environment: "{{ db_connection_args }}"
-
-        - name: save old PGBACKUP_OLD
-          set_fact:
-            PGBACKUP_OLD: "{{ pgbackup_old_query.query_result[0].setting }}"
-
-        - name: get installer.cluster_type
-          postgresql_query:
-            port: "{{ PGPORT_OLD }}"
-            query: SHOW installer.cluster_type
-          register: current_cluster_type
-          become: true
-          become_user: postgres
-          environment: "{{ db_connection_args }}"
-
-        - name: check cluster_type from DB and actual state
-          assert:
-            that: item.value == tag
-            fail_msg: "{{ update_control_msgs.fails.type_configuration }}"
-          with_dict: "{{ current_cluster_type.query_result }}"
 
     - name: check PGHOME_OLD_NAME exist
       assert:
@@ -461,6 +328,13 @@
         that: "PGPORT_OLD|length > 0"
         fail_msg: "PGPORT_OLD didn't load"
         success_msg: "PGPORT_OLD = {{ PGPORT_OLD }}"
+
+    - name: check CLNAME_OLD exist
+      assert:
+        that: "CLNAME_OLD|length > 0"
+        fail_msg: "CLNAME_OLD didn't load"
+        success_msg: "CLNAME_OLD = {{ CLNAME_OLD }}"
+      when: patroni
 
     - name: check PGBOUNCERPORT_OLD exist
       assert:
@@ -487,7 +361,7 @@
         that: "PYTHON_VENV_OLD|length > 0"
         fail_msg: "PYTHON_VENV_OLD didn't load"
         success_msg: "PYTHON_VENV_OLD = {{ PYTHON_VENV_OLD }}"
-      when: is_patroni_exists
+      when: patroni
 
     - name: check tag, some configuration type have to actual value
       assert:
@@ -497,35 +371,11 @@
 
   when: inventory_hostname != 'etcd'
 
-- name: Set max_worker_processes for update
+- name: Save old variables for update
   block:
 
-    - name: define current max_worker_processes
-      postgresql_query:
-        port: "{{ ports.pg }}"
-        query: show max_worker_processes
-      register: _upd_cur_max_worker_processes
-      become: true
-      become_user: postgres
-      environment:
-        - PGHOST: "{{ ansible_fqdn }}"
-        - PGSSLCERT: "{{ pg_certs_pwd.postgres_cert }}"
-        - PGSSLKEY: "{{ pg_certs_pwd.postgres_key }}"
-        - PGSSLROOTCERT: "{{ pg_certs_pwd.root_ca }}"
-
-    - name: set max_worker_processes for update
+    - name: define clustername
       set_fact:
-        _upd_max_worker_processes: "{{ _upd_cur_max_worker_processes.query_result[0].max_worker_processes }}"
+        clustername: "{{ CLNAME_OLD }}"
 
-  run_once: true
-  when: inventory_hostname != 'etcd'
-
-- name: define roles of nodes
-  include_role:
-    name: patroni
-    tasks_from: update_define_roles_of_nodes.yml
-  when: "action_type in ('scouting_users','unlock_reset_user','scouting_create_user','create_user','get_installed_contrib_ext','install_contrib_ext','scouting_pgbouncer','scout_edit_pg_hba','update_minor')"
-
-- name: Set python interpretator
-  set_fact:
-    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+  when: "inventory_hostname != 'etcd' and 'install' not in action_type"

@@ -1,7 +1,3 @@
-- name: Set python interpretator
-  set_fact:
-    ansible_python_interpreter: '{{ python.global_bin_2 }}'
-
 - name: Recovery pgbouncer
   block:
 
@@ -32,6 +28,29 @@
         - { src: "{{ backup.pgbouncer }}{{ user_share_dir }}/man/man5/pgbouncer.5",    dest: "{{ user_share_dir }}/man/man5/",  owner: root,     group: root }
         - { src: "{{ backup.pgbouncer }}{{ pgbouncer_files.conf_dir }}/pgbouncer.ini", dest: "{{ pgbouncer_files.conf_dir }}/", owner: postgres, group: postgres }
 
+    - name: check exists confd
+      stat: path="{{ confd_files.path_dir }}/bin/confd"
+      register: confd_exists
+
+    - name: revert bouncer config for confd
+      block:
+
+        - name: revert confd template file
+          copy:
+            src: "{{ backup.pgbouncer }}{{ confd_files.conf_dir }}/templates/pgbouncer.tmpl"
+            dest: "{{ confd_files.conf_dir }}/templates/pgbouncer.tmpl"
+            owner: postgres
+            group: postgres
+            mode: 0600
+            remote_src: true
+
+        - name: restart systemd and start service
+          systemd:
+            name: confd
+            state: restarted
+
+      when: confd_exists.stat.exists
+
     - name: restarted systemd and start service
       systemd:
         name: pgbouncer
@@ -48,42 +67,3 @@
         delay: 5
 
   become: true
-
-- name: recovery confd
-  block:
-
-    - name: stop confd service
-      service:
-        name: confd
-        state: stopped
-      when: "'confd.service' in ansible_facts.services"
-
-    - name: revert confd files
-      synchronize:
-        src: "{{ item.src }}"
-        dest: "{{ item.dest }}"
-      delegate_to: "{{ inventory_hostname }}"
-      become_user: root
-      with_items:
-        - { src: '{{ backup.confd }}{{ confd_files.path_dir }}/', dest: '{{ confd_files.path_dir }}' }
-        - { src: '{{ backup.confd }}{{ confd_files.conf_dir }}/', dest: '{{ confd_files.conf_dir }}' }
-        - { src: '{{ backup.confd }}{{ confd_files.service_file }}', dest: '{{ service_path_dir }}' }
-
-    - name: daemon reload of systemctl services
-      systemd:
-        daemon_reload: yes
-
-    - name: start confd service and enable
-      systemd:
-        name: confd
-        state: started
-        daemon_reload: yes
-        enabled: yes
-      register: result
-      until: result.status.ActiveState == 'active'
-      retries: 6
-      delay: 10
-
-  become_user: root
-  become: true
-  when: confd

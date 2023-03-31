@@ -99,7 +99,7 @@
 
         - name: it is exseption, if test password didn't work
           assert:
-            that: "inner_install"
+            that: "inner_install is defined"
             fail_msg: "test password didn't work"
 
         - name: get actual password policy for {{ _genupdatepass_dbuser }}, if user exist
@@ -167,7 +167,9 @@
             ansible_python_interpreter: '{{ previous_python_interpreter }}'
       
   environment:
-    - "{{ db_connection_args }}"
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
     - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
   become: true
   become_user: postgres

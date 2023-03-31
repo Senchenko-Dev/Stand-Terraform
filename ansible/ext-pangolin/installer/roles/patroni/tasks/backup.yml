@@ -20,7 +20,6 @@
       with_items:
         - { src: "{{ backup.patroni }}",                                   state: absent }
         - { src: "{{ backup.patroni }}{{ patroni_files.conf_dir }}",       state: directory }
-        - { src: "{{ backup.patroni }}{{ service_path_dir }}",             state: directory }
 
     - name: backup virtual environment for python
       copy:
@@ -44,7 +43,7 @@
     - name: backup config of patroni service
       copy:
         src: "{{ service_path_dir }}/patroni.service"
-        dest: "{{ backup.patroni }}{{ service_path_dir }}/patroni.service"
+        dest: "{{ backup_root_dir }}{{ service_path_dir }}/patroni.service"
         remote_src: yes
 
   become: true   

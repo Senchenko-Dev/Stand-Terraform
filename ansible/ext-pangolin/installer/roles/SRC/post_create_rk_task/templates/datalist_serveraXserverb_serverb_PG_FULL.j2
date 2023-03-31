@@ -3,8 +3,8 @@ GROUP "DININFRA"
 DESCRIPTION "PostgreSQL_SE"
 RECONNECT
 DYNAMIC 2 2
-PREEXEC "{{ pg_major_version }}_manage_backup.sh start" -on_host "{{ replica_fqdn }}"
-POSTEXEC "{{ pg_major_version }}_manage_backup.sh stop" -on_host "{{ replica_fqdn }}"
+PREEXEC "{{pg_version}}_manage_backup.sh start" -on_host "{{ replica_fqdn }}"
+POSTEXEC "{{pg_version}}_manage_backup.sh stop" -on_host "{{ replica_fqdn }}"
 DEFAULTS
 {
     FILESYSTEM
@@ -113,11 +113,4 @@ FILESYSTEM "{{ db_pg_data_fs }}_ts" {{ replica_fqdn }}:"{{ db_pg_data_fs }}"
 {
     -trees
         "{{ tablespace_location }}"
-}
-
-FILESYSTEM "{{ db_pg_data_fs }}_reencrypt" {{ replica_fqdn }}:"/"
-{
-    -trees
-        "/etc/postgres"
-        "/etc/patroni"
 }

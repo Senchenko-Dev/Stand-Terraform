@@ -44,7 +44,7 @@ then
     TYPE="start"
 fi
 
-BACKUP_DIR="/{{ PGBACKUP.split('/').1 }}/{{ pg_major_version }}"
+BACKUP_DIR="{{ PGBACKUP }}"
 PGINSTANCE="{{ clustername }}"
 WALSTATE_FILE=$BACKUP_DIR/wals_to_delete
 SOME_ARCHIVE_ABSENT=0
@@ -52,9 +52,16 @@ SOME_ARCHIVE_WAS_NOT_REMOVED=0
 INVALID_PATH=0
 LOG_FILE=$BACKUP_DIR/archive.log
 {% if 'update' in action_type %}
-MANAGE_BACKUP_SCRIPT={{ path_to_manage_backup_sh_file }}
+{% if ([ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 0 %}
+#TODO This is crutch! Path to bash files should be changed to name which containing major pg se version
+#4.2.x-4.4.x
+MANAGE_BACKUP_SCRIPT={{ manage_backup_bin }}/11_manage_backup.sh
+{% elif ([ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int != 0 %}
+#4.3.0-4.4.x && 4.4.0-4.5.0
+MANAGE_BACKUP_SCRIPT={{ manage_backup_bin }}/{{ pg_major_version }}_manage_backup.sh
+{% endif %}
 {% elif action_type == 'install' %}
-MANAGE_BACKUP_SCRIPT={{ manage_backup_bin }}/{{ src_bin_version }}_manage_backup.sh
+MANAGE_BACKUP_SCRIPT={{ manage_backup_bin }}/{{ pg_major_version }}_manage_backup.sh
 {% endif %}
 
 touch $LOG_FILE

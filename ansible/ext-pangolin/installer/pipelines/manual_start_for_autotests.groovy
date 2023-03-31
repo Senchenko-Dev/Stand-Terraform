@@ -111,8 +111,8 @@ switch(segment) {
         groupId = 'Nexus_PROD'
         artifactId = artifactId_for_nexus
         repoId = 'sbt_PROD_group'
-        pip_repository = 'https://spo.solution.sbt/python/simple'
-        nexusAddress = 'spo.solution.sbt'
+        pip_repository = 'https://pypi.org/simple/'
+        nexusAddress = 'pypi.org'
         break
     case ["sbercloud_archive"]:
         nexusRestApiUrl = 'https://dzo.sw.sbc.space/nexus-ci'
@@ -120,8 +120,8 @@ switch(segment) {
         groupId = 'ru/sbt/pangolin/archive'
         artifactId = artifactId_for_nexus
         repoId = 'sbt_maven'
-        pip_repository = 'https://spo.solution.sbt/python/simple'
-        nexusAddress = 'spo.solution.sbt'
+        pip_repository = 'https://pypi.org/simple/'
+        nexusAddress = 'pypi.org'
         break
 }
 
@@ -202,7 +202,7 @@ node(env.jenkinsAgentLabel){
                  withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'postgresql_nexus_cred', usernameVariable: 'remoteUsername', passwordVariable: 'remotePassword']])
                   {
                     url_to_distr = getNexusLink(nexusRestApiUrl, artifactId, version.toUpperCase(), "tar.gz", repoId, groupId, nexusClassifier, remoteUsername, remotePassword)
-                    sh "wget -nv --no-check-certificate --user=${remoteUsername} --password=${remotePassword} ${url_to_distr}"
+                    sh "wget --no-check-certificate --user=${remoteUsername} --password=${remotePassword} ${url_to_distr}"
                     }
                 }
                 stage('Unarchive distributive'){
@@ -225,7 +225,7 @@ node(env.jenkinsAgentLabel){
                   sh """
                       virtualenv pg_se_venv --python=python2
                       source pg_se_venv/bin/activate
-                      pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' ansible==2.9.18
+                      pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' ansible==2.9.25
                       pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' rpm==0.0.2
                       pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' -r distributive/installer/files/slave.txt
                      """
@@ -240,10 +240,6 @@ node(env.jenkinsAgentLabel){
                         python json_to_yml.py ${install_type.first()}
                        """
                   }
-                }
-                stage ('Start job Generate_certs') {
-                  build job: "${gen_certs_job}", parameters: [ string(name: 'hosts_list', value: hosts_list),
-                  string(name: 'ssh_user', value: ssh_user), password(name: 'ssh_password', value: ssh_password) ]
                 }
                 stage('Run Ansible playbook for hand case')
                 {
@@ -287,6 +283,7 @@ node(env.jenkinsAgentLabel){
                                                               ' security_level=' + security_level +
                                                               ' critical_level=' + critical_level +
                                                               ' segment=' + segment_type.first() +
+                                                              ' manual_run=yes' +
                                                               ' inner_install=yes' +
                                                               ' custom_config=group_vars/custom_dev.yml' +
                                                               ' stand=' + stand +'\"'

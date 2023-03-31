@@ -9,7 +9,7 @@ boto==2.49.0
 requests==2.23.0
 python-etcd
 click==6.7
-prettytable==2.2.0
+prettytable==2.2.1
 psutil==5.8.0
 cdiff==1.0
 python-daemon==2.3.0

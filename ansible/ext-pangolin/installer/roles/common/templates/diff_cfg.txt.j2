@@ -1,4 +1,4 @@
-force added
+4.3.0:::force added
 dict:::postgresql:::data_dir
 dict:::postgresql:::bin_dir
 dict:::postgresql.parameters:::log_statement
@@ -16,54 +16,91 @@ dict:::postgresql.parameters:::listen_addresses
 dict:::postgresql.parameters:::max_wal_size
 dict:::postgresql.parameters:::max_wal_senders
 dict:::postgresql.parameters:::max_replication_slots
-{% if not is_patroni_exists %}
-dict:::postgresql.parameters:::max_worker_processes
-{% endif %}
-dict:::postgresql.parameters:::pgaudit.log
-dict:::postgresql.parameters:::cron.max_running_jobs
-dict:::postgresql.parameters:::search_path
-dict:::postgresql.parameters:::log_line_prefix
-dict:::postgresql.parameters:::superuser_reserved_connections
-dict:::postgresql.parameters:::monitoring_ldap_servers
-dict:::postgresql.parameters:::enable_monitor_object_modification_date
-dict:::postgresql.parameters:::object_modification_date_keep_interval
-{% if pg_stat_kcache_is_enable %}
-dict:::postgresql.parameters:::pg_stat_kcache.linux_hz
-{% endif %}
-dict:::postgresql.parameters:::relnblocks_enable
-dict:::postgresql.parameters:::relnblocks_hash_max_size
-dict:::postgresql.parameters:::relnblocks_hash_init_size
-dict:::postgresql.parameters:::relnblocks_hash_max_db
-dict:::postgresql.parameters:::relnblocks_hash_init_db
-{% if performance_insights.is_enable %}
-dict:::postgresql.parameters:::performance_insights.enable
-dict:::postgresql.parameters:::performance_insights.masking
-dict:::postgresql.parameters:::performance_insights.sampling_enable
-dict:::postgresql.parameters:::performance_insights.sampling_period
-dict:::postgresql.parameters:::performance_insights.num_samples_in_ram
-dict:::postgresql.parameters:::performance_insights.num_samples_in_files
-{% endif %}
-{% if pg_profile.is_enable %}
-dict:::postgresql.parameters:::pg_profile.topn
-dict:::postgresql.parameters:::pg_profile.max_sample_age
-dict:::postgresql.parameters:::pg_profile.track_sample_timings
-{% endif %}
-dict:::bootstrap.dcs.postgresql.parameters:::max_worker_processes
-dict:::bootstrap.dcs.postgresql.parameters:::max_connections
-dict:::bootstrap.dcs:::ttl
-dict:::bootstrap.dcs:::retry_timeout
-dict:::bootstrap.dcs:::synchronous_mode_strict
-dict:::bootstrap.dcs:::synchronous_mode
 dict:::etcd:::hosts
 dict:::etcd:::password
 dict:::restapi.authentication:::password
+dict:::bootstrap.dcs:::ttl
+dict:::bootstrap.dcs:::retry_timeout
+dict:::bootstrap.dcs.postgresql.parameters:::max_connections
 dict:::NONE:::hba_file
 dict:::NONE:::ident_file
 
-removed
+4.3.0:::removed
 dict:::etcd:::host
 dict:::postgresql.authentication.replication:::password
 dict:::postgresql.authentication.superuser:::password
-dict:::postgresql.parameters:::max_wal_senders
-dict:::postgresql.parameters:::max_replication_slots
-dict:::postgresql.parameters:::wal_keep_segments
+
+4.4.0:::force added
+dict:::postgresql.parameters:::pgaudit.log
+dict:::postgresql.parameters:::cron.max_running_jobs
+dict:::postgresql.parameters:::search_path
+pghba:::host all patroni 127.0.0.1/32 scram-sha-256
+pghba:::host replication patroni 127.0.0.1/32 scram-sha-256
+pghba:::host all cron, backup_user 0.0.0.0/0 scram-sha-256
+dict:::bootstrap.dcs:::synchronous_mode_strict
+
+4.4.0:::removed
+pghba:::host all sberpg, masteromni, pstgcmdb, backup_user 0.0.0.0/0 md5
+pghba:::host all all_no_pam 10.101.175.116/32 md5
+pghba:::host all all_no_pam 10.103.110.0/24 md5
+pghba:::host all all_no_pam 10.103.111.0/24 md5
+pghba:::host all all_no_pam 10.118.46.0/24 md5
+pghba:::host all all_no_pam 10.118.51.0/24 md5
+pghba:::host all all_no_pam 10.118.53.0/24 md5
+pghba:::host all all_no_pam 10.118.75.0/24 md5
+pghba:::host all +all-sa-pam-group  10.101.146.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.101.175.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.105.82.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.105.83.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.115.52.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.115.242.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.118.46.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.118.51.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.118.53.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.118.75.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.123.118.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.101.175.116/32 ldap
+pghba:::host all +all-sa-pam-group  10.103.68.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.103.70.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.103.110.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.103.111.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.127.147.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.127.144.0/24 ldap
+pghba:::host all +all-sa-pam-group  10.35.41.128/25 ldap
+pghba:::host all +all-sa-pam-group  10.35.190.24/25 ldap
+pghba:::host all +all-sa-pam-group  10.43.171.0/25 ldap
+pghba:::host all +all-sa-pam-group  10.60.9.0/25 ldap
+pghba:::host all +db_admin 127.0.0.1/32 ldap
+pghba:::host all 16802315, Bogachev-VY, 17630584, Dolgopolova-EI, Egorov-PA, Izosimov-SD, 16758344, Kedrov-BV, Kirichenko-evv, konovalov-dmn, Lesnych-AP, 8432474, Mikushin-EYu, Papulov-EA, 16710609, Roslyakov-AN, 17555360, 4001407, 8428019, 16527841, guseynaliyev-avo 127.0.0.1/32 ldap
+pghba:::host all Balykova-ZT, Bogachev-VY, Bulgakov-RS, Dolgopolova-EI, Egorov-PA, Izosimov1-SD, Ilin-ID, Kedrov1-BV, Kirichenko-evv, konovalov1-dn, Lesnych-AP, Mikushin-EY, Papulov1-EA, Perelomov-GP, Roslyakov-AN, Sidelnikov-IO, Trofimenko-AI, Chernyshov1-AN, Shagiakhmetov-RL, guseynaliev-av 127.0.0.1/32 ldap
+pghba:::host all all_no_pam 10.21.0.0/16 ldap
+pghba:::host all all_no_pam 10.23.0.0/16 ldap
+pghba:::host all all_no_pam 10.24.0.0/16 ldap 
+pghba:::host all all_no_pam 100.99.0.0/16 ldap
+pghba:::host all all_no_pam 100.124.0.0/16 ldap
+pghba:::host all all_no_pam 172.29.0.0/16 ldap
+pghba:::host all all_no_pam 10.32.0.0/16 ldap
+pghba:::host all all_no_pam 10.51.0.0/16 ldap
+pghba:::host all all_no_pam 10.37.0.0/16 ldap
+pghba:::host all all_no_pam 10.57.0.0/16 ldap
+pghba:::host all all_no_pam 10.73.0.0/16 ldap
+pghba:::host all all_no_pam 10.200.0.0/16 ldap
+pghba:::host all all_no_pam 10.216.0.0/16 ldap
+pghba:::host all all_no_pam 10.247.0.0/16 ldap
+pghba:::host all all_no_pam 10.102.0.0/16 ldap
+pghba:::host all all_no_pam 10.110.0.0/16 ldap
+pghba:::host all all_no_pam 10.111.0.0/16 ldap
+pghba:::host all all_no_pam 10.112.0.0/16 ldap
+pghba:::host all all_no_pam 10.121.0.0/16 ldap
+pghba:::host all all_no_pam 10.117.0.0/16 ldap
+pghba:::host all all_no_pam 10.107.0.0/16 ldap
+
+4.5.0:::force added
+dict:::postgresql.parameters:::password_encryption
+
+4.5.0:::removed
+pghba:::host all test_tuz_devops, test_tuz, pgbouncer, zabbix_oasubd, monitoring_php, auditor 0.0.0.0/0 md5
+pghba:::host all all 10.105.81.0/24 md5
+pghba:::host all all 10.127.64.0/24 md5
+pghba:::host all all 10.60.40.0/24 md5
+pghba:::host all all 10.34.40.0/24 md5

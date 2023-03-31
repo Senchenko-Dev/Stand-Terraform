@@ -25,61 +25,24 @@
     - { parameter: 'Список логин ldap/AD Администраторов АС', value: '{{ as_admins }}',
         symbols: ['@', '.', '!', '#', '$', '%', '^', '&', '*', '(', ')', '{', '}', '\', '/', '?', '+', ';', ':', '#', '<', '>', '`'] }
 
-- name: Сheck parameters at the start
+- name: Check public schema variable
   assert:
-    that:
-      - "{{ item.name }} | lower is not search('pg_.*')"
-      - "{% if item.name == 'schema_name' %}{{ item.name }} | lower is not search('^(ext|public)$'){% endif %}"
-      - "{% if item.name == 'db_name' %}{{ item.name }} | lower is not search('^(template|sys|postgres)$'){% endif %}"
-      - "{% if item.name == 'as_TUZ' or 'as_admins' %}not {{ item.value | to_json | lower }} | find_text_in_variable({{ line_check_as_admins | to_json }}){% endif %}"
-      - "{% if item.name == 'as_TUZ' %}not {{ item.value | to_json | lower }} | find_text_in_variable('backup_user'){% endif %}"
-      - "{% if item.name == 'as_TUZ' %}not {{ item.value | to_json | lower }} | find_text_in_variable({{ as_admins | to_json | lower }}){% endif %}"
-      - "{% if item.name == 'as_TUZ' or item.name == 'as_admins' %}{{ item.value | count }} == {{ item.value | unique | count }}{% endif %}"
-    fail_msg: "The value {{ item.value }} for the parameter {{ item.name }} is incorrect. Please change the value of the parameter: {{ item.name }}"
-    success_msg: "The value {{ item.value }} for the parameter {{ item.name }} is correct"
+    that: 'not {{ schema_name | to_json }} | find_text_in_variable("public")'
+    fail_msg: "schema public can't be use as user's schema. Please modify parameter 'Пользовательская схема'"
+
+- name: Check as_admins variable
+  assert:
+    that: 'not {{ as_TUZ | to_json }} | find_text_in_variable({{ as_admins | to_json }})'
+    fail_msg: "Login of database administrator can't be as technical user. Please remove database administrator login from parameter
+              'Список технологических учетных записей'"
+
+- name: Check "pg_" in name objects
+  assert:
+    that: 'not {{ item }} is match(pg_regex)'
+    fail_msg: "You can't use the 'pg_' prefix for object names."
   with_items:
-    - { name: as_admins, value: "{{ as_admins }}" }
-    - { name: tablespace_name, value: "{{ tablespace_name }}" }
-    - { name: db_name, value: "{{ db_name }}" }
-    - { name: as_TUZ, value: "{{ as_TUZ }}" }
-    - { name: schema_name, value: "{{ schema_name }}" }
+    - '{{ schema_name | to_json }}'
+    - '{{ db_name | to_json }}'
+    - '{{ tablespace_name | to_json }}'
   vars:
-    - line_check_as_admins: ["postgres", "masteromni", "zabbix_oasubd", "monitoring_php", "auditor", "pstgcmdb", "as_admin", "as_admins", "as_admin_read", "as_tuz", "superuser", "sysadmin", "wd"]
-
-- name: Check parameters for initprotection
-  block:
-
-    - name: define variable for check initprotection users
-      set_fact:
-        check_admin_protection_users: []
-        check_password_of_admin_protection_user: []
-
-    - name: check values in dictionary with initprotection users
-      set_fact:
-        check_admin_protection_users: "{% if admin_protection_users | length == 2 and item.value.user_name is defined and item.value.password is defined %}\
-                                       {{ check_admin_protection_users + [true] }}\
-                                       {% else %}{{ check_admin_protection_users + [false] }}{% endif %}"
-      loop: "{{ lookup('dict', admin_protection_users) }}"
-      loop_control:
-        label: "{{ item.value.user_name }}"
-
-    - name: print message when admin_protection_users dictionary have incorrect data
-      assert:
-        that: false not in check_admin_protection_users
-        fail_msg: "Data protection from privileges users won't be enable, because passed not all users for initprotection util or one of few parameters passed incorrect"
-
-    - name: check password of initprotection users
-      set_fact:
-        check_password_of_admin_protection_user: "{% if 'SCRAM-SHA-256' in item.value.password %}{{ check_password_of_admin_protection_user + [true] }}\
-                                                  {% else %}{{ check_password_of_admin_protection_user + [false] }}{% endif %}"
-      loop: "{{ lookup('dict', admin_protection_users) }}"
-      loop_control:
-        label: "{{ item.value.user_name }}"
-      when: false not in check_admin_protection_users
-
-    - name: print message when some of admin_protection_users have incorrect password
-      assert:
-        that: false not in check_password_of_admin_protection_user
-        fail_msg: "Data protection from privileges users won't be enable, because one of passed users have password, which not represented as a SCRAM-SHA-256 hash"
-
-  when: admin_protection_users is defined and admin_protection is defined and admin_protection
+    - pg_regex: '^(?i)pg_'

@@ -9,7 +9,7 @@
 
     - name: disable password history, reuse, max_age and min_age for {{ username }}
       include_role:
-        name: configure
+        name: finally
         tasks_from: update_change_reuse_time
       vars:
         passwords_history: true
@@ -21,22 +21,23 @@
         port: "{{ ports.pg }}"
         name: "{{ username }}"
         password: "{{ password }}"
-        role_attr_flags: "{% if username == TUZ_group %}INHERIT\
-                          {% else %}NOINHERIT{% endif %}"
       environment:
         PGOPTIONS: "-c password_encryption=scram-sha-256"
       no_log: "{{ nolog }}"
 
     - name: enable password history, reuse, max_age and min_age for {{ username }}
       include_role:
-        name: configure
+        name: finally
         tasks_from: update_change_reuse_time
       vars:
         passwords_history: false
         database_user: "{{ username }}"
       when: is_user.rowcount|int != 0
 
-  environment: "{{ db_connection_args }}"
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
   become: true
   become_user: postgres
   when: inventory_hostname == 'master'

@@ -31,7 +31,6 @@ class PghbaConnParams(enum):
 class PghbaConnTypes(enum):
     local="local"
     hostssl="hostssl"
-    hostnossl="hostnossl"
     host="host"
     
 class PghbaStrTypes(enum):
@@ -101,6 +100,38 @@ def compare_versions(first, second, idx=0):
             return compare_versions(first, second, idx)
         return 2  # is equal
 
+def clean_old_commits(commits):
+    return
+    res = commits.split(CommentList.new_val.value)
+    if len(res):
+        res = res.pop(0)
+        res = " ".join(res)
+        res = res.split(CommentList.prev_val.value)
+    else:
+        res = commits.split(CommentList.prev_val.value)
+
+    if len(res):
+        res = res.pop(0)
+        res = " ".join(res)
+        res_2 = res[-1].split(CommentList.old_cmnt.value)
+    
+    if not len(res) and not len(res_2):
+        return
+    if len(res_2):
+        res[-1] = res_2[-1]
+    num_ch_1 = 0
+    num_ch_2 = 0
+    idx = -1
+    res = res[-1] 
+    for i, ch in enumerate(res):
+        if (num_ch_1 + num_ch_2) % 2 == 0 and (num_ch_1 != 0 or num_ch_2 != 0):
+            idx = i
+            break
+        if ch == '\'':
+            num_ch_1 += 1
+        if ch == '\"':
+            num_ch_2 += 1
+
 def pg_hba_split(elem):
     """
     input: elem - строка pg_hba
@@ -110,24 +141,13 @@ def pg_hba_split(elem):
     words = []
     if CommentList.cmnt_only.value in elem:  #чистые коментарии пропускаем
         return words
-    words_splitted = elem.split(' ')
-    for idx, word in enumerate(words_splitted): 
+    for word in elem.split(' '): 
         if len(word) == 0:
             continue
         if len(words) > 4:
             words[-1] += ' ' + word
-            continue
-        elif len(word) > 1 and word[-1] == ',': 
-            # запятная как разделитель не должна учитываться в параметрах подключения
-            if idx == 2:
-                word_sum += word
-            else:
-                word_sum += ' ' + word
-        elif  len(word) > 0 and word != ',' and idx < len(words_splitted)-1 and words_splitted[idx + 1] == ',':
-            # запятная как разделитель не должна учитываться в параметрах подключения
-            word_sum += ' ' + word + ','
-        elif word == ',':
-            continue
+        elif word[-1] == ',': # запятная как разделитель не должна учитываться в параметрах подключения
+            word_sum += ' ' + word
         else:
             if len(word_sum) > 0:
                 words.append(word_sum + ' ' + word)
@@ -209,22 +229,26 @@ def check_ldap_equal(old_conn_params, new_conn_params, old_users, new_users):
     - второй элемент True => ldap для учеток с PAM
     """
     if old_conn_params.find(PghbaConnParams.ldap.value) != -1 and new_conn_params.find(PghbaConnParams.ldap.value) != -1:
-        if "-pam-" in old_users.lower() and ("-pam-" in new_users.lower() or new_users.lower() == "all_pam"):
+        if "-pam-" in old_users and ("-pam-" in new_users or new_users == "all_pam"):
             return (True, True)
-        if  "-pam-" not in old_users.lower() and ("-pam-" not in new_users.lower() or new_users.lower() == "all_no_pam"):
+        if  "-pam-" not in old_users and ("-pam-" not in new_users or new_users == "all_no_pam"):
             return (True, False)
         
         return (False, None)
     else:
         return (None, None)
 
-def check_equal_pghba_string_condition(curr_line, next_line, work_mode, user_list=[]):
+def check_equal_pghba_string_condition(curr_line, next_line, work_mode, user_list=[], support_db_admin_user_list=""):
     """
+    dublicate - удалить дубликаты, True - если дубликаты были найдены
+    merge - слияние двух строк, True - если строки удовлетворяют условиям слияние
     clean - удаление пользователей из заданной строки, либо самой строки, True - удаление будет произведено
     
     curr_line - целевая строка pg_hba
     next_line - строка pg_hba, которая подлежит проверке
-    work_mode - clean(удалить заданные строки)
+    work_mode - dublicate(убрать дубилкаты)/merge(слияние двух строк)/clean(удалить заданные строки)
+    user_list - список пользователей из curr_line и next_line
+    support_db_admin_user_list - список db_admin пользователей из all.yml (sigma или alpha)
     
     output:
     - первый элемент True - строки равны
@@ -237,10 +261,15 @@ def check_equal_pghba_string_condition(curr_line, next_line, work_mode, user_lis
             and curr_line[1] == next_line[1] \
             and curr_line[0] == next_line[0]:
         # 0 - тип подключения, 1 - имя БД, 2 - пользователи, 3 - маска подсети, 4 - параметры подключения
-        if (work_mode == "clean"):
+        if (work_mode == "dublicate" or work_mode == "clean"):
             is_same_type_ldap, is_pam = check_ldap_equal(curr_line[4], next_line[4], curr_line[2], next_line[2])
             if (curr_line[4] == next_line[4]) or is_same_type_ldap:
                 return (True, is_pam )
+        elif work_mode == "merge":
+            is_ldap, actual_conn_params = merge_pghba_ldap_string(user_list, curr_line, next_line, support_db_admin_user_list)
+            if is_ldap or curr_line[4] == next_line[4]:
+                curr_line[4] = actual_conn_params
+                return (True, None )
     elif len(next_line) == PghbaStrTypes.local.value \
             and len(curr_line) == PghbaStrTypes.local.value \
             and curr_line[3] == next_line[3] \
@@ -253,6 +282,50 @@ def check_equal_pghba_string_condition(curr_line, next_line, work_mode, user_lis
         pass # добавить при необходимости
     
     return (False, None )
+    
+def remove_duplicate_pghba(pghba_list):
+    """
+    удаление дубликатов строк
+    также в случае если тип подключения, имя БД, параметры подключения и ip совпадают,но разные пользователи, то строки объединянются в одну
+    pghba_list - pg_hba список
+    return True, если дубликаты были
+    """
+    remove_idx = []
+    for main_idx, main_line in enumerate(pghba_list):
+        curr_line = pg_hba_split(main_line)
+        for idx in range(main_idx + 1, len(pghba_list)):
+            next_line = pg_hba_split(pghba_list[idx])
+            if len(next_line) == 0 or len(curr_line) == 0:
+                continue
+            
+            is_merge, is_pam = check_equal_pghba_string_condition(curr_line = curr_line, 
+                                                                 next_line = next_line,
+                                                                 work_mode = "dublicate")
+                
+            if not is_merge:
+                continue
+            
+            curr_line[2] = re.sub(r"[\ ]", "", curr_line[2])
+            next_line[2] = re.sub(r"[\ ]", "", next_line[2])
+
+            main_subsplit = curr_line[2].split(',')
+            next_subsplit = next_line[2].split(',')
+            main_subsplit = list(set(next_subsplit + main_subsplit))
+            
+            curr_line[2] = ', '.join(main_subsplit)
+            pghba_list[main_idx] = ' '.join(curr_line)
+
+            remove_idx.insert(0, idx)
+
+    remove_idx = list(set(remove_idx))
+    remove_idx = sorted(remove_idx, reverse=True)
+    for idx in remove_idx:
+        del pghba_list[idx]
+
+    if len(remove_idx) == 0:
+        return False
+    
+    return True
 
 def merge_shared_preload_libraries(old_str, new_str):
     """
@@ -270,52 +343,104 @@ def merge_shared_preload_libraries(old_str, new_str):
         old_elems.remove('pgaudit')
 
     res = list(set(old_elems + new_elems))
-
-    if 'pg_stat_kcache' in res:
-        res.remove('pg_stat_kcache')
-    res.remove('pg_hint_plan')
-    res.remove('pg_outline')
-    res.remove('pg_pathman')
-
-    if 'pg_stat_kcache' in new_elems:
-        res.append('pg_stat_kcache')
-    res.append('pg_hint_plan')
-    res.append('pg_outline')
-    res.append('pg_pathman')
-
+    #если в результирующей строке pg_pathman не последний, то перезаписываем его
+    if res[-1] != 'pg_pathman':
+        res.remove('pg_pathman')
+        res.append('pg_pathman')
     res = ','.join(res)
     return res
 
-def load_control_info_from_custom_dev(root_path, custom_cfg_name):
+def sort_pghba(pghba_list):
     """
-    карту замен для методов аутентификации в pghba
+    сортировка pghba списка в такой последовательности:
+    local->hostssl->host
+    """
+    if len(pghba_list) == 0:
+        return
+
+    pghba_parts = [[], [], [],[],[],[]] #local->hostssl->host_pam_ldap->host_md5(только ТУЗы)->host_no_pam_ldap
+    for i, x in enumerate(pghba_list):
+        tmp_name = x.split(' ')
+        if len(tmp_name) == 0:
+            continue
+        if tmp_name[0] == PghbaConnTypes.local.value:
+            pghba_parts[0].append(x)
+        elif tmp_name[0] == PghbaConnTypes.hostssl.value:
+            pghba_parts[1].append(x)
+        elif tmp_name[0] == PghbaConnTypes.host.value:
+            if "-pam-" in x: # учетки с PAM должны быть в приоритете
+                pghba_parts[2].append(x)
+            elif "md5" in x and "0.0.0.0/0" in x: # только TUZы 
+                pghba_parts[3].append(x)
+            else:
+                pghba_parts[4].append(x)
+    pghba_list.clear()
+    for x in pghba_parts:
+        pghba_list.extend(x)
+
+    return
+
+def load_support_dm_admins_list(root_path, custom_cfg_name, is_alpha):
+    """
+    загрузить support_sigma/support_alpha список зарегистрированных db_admins пользователей
     root_path - путь до корневой папки, в которой находится копия all.yml
-
-    auth_methods_control_map - карта замены одного параметра (ключ) аутентификации другим (значение)
-    is_update_ldap_auth_methods - заменять или нет настройки ldap в старом конфиге
+    is_alpha = true => support_alpha, и наоборот.
     """
-    auth_methods_control_map = {}
-
     all_yml_file = root_path + '/' + custom_cfg_name
     with open(all_yml_file, 'r') as fp:
         for all_yml_file in ruamel.yaml.round_trip_load_all(stream=fp):
             pass
-
-    is_update_ldap_auth_methods = all_yml_file.get('is_update_ldap_auth_methods')
-    if is_update_ldap_auth_methods == None \
-       or not bool(is_update_ldap_auth_methods) \
-       or str(is_update_ldap_auth_methods) in ['off', 'false', 'False', 'no']:
-       is_update_ldap_auth_methods = False
+    if is_alpha and all_yml_file.get('support_alpha') != None:
+        return all_yml_file.get('support_alpha')
+    elif not is_alpha and all_yml_file.get('support_sigma') != None:
+        return all_yml_file.get('support_sigma')
     else:
-       is_update_ldap_auth_methods = True
+        return ""
+    
+def merge_pghba_ldap_string(user_list, curr_pghba, new_pghba, support_db_admin_user_list):
+    """
+    если тип подключения, БД для подключения и ip в строке из старого и из нового файлов совпадают, а также в обоих случаях подключение происходит
+    с помощью ldap, то перед тем как мержить строки необходимо произвести проверку, на предмет входят ли пользователи в этих строках в групповую 
+    роль db_admin. Т.е. если в списке support_sigma/support_alpha есть указанный пользователь (из строки pg_hba), то в результирующую строку мержа, 
+    его не нужно добавлять (в том случае если в строке уже есть групповая роль db_admin, если нет, то ее нужно ввести). В противном случае его 
+    необходимо добавить;
+    настройки ldap всегда обновляются (берутся новые значения); причем учитывается, что существует разделение на ldap настройки для PAM 
+    (в имени всегда присутствует "pam") и для обычной доменной авторизации;
+    user_list - смерженный список пользователей (старых с новыми)
+    old_users - список старых пользователей
+    new_users - список новых пользователей
+    old_conn_params - параметры соединения из старого файла
+    new_conn_params - параметры соединения из нового файла
+    support_db_admin_user_list - список db_admin пользователей из all.yml (sigma или alpha)
+    """
+    
+    old_users = curr_pghba[2]
+    new_users = new_pghba[2]
+    old_conn_params = curr_pghba[4]
+    new_conn_params = new_pghba[4]
+    
+    if old_conn_params.find(PghbaConnParams.ldap.value) != -1 and new_conn_params.find(PghbaConnParams.ldap.value) != -1:                            
+        if "-pam-" in old_users and "-pam-" in new_users:
+            old_conn_params = new_conn_params
+        elif "-pam-" not in old_users and "-pam-" not in new_users:
+            old_conn_params = new_conn_params
+        else:
+            return (False, old_conn_params)
 
-    if all_yml_file.get('auth_methods_control_map') != None:
-        auth_methods_control_map = all_yml_file.get('auth_methods_control_map')
-        if ruamel.yaml.comments.CommentedMap != type(auth_methods_control_map) \
-            or len(auth_methods_control_map) <= 0:
-            auth_methods_control_map = {}
-
-    return (auth_methods_control_map, is_update_ldap_auth_methods)
+        removed_users = []
+        for user in user_list:
+            if support_db_admin_user_list.find(user) != -1:
+                removed_users.append(user)
+                
+        for ruser in removed_users:
+            user_list.remove(ruser)
+            
+        if len(removed_users) > 0 and "+db_admin" not in user_list:
+            user_list.insert(0, "+db_admin")
+            
+        return (True, old_conn_params)
+    else:    
+        return (False, old_conn_params)
 
 def pop_pg_hba(old_list, pghba_users):
     """
@@ -331,8 +456,6 @@ def pop_pg_hba(old_list, pghba_users):
     remove_elems = []
 
     for idx, old_elem in enumerate(old_list):
-        old_list[idx] = old_elem.expandtabs()
-        old_elem = old_list[idx]
         old_elem_split = pg_hba_split(old_elem) #парсинг строки pghba
         if len(old_elem_split) == 0:
             continue
@@ -359,16 +482,48 @@ def pop_pg_hba(old_list, pghba_users):
 
     return result_pghba_str
     
-def merge_list_elements(old_list, new_elem, is_pghba):
+def merge_list_elements(old_list, new_elem, is_pghba, support_db_admin_user_list):
     """
     слияние списков
     old_list - список, целевой
     new_elem - новый элемент, который необходимо вставить в список (если до этого его не было)
+    is_pghba - ключ, True - список представляет собой pg_hba структуру, False - не pg_hba
+    support_db_admin_user_list - список db_admin пользователей из all.yml (sigma или alpha)
     """
     if new_elem in old_list:  #если строки одинаковы, то пропускаем
         return False
     elif type(new_elem) == str and is_pghba:  #pg_hba слияние
-        return False
+        new_elem_split = pg_hba_split(new_elem) #парсинг строки pghba из нового файла
+        if len(new_elem_split) == 0:
+            return False
+                
+        for idx, old_elem in enumerate(old_list):
+            old_elem_split = pg_hba_split(old_elem) #парсинг строки pghba из старого файла
+            if len(old_elem_split) == 0:
+                continue
+
+            # 2 - пользователи  
+            new_elem_split[2] = re.sub(r"['\ ]", "", new_elem_split[2])
+            old_elem_split[2] = re.sub(r"['\ ]", "", old_elem_split[2])
+            user_list = list(set(new_elem_split[2].split(',') + old_elem_split[2].split(',')))
+            
+            is_merge, is_pam = check_equal_pghba_string_condition(curr_line = old_elem_split, 
+                                                                next_line = new_elem_split, 
+                                                                work_mode = "merge",
+                                                                user_list = user_list, 
+                                                                support_db_admin_user_list = support_db_admin_user_list)
+            if not is_merge: 
+                continue
+            
+            if is_merge:
+                user_list = sorted(user_list, reverse=True) # групповые роли должны быть в конце списка пользователей
+                old_elem_split[2] = ', '.join(user_list)
+                old_elem = ' '.join(old_elem_split)
+                old_list[idx] = old_elem
+                return True
+        else:
+            old_list.append(' '.join(new_elem_split))
+            return True
     elif type(new_elem) == str and not is_pghba:  #слияние строк в списке (кроме pg_hba)
         old_list.append(new_elem)
         return True
@@ -389,8 +544,10 @@ def merge_list_elements(old_list, new_elem, is_pghba):
             return True
     return False
 
-def read_diff_file(diff_file_name):
+def read_diff_file(old_ver, new_ver, diff_file_name):
     """
+    old_ver - версия, с которой происходит обновление
+    new_ver - версия на которую будем обновляться
     diff_file_name - путь (включая имя) до diff_cfg.txt
     """
     f = open(diff_file_name, 'r')
@@ -404,17 +561,44 @@ def read_diff_file(diff_file_name):
         line = re.sub(r"[\n]", "", line)
         if re.search(r'\b{}\b'.format(DiffCommands.rm.value), line):
             is_removed = True
+            res_line = line.split(DiffCommands.separator.value)[0]
+            if not len(removed) or removed[idx_removed][0] != res_line:
+                idx_removed += 1
+                removed.append([0, []])
+            removed[idx_removed][0] = res_line
         elif re.search(r'\b{}\b'.format(DiffCommands.add.value), line):
             is_removed = False
+            res_line = line.split(DiffCommands.separator.value)[0]
+            if not len(added) or added[idx_added][0] != res_line:
+                idx_added += 1
+                added.append([0, []])
+            added[idx_added][0] = res_line
         elif re.search(r'\b{}|{}|{}\b'.format(DiffTypes.list.value, DiffTypes.dict.value, DiffTypes.pghba.value), line):
             if is_removed:
-                removed.append(line)
+                removed[idx_removed][1].append(line)
             else:
-                added.append(line)
+                added[idx_added][1].append(line)
         else:
             continue
 
-    result_removed = list(set(removed))
+    # необходимо получить общий, не зависящий от версий, контейнер с данными
+    # то есть, как пример, если параметр должен быть удален в новой версии, но 
+    # был добавлен в промежуточной, его не следует добавлять в результирующий файл
+    merge_diff_file(old_ver, new_ver, added, removed)
+    merge_diff_file(old_ver, new_ver, removed, added)
+
+
+    result_removed = set()
+    for x in removed:
+        result_removed |= set(x[1])
+    result_added = set()
+    for x in added:
+        result_added |= set(x[1])
+
+    removed.clear()
+    added.clear()
+
+    result_removed = list(result_removed)
     for i, x in enumerate(result_removed):
         tpv = x.split(DiffCommands.separator.value)
         if tpv[0] != DiffTypes.pghba.value:
@@ -423,7 +607,7 @@ def read_diff_file(diff_file_name):
             elif len(tpv) == 3:
                 result_removed[i] = [tpv[0], tpv[1], tpv[2]]
 
-    result_added = list(set(added))
+    result_added = list(result_added)
     for i, x in enumerate(result_added):
         tpv = x.split(DiffCommands.separator.value)
         if tpv[0] != DiffTypes.pghba.value:
@@ -434,128 +618,29 @@ def read_diff_file(diff_file_name):
    
     return result_removed, result_added
 
-def merge_pghba(old_list, new_list, auth_methods_control_map, is_update_ldap_auth_methods):
+def merge_diff_file(old_ver, new_ver, cleared, priority):
     """
-    old_list - исследуемый список из старого конфигурационного файла
-    new_list - исследуемый список из нового конфигурационного файла
-    auth_methods_control_map - карта замен настроек авторизации в pghba
+    old_ver - версия старой версии PG SE postgres.yml файла, например, 4.2.5
+    new_ver - версия новой версии PG SE postgres.yml файла, например, 4.3.0
     """
-    for idx, old_elem in enumerate(old_list):
-        old_elem = old_elem.replace('\t',' ')
-        old_elem_split = pg_hba_split(old_elem) #парсинг строки pghba из old файла
-        if len(old_elem_split) == 0:
+    for r_ver in cleared:
+        is_less_old = compare_versions(r_ver[0], old_ver)  # is less
+        is_more_new = compare_versions(r_ver[0], new_ver)  # is more
+        if is_less_old == 0 or is_more_new == 1:
             continue
-
-        # update ldap
-        if is_update_ldap_auth_methods:
-            for new_elem in new_list:
-                new_elem = new_elem.replace('\t',' ')
-                new_elem_split = pg_hba_split(new_elem) #парсинг строки pghba из new файла
-                if len(new_elem_split) == 0:
-                    continue
-                is_same_type_ldap, is_pam = check_ldap_equal(old_elem_split[-1], new_elem_split[-1], old_elem_split[2], new_elem_split[2])
-                if is_same_type_ldap == True:
-                    old_elem_split[-1] = new_elem_split[-1]
-                    old_elem = ' '.join(old_elem_split)
-                    old_list[idx] = old_elem
-                    break
-
-        # auth-methods
-        auth_methods = old_elem_split[-1]
-        for key in auth_methods_control_map:
-            if key in auth_methods:
-                old_elem_split[-1] = auth_methods.replace(key, auth_methods_control_map[key])
-                old_elem = ' '.join(old_elem_split)
-                old_list[idx] = old_elem
-
-    new_list = remove_duplicate_lines(old_list, new_list)
-    old_list.extend(new_list)
-
-    return old_list
-
-def remove_duplicate_lines(old_list, new_list):
-    """
-    Удаление дубликатов строк из списка нового конф файла pg_hba или в части hba файла postgres.yml, на сонове старого.
-    old_list - список строк hba из старого конфига
-    new_list - список строк hba из нового конфига
-    В результате вернет new_list без дубликатов для нового конфига.
-    """
-
-    list_old, list_new, key_old, key_new = [], [], [], []
-    dict_old, dict_new, dict_for_update, res_del = {}, {}, {}, {}
-
-    short_line, result = [], []
-
-    # Лист со строками хба из старого конфига без пустых элементов и комментариев
-    for main_idx, main_line in enumerate(old_list):
-        curr_line = pg_hba_split(main_line)
-        if curr_line and len(curr_line) == 5:
-            list_old.append(curr_line)
-
-    # 'dict_old' - словарь старых строк хба, где 'key' - "'тип подключения' 'имя БД' 'string' 'маска подсети' 'параметры подключения'", 'value' - список пользователей с параметрами подключения 'key'
-    for num, elem in enumerate(list_old):
-        key_old.append(f"{elem[0]} {elem[1]} string {elem[3]} {elem[4]}")
-        if key_old[num] not in dict_old:
-            dict_old.update({key_old[num]: f"{elem[2]}, "})
-        else:
-            dict_old[key_old[num]] = (dict_old[key_old[num]] + elem[2] + ', ')
-
-    # Лист со строками хба из нового конфига без пустых элементов и комментариев
-    for main_idx, main_line in enumerate(new_list):
-        curr_line = pg_hba_split(main_line)
-        if curr_line and len(curr_line) == 5:
-            list_new.append(curr_line)
-        elif len(curr_line) == 4:
-            short_line.append(curr_line)
-
-    # 'short_line' - лист со строками хба размером '4' (например: 'local all all md5'). Сразу записываются в 'result'
-    result = [' '.join(x) for x in short_line]
-
-    # 'dict_new' - словарь новых строк хба, где 'key' - "'тип подключения' 'имя БД' 'string' 'маска подсети' 'параметры подключения'", 'value' - список пользователей с параметрами подключения 'key'
-    for num, elem in enumerate(list_new):
-        key_new.append(f"{elem[0]} {elem[1]} string {elem[3]} {elem[4]}")
-        if key_new[num] not in dict_new:
-            dict_new.update({key_new[num]: f"{elem[2]}, "})
-        else:
-            dict_new[key_new[num]] = (dict_new[key_new[num]] + elem[2] + ', ')
-
-    # Цикл для сравнения пользователей старого и нового спика, если параметры подключения одинаковые. 'res_del' - словарь совпадений пользователей нового конфига с пользователями старого конфига
-    # 'new_users_list' - приведение списка пользователей к одному виду, типа ['user1', 'user2', 'user3'], 'old_users_list' - приведение списка пользователей к одному виду, типа ['user1', 'user2', 'user3']
-    for key_new, val_new in dict_new.items():
-        new = val_new.split(', ')
-        new_users_list = [x.strip(', ') for x in new]
-        new_users_list = list(filter(None, new_users_list))
-        dict_new.update({key_new: new_users_list})
-        for key_old, val_old in dict_old.items():
-            old = val_old.split(', ')
-            old_users_list = [x.strip(', ') for x in old]
-            old_users_list = list(filter(None, old_users_list))
-            if key_new == key_old:
-                for user in new_users_list:
-                    if user in old_users_list:
-                        if key_new not in res_del:
-                            res_del.update({key_new: f"{user}, "})
-                        else:
-                            res_del[key_new] = (res_del[key_new] + user + ', ')
-
-    dict_for_update = dict_new.copy()
-    # Цикл для сравнения получившегося списка 'res_del' и первоночального списка 'dict_new' строк из нового конфига
-    # 'dict_for_update' - словарь с 'key' -параметры подключения, 'value' - список пользователей. ['user1', 'user2'] - если совпадений не нашлось. '' - если совпали все пользователи
-    for key, val in dict_for_update.items():
-        for key_del, val_del in res_del.items():
-            delete = val_del.split(', ')
-            del_users_list = [x.strip(', ') for x in delete]
-            del_users_list = list(filter(None, del_users_list))
-            if key in key_del and set(val) == set(del_users_list):
-                dict_for_update.update({key: ''})
-            elif key in key_del and set(val) != set(del_users_list):
-                update_list = list(set(val) - set(del_users_list))
-                dict_for_update.update({key: update_list})
-
-    # 'result' - результирующий список с подстановкой пользователей по ключу вместо слова 'string'.
-    for key, val in dict_for_update.items():
-        if val:
-            line = key.replace('string', ', '.join(val))
-            result.append(line)
-
-    return result
+        for a_ver in priority:
+            is_less_old = compare_versions(a_ver[0], old_ver)  # is less
+            is_more_new = compare_versions(a_ver[0], new_ver)  # is more
+            if is_less_old == 0 or is_more_new == 1:
+                continue
+            idxs = []
+            is_less = compare_versions(r_ver[0], a_ver[0])
+            if is_less != 0:
+                continue
+            for i, r in enumerate(r_ver[1]):
+                if r in a_ver[1]:
+                    if i not in idxs:
+                        idxs.insert(0, i)
+            for i in idxs:
+                r_ver[1].pop(i)
+    return

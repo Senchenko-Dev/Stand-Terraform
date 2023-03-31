@@ -17,6 +17,7 @@ segment = env.segment //network type
 kms_host= env.kms_host //kms host
 kms_login= env.kms_login //kms login
 kms_password= env.kms_password //kms password
+artifactId_for_nexus=env.artifactId_for_nexus
 schema_name = env.schema_name
 custom_config = env.custom_config // path to custom config
 
@@ -61,105 +62,151 @@ list_of_variables = [version : version,
 
 //nexus variables
 switch(segment) {
-  case ["sbercloud"]:
-        nexusRestApiUrl = 'https://dzo.sw.sbc.space/nexus-cd'
+  case ["sigma"]:
+        nexusRestApiUrl = 'https://sbrf-nexus.sigma.sbrf.ru/nexus/service/local'
         nexusClassifier = "distrib"
         groupId = 'Nexus_PROD'
-        artifactId = artifactId_for_nexus
-        repoId = 'sbt_PROD_group'
-        pip_repository = 'https://spo.solution.sbt/python/simple'
-        nexusAddress = 'spo.solution.sbt'
+        artifactId = 'CI02289206_PostgreSQL_Sber_Edition'
+        repoId = 'Nexus_PROD'
+        nexusAddress = 'mirror.sigma.sbrf.ru'
+        pip_repository = 'http://mirror.sigma.sbrf.ru/pypi/simple'
         break
-  case ["sbercloud_archive"]:
-        nexusRestApiUrl = 'https://dzo.sw.sbc.space/nexus-ci'
+  case ["sigma_installer"]:
+        nexusRestApiUrl = 'http://nexus.sigma.sbrf.ru:8099/nexus/service/local'
         nexusClassifier = "distrib"
-        groupId = 'ru/sbt/pangolin/archive'
+        groupId = 'as_postgresql'
         artifactId = artifactId_for_nexus
-        repoId = 'sbt_maven'
-        pip_repository = 'https://spo.solution.sbt/python/simple'
-        nexusAddress = 'spo.solution.sbt'
+        repoId = 'SBT_CI_distr_repo'
+        nexusAddress = 'mirror.sigma.sbrf.ru'
+        pip_repository = 'http://mirror.sigma.sbrf.ru/pypi/simple'
         break
-  case ["sbercloud_installer"]:
-        nexusRestApiUrl = env.NexusRestApiUrl
+  case ["sigma_archive"]:
+        nexusRestApiUrl = 'http://nexus.sigma.sbrf.ru:8099/nexus/service/local'
         nexusClassifier = "distrib"
-        groupId = env.GroupId
-        artifactId = env.ArtifactId_for_nexus
-        repoId = env.RepoId
-        pip_repository = env.Pip_repository
-        nexusAddress = env.NexusAddress
+        groupId = 'as_postgresql.archive'
+        artifactId = artifactId_for_nexus
+        repoId = 'SBT_CI_distr_repo'
+        nexusAddress = 'mirror.sigma.sbrf.ru'
+        pip_repository = 'http://mirror.sigma.sbrf.ru/pypi/simple'
         break
+  case ["alpha"]:
+        nexusRestApiUrl = 'https://sbrf-nexus.ca.sbrf.ru/nexus/service/local'
+        nexusClassifier = "distrib"
+        groupId = 'Nexus_PROD'
+        artifactId = 'CI02289206_PostgreSQL_Sber_Edition'
+        repoId = 'Nexus_PROD'
+        nexusAddress = 'mirror.ca.sbrf.ru'
+        pip_repository = 'http://mirror.ca.sbrf.ru/pypi/simple'
+        break
+}
+
+if (segment == 'sigma' || segment == 'sigma_archive'){
+  if (env.JENKINS_URL.contains('sbt-jenkins.sigma.sbrf.ru')){
+    devops_segment = 'CI'
+  }else if (env.JENKINS_URL.contains('sbt-qa-jenkins.sigma.sbrf.ru')){
+    devops_segment = 'CDL'
+  }else if (env.JENKINS_URL.contains('nlb-jenkins-sigma-psi.sigma.sbrf.ru')){
+    devops_segment = 'CDP'
+  }else if (env.JENKINS_URL.contains('nlb-jenkins-sigma.sigma.sbrf.ru')){
+    devops_segment = 'PROD'
+  }
+}else if (segment == 'sigma_installer'){
+  if (env.JENKINS_URL.contains('sbt-jenkins.sigma.sbrf.ru')){
+    devops_segment = 'PR_CI'
+  }else if (env.JENKINS_URL.contains('sbt-qa-jenkins.sigma.sbrf.ru')){
+    devops_segment = 'PR_CDL'
+  }else if (env.JENKINS_URL.contains('nlb-jenkins-sigma-psi.sigma.sbrf.ru')){
+    devops_segment = 'PR_CDP'
+  }else if (env.JENKINS_URL.contains('nlb-jenkins-sigma.sigma.sbrf.ru')){
+    devops_segment = 'PR_PROD'
+  }
+}else{
+    if (env.JENKINS_URL.contains('sbt-jenkins.ca.sbrf.ru')){
+      devops_segment='CI'
+    }else if (env.JENKINS_URL.contains('sbt-qa-jenkins.ca.sbrf.ru')){
+    devops_segment = 'CDL'
+  }else if (env.JENKINS_URL.contains('nlb-jenkins-psi.ca.sbrf.ru')){
+    devops_segment = 'CDP'
+  }else if (env.JENKINS_URL.contains('nlb-jenkins.ca.sbrf.ru')){
+    devops_segment = 'PROD'
+  }
 }
 
 @NonCPS
-def getNexusLink(nexusRestApiUrl, nexusArtifactId, nexusVersionId, nexusExtensionId, nexusRepositoryId, nexusGroupId, nexusClassifier, remoteUsername, remotePassword) {
-    if ( segment == "sbercloud" || segment == "sbercloud_archive" || segment == "sbercloud_installer") {
-      return "${nexusRestApiUrl}/repository/${nexusRepositoryId}/${nexusGroupId}/${nexusArtifactId}/${nexusVersionId}/${nexusArtifactId}-${nexusVersionId}-${nexusClassifier}.tar.gz"
-    } else {
-      def api = "${nexusRestApiUrl}/artifact/maven/redirect?r=${nexusRepositoryId}&g=${nexusGroupId}&a=${nexusArtifactId}&v=${nexusVersionId}&p=${nexusExtensionId}&c=${nexusClassifier}"
-      def con = new URL(api).openConnection()
-      println(con)
-      con.requestMethod = 'HEAD'
-      if (remoteUsername != null && remotePassword != null) {
-          def authString = "${remoteUsername}:${remotePassword}".getBytes().encodeBase64().toString()
-          con.setRequestProperty("Authorization", "Basic ${authString}")
-      }
-      con.setInstanceFollowRedirects(true)
-      con.connect()
-      def is = con.getInputStream()
-      is.close()
-      return con.getURL().toString()
-    }
+def getNexusLink(nexusRestApiUrl, nexusArtifactId, nexusVersionId, nexusExtensionId, nexusRepositoryId, nexusGroupId, nexusClassifier, remoteUsername, remotePassword)
+{
+  def api = "${nexusRestApiUrl}/artifact/maven/redirect?r=${nexusRepositoryId}&g=${nexusGroupId}&a=${nexusArtifactId}&v=${nexusVersionId}&p=${nexusExtensionId}&c=${nexusClassifier}"
+  def con = new URL(api).openConnection()
+  println(con)
+  con.requestMethod = 'HEAD'
+  if (remoteUsername != null && remotePassword != null)
+  {
+    def authString = "${remoteUsername}:${remotePassword}".getBytes().encodeBase64().toString()
+    con.setRequestProperty("Authorization", "Basic ${authString}")
+  }
+  con.setInstanceFollowRedirects(true)
+  con.connect()
+  def is = con.getInputStream()
+  is.close()
+  con.getURL().toString()
 }
 
-node(env.jenkinsAgentLabel){
+node('masterLin'){
   timestamps {
     ansiColor('xterm') {
-                deleteDir()
-                stage('Check jenkins variables'){
-                      wrap([$class: 'MaskPasswordsBuildWrapper', varPasswordPairs: [[password: "${ssh_password}", var: 'PSWD']]]) {
+                  deleteDir()
+                  stage('Check jenkins variables'){
+                    wrap([$class: 'MaskPasswordsBuildWrapper', varPasswordPairs: [[password: "${ssh_password}", var: 'PSWD']]]) {
                       list_of_variables.findAll { key, value ->
-                        if ((value instanceof java.lang.String) && (value.length() != 0 ))  {
+                        if ((value instanceof java.lang.String) && (value.length() != 0 ))
+                        {
                             println('Correct. Variable ' + key + ' does not empty and equals: ' + value)
-                        }else{
+                        }
+                        else
+                        {
                           println('Error. Variable ' + key + ' is empty')
+                          emailext (attachLog: true,
+                              body: """<p>Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} is FAILURE. <br>More info at ${env.BUILD_URL} or in mail attachment</br></p>""",
+                              compressLog: true,
+                              mimeType: 'text/html',
+                              subject: "FAILURE: Segment: ${segment}, Stage: ${devops_segment}",
+                              to: 'PMKraskin@sberbank.ru, Karpenko.An.Ser@sberbank.ru, Pekler.P.V@sberbank.ru, MAlBibik@sberbank.ru, RMuAminov@sberbank.ru, AAleverov@sberbank.ru'
+                          )
                           autoCancelled = true
                           error("Abortion is build, because the variable from input Jenkins variables is empty")
                         }
                       }
                     }
                   }
-                stage('Download distributive') {
-                 withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'postgresql_nexus_cred', usernameVariable: 'remoteUsername', passwordVariable: 'remotePassword']])
-                  {
-                    url_to_distr = getNexusLink(nexusRestApiUrl, artifactId, version.toUpperCase(), "tar.gz", repoId, groupId, nexusClassifier, remoteUsername, remotePassword)
-                    sh "wget -nv --no-check-certificate --user=${remoteUsername} --password=${remotePassword} ${url_to_distr}"
+                  stage('Download distributive') {
+                   withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'postgresql_nexus_cred', usernameVariable: 'remoteUsername', passwordVariable: 'remotePassword']])
+                    {
+                      url_to_distr = getNexusLink(nexusRestApiUrl, artifactId, version.toUpperCase(), "tar.gz", repoId, groupId, nexusClassifier, remoteUsername, remotePassword)
+                      sh "wget --user=${remoteUsername} --password=${remotePassword} ${url_to_distr}"
                     }
-                }
-                stage('Unarchive distributive'){
-                  sh "mkdir distributive"
-                  sh "find -iname \\*${version}-distrib.tar.gz -exec tar -xvf {} -C distributive \\;"
-                  sh "cp -r ${env.WORKSPACE}/distributive/installer/files/ ${env.WORKSPACE}/distributive"
-                }
-                stage ('Change installer') {
-                  sh "rm -rf ${env.WORKSPACE}/distributive/installer"
-                  sh "mkdir ${env.WORKSPACE}/distributive/installer"
-                  dir("${env.WORKSPACE}/distributive/installer")
-                  {
-                    def scmVars = checkout scm
-                    def branchName = scmVars.GIT_BRANCH
-                    def commitName = scmVars.GIT_COMMIT
-                    println "branchName: ${branchName}"
-                    println "git commit: ${commitName}"
                   }
-                  sh "rm -rf ${env.WORKSPACE}/distributive/installer/files"
-                  sh "cp -r ${env.WORKSPACE}/distributive/files ${env.WORKSPACE}/distributive/installer/files"
-                }
-                stage('Install python libraries')
+                  stage('Unarchive distributive'){
+                    sh "mkdir distributive"
+                    sh "find -iname \\*${version}-distrib.tar.gz -exec tar -xvf {} -C distributive \\;"
+                  }
+                  stage ('Change installer') {
+                    sh "rm -rf ${env.WORKSPACE}/distributive/installer"
+                    sh "mkdir ${env.WORKSPACE}/distributive/installer"
+                    dir("${env.WORKSPACE}/distributive/installer")
+                    {
+                      def scmVars = checkout scm
+                      def branchName = scmVars.GIT_BRANCH
+                      def commitName = scmVars.GIT_COMMIT
+                      println "branchName: ${branchName}"
+                      println "git commit: ${commitName}"
+                    }
+                  }
+                  stage('Install python libraries')
                 {
                   sh """
                       virtualenv pg_se_venv --python=python2
                       source pg_se_venv/bin/activate
-                      pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' ansible==2.9.18
+                      pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' ansible==2.9.25
                       pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' rpm==0.0.2
                       pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' -r distributive/installer/files/slave.txt
                      """
@@ -176,11 +223,7 @@ node(env.jenkinsAgentLabel){
                   }
                 }
                 stage ('Start job Clearing_servers') {
-                  build job: "${clearing_servers_job}"
-                }
-                stage ('Start job Generate_certs') {
-                  build job: "${gen_certs_job}", parameters: [ string(name: 'hosts_list', value: hosts_list),
-                  string(name: 'ssh_user', value: ssh_user), password(name: 'ssh_password', value: ssh_password) ]
+                  build job: 'Clearing_servers'
                 }
                 stage('Run Ansible playbook for hand case')
                 {
@@ -224,6 +267,7 @@ node(env.jenkinsAgentLabel){
                                                               ' security_level=' + security_level +
                                                               ' critical_level=' + critical_level +
                                                               ' segment=' + segment_type.first() +
+                                                              ' manual_run=yes' +
                                                               ' inner_install=yes' +
                                                               ' custom_config=' + custom_config +
                                                               ' stand=' + stand +'\"'

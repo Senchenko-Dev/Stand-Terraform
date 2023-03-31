@@ -6,6 +6,16 @@
   set_fact:
     ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
 
+- name: Define default old_ver
+  set_fact:
+    _useamerge_old_ver: "00.00.00"
+  when: _useamerge_old_ver is undefined
+
+- name: Define default new_ver
+  set_fact:
+    _useamerge_new_ver: "00.00.00"
+  when: _useamerge_new_ver is undefined
+
 - name: Define default root_path
   set_fact:
     _useamerge_root_path: ""
@@ -23,8 +33,8 @@
 
 - name: Define default only_pgse
   set_fact:
-    _useamerge_yml_cfg_sections: 'all'
-  when: _useamerge_yml_cfg_sections is undefined
+    _useamerge_only_pgse: False
+  when: _useamerge_only_pgse is undefined
 
 - name: Define default pghba_mode
   set_fact:
@@ -45,16 +55,14 @@
 
     - name: copy merge config data
       copy:
-        src: "{{ cfg_amerge_item.src }}"
-        dest: "{{ cfg_amerge_item.dst }}"
+        src: "{{ item.src }}"
+        dest: "{{ item.dst }}"
         owner: postgres
         group: postgres
         mode: 0600
-      loop:
+      with_items:
         - { src: "{{ playbook_dir }}/library/config_auto_merge", dst: "{{ REMOTE_TMP }}/"}
         - { src: "{{ custom_config }}",                          dst: "{{ merge_cfg_root_dir }}/"}
-      loop_control:
-        loop_var: cfg_amerge_item        
 
     - name: copy differ template
       template:
@@ -73,8 +81,10 @@
         old_cfg_file: "{{ _useamerge_old_cfg_file }}"
         new_cfg_file: "{{ _useamerge_new_cfg_file }}"
         result_cfg_file: "{{ _useamerge_result_cfg_file }}"
+        old_ver: "{{ _useamerge_old_ver }}"
+        new_ver: "{{ _useamerge_new_ver }}"
         root_path: "{{ _useamerge_root_path }}"
-        yml_cfg_section_merge_mode: "{{ _useamerge_yml_cfg_sections }}"
+        only_pgse: "{{ _useamerge_only_pgse }}"
         pghba_mode: "{{ _useamerge_pghba_mode }}"
         pghba_users: "{{ _useamerge_pghba_users }}"
         custom_cfg_name: "{{ custom_config_name }}"
@@ -86,8 +96,7 @@
 - name: Check auto merge result
   assert:
     that: is_success.message == 0
-    fail_msg: "{% if 'update' in action_type %}{{ control_name }}.FAIL__Ошибка во время мержа конфигов.__{{ control_name }}\
-               {% else %}Result auto merge is incorrect{% endif %}"
+    fail_msg: "Result auto merge is incorrect"
     success_msg: "Result auto merge is correct"
 
 - name: Save auto merge result

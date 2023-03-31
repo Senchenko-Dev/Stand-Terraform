@@ -1,13 +1,10 @@
-- name: Remove old postgres/kmadmin_pg rules into sudoers
+- name: Remove old postgres rules into sudoers
   lineinfile:
     path: /etc/sudoers
-    regexp: "{{ item }}"
+    regexp: ^postgres.*ALL=[(]ALL[)].*NOPASSWD:.*
     state: absent
   become: true
-  with_items:
-    - "^postgres.*ALL=[(]ALL[)].*NOPASSWD:.*"
-    - "^kmadmin_pg.*ALL=[(]ALL[)].*NOPASSWD:.*"
-  when: "action_type in ['update_major', 'update_minor']"
+  when: "'update' in action_type"
 
 - name: Add postgres rules into sudoers
   block:
@@ -30,23 +27,6 @@
           /bin/journalctl -u rsyslog'
         validate: /usr/sbin/visudo -cf %s
 
-    - name: change and validate the sudoers file for pangolin_reencrypt kmadmin_pg
-      lineinfile:
-        path: /etc/sudoers
-        state: present
-        insertafter: '^#includedir /etc/sudoers.d'
-        line: 'kmadmin_pg  ALL=(ALL)       NOPASSWD:
-          /usr/bin/systemctl stop pangolin_reencrypt@kmadmin_pg,
-          /usr/bin/systemctl start pangolin_reencrypt@kmadmin_pg,
-          /usr/bin/systemctl restart pangolin_reencrypt@kmadmin_pg,
-          /usr/bin/systemctl status pangolin_reencrypt@kmadmin_pg,
-          /usr/bin/systemctl status pangolin_reencrypt@kmadmin_pg --no-pager --full,
-          /usr/bin/systemctl enable pangolin_reencrypt@kmadmin_pg,
-          /usr/bin/systemctl disable pangolin_reencrypt@kmadmin_pg,
-          /usr/bin/systemctl status pangolin_reencrypt@kmadmin_pg -l,
-          /bin/journalctl -u pangolin_reencrypt@kmadmin_pg'
-        validate: /usr/sbin/visudo -cf %s
-
     - name: change and validate the sudoers file for standalone-postgresql-only
       replace:
         path: /etc/sudoers
@@ -59,26 +39,9 @@
           /usr/bin/systemctl status postgresql --no-pager --full,
           /usr/bin/systemctl enable postgresql,
           /usr/bin/systemctl disable postgresql,
-          /usr/bin/systemctl status postgresql -l,
           /bin/journalctl -u rsyslog'
         validate: /usr/sbin/visudo -cf %s
       when: tag == 'standalone-postgresql-only' or tag == 'standalone-postgresql-pgbouncer'
-
-    - name: change and validate the sudoers file for pangolin_reencrypt postgres
-      replace:
-        path: /etc/sudoers
-        regexp: /bin/journalctl -u rsyslog
-        replace: '/bin/journalctl -u pangolin_reencrypt@postgres,
-          /usr/bin/systemctl stop pangolin_reencrypt@postgres,
-          /usr/bin/systemctl start pangolin_reencrypt@postgres,
-          /usr/bin/systemctl restart pangolin_reencrypt@postgres,
-          /usr/bin/systemctl status pangolin_reencrypt@postgres,
-          /usr/bin/systemctl status pangolin_reencrypt@postgres --no-pager --full,
-          /usr/bin/systemctl enable pangolin_reencrypt@postgres,
-          /usr/bin/systemctl disable pangolin_reencrypt@postgres,
-          /usr/bin/systemctl status pangolin_reencrypt@postgres -l,
-          /bin/journalctl -u rsyslog'
-        validate: /usr/sbin/visudo -cf %s
 
     - name: change and validate the sudoers file for standalone-postgresql-pgbouncer
       replace:
@@ -93,7 +56,6 @@
           /usr/bin/systemctl status pgbouncer --no-pager --full,
           /usr/bin/systemctl enable pgbouncer,
           /usr/bin/systemctl disable pgbouncer,
-          /usr/bin/systemctl status pgbouncer -l,
           /bin/journalctl -u pgbouncer'
         validate: /usr/sbin/visudo -cf %s
       when: tag == 'standalone-postgresql-pgbouncer' or tag == 'standalone-patroni-etcd-pgbouncer' or installation_type == 'cluster'
@@ -123,6 +85,23 @@
           /bin/journalctl -u patroni'
         validate: /usr/sbin/visudo -cf %s
       when: tag == 'standalone-patroni-etcd-pgbouncer' or installation_type == 'cluster'
+
+    - name: change and validate the sudoers file for cluster-patroni-etcd-pgbouncer
+      replace:
+        path: /etc/sudoers
+        regexp: /bin/journalctl -u patroni
+        replace: '/bin/journalctl -u patroni,
+          /usr/bin/systemctl stop confd,
+          /usr/bin/systemctl start confd,
+          /usr/bin/systemctl restart confd,
+          /usr/bin/systemctl status confd,
+          /usr/bin/systemctl status confd -l,
+          /usr/bin/systemctl status confd --no-pager --full,
+          /usr/bin/systemctl enable confd,
+          /usr/bin/systemctl disable confd,
+          /bin/journalctl -u confd'
+        validate: /usr/sbin/visudo -cf %s
+      when: tag == 'cluster-patroni-etcd-pgbouncer'
 
     - name: change and validate the sudoers file for cluster-patroni-etcd-pgbouncer-haproxy
       replace:

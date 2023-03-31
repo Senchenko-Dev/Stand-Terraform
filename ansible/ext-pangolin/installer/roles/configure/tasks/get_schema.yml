@@ -7,7 +7,8 @@
 
     - name: get schemas from list_schema
       set_fact:
-        schemas: '{{ schemas + [ list_schems ] }}'
+        schemas: '{{ schemas + [ item ] }}'
+      with_items: '{{ list_schems }}'
     
     - name: update list schemas
       set_fact:

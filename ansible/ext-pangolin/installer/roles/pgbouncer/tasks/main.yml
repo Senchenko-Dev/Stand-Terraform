@@ -4,4 +4,4 @@
 
 - name: Import minor update
   import_tasks: update.yml
-  when: "action_type in ['update_major', 'update_minor']"
+  when: action_type == 'update_minor'

@@ -17,6 +17,7 @@
         - { dir: "{{ backup.pgbouncer }}{{ user_share_dir }}/man/man1",        state: directory }
         - { dir: "{{ backup.pgbouncer }}{{ user_share_dir }}/man/man5",        state: directory }
         - { dir: "{{ backup_root_dir }}{{ logrorate_dir }}",                   state: directory }
+        - { dir: "{{ backup.pgbouncer }}{{ confd_files.conf_dir }}/templates", state: directory }
 
     - name: backup leftover pgbouncer files
       copy:
@@ -36,34 +37,18 @@
         - { src: "{{ user_share_dir }}/man/man5/pgbouncer.5",    dest: "{{ backup.pgbouncer }}{{ user_share_dir }}/man/man5/",  owner: root,     group: root }
         - { src: "{{ pgbouncer_files.conf_dir }}/pgbouncer.ini", dest: "{{ backup.pgbouncer }}{{ pgbouncer_files.conf_dir }}/", owner: postgres, group: postgres }
 
+    - name: check exists confd
+      stat: path="{{ confd_files.path_dir }}/bin/confd"
+      register: confd_exists
+
+    - name: backup pgbouncer configs into confd
+      copy:
+        src: "{{ confd_files.conf_dir }}/templates/pgbouncer.tmpl"
+        dest: "{{ backup.pgbouncer }}{{ confd_files.conf_dir }}/templates/pgbouncer.tmpl"
+        owner: postgres
+        group: postgres
+        mode: 0600
+        remote_src: true
+      when: confd_exists.stat.exists
+
   when: pgbouncer
-
-- name: Backup confd
-  block:
-
-  - name: ensure {{ backup.confd }}
-    file:
-      path: "{{ item.src }}"
-      state: "{{ item.state }}"
-      owner: postgres
-      group: postgres
-      mode: 0700
-    with_items:
-      - { src: "{{ backup.confd }}",                            state: absent }
-      - { src: "{{ backup.confd }}/{{ confd_files.path_dir }}", state: directory }
-      - { src: "{{ backup.confd }}/{{ confd_files.conf_dir }}", state: directory }
-      - { src: "{{ backup.confd }}/{{ service_path_dir }}",     state: directory }
-
-  - name: backup confd files
-    synchronize:
-      src: "{{ item.src }}"
-      dest: "{{ item.dest }}"
-    with_items:
-      - { src: '{{ confd_files.path_dir }}/',      dest: '{{ backup.confd }}/{{ confd_files.path_dir }}' }
-      - { src: '{{ confd_files.conf_dir }}/',      dest: '{{ backup.confd }}/{{ confd_files.conf_dir }}' }
-      - { src: '{{ confd_files.service_file }}',   dest: '{{ backup.confd }}/{{ service_path_dir }}' }
-    delegate_to: "{{ inventory_hostname }}"
-    become_user: root
-
-  become: true
-  when: confd

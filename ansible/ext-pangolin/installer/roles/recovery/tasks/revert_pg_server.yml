@@ -1,7 +1,0 @@
-- name: Recovery in SRC role
-  include_role:
-    name: SRC
-    tasks_from: revert_pg_server.yml
-  when: "inventory_hostname != 'etcd' \
-         and SRC \
-         and is_recovery_pg_server"

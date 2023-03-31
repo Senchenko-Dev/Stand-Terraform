@@ -21,7 +21,7 @@
   run_once: true
 
 - block:
-    - name: Stop patroni, pgbouncer,etcd service, if started
+    - name: Stop patroni, pgbouncer,etcd,confd service, if started
       service:
         name: "{{ item }}"
         state: stopped
@@ -29,6 +29,7 @@
         - patroni
         - pgbouncer
         - etcd
+        - confd
 
     - pause:
         seconds: 10
@@ -58,6 +59,7 @@
       - python-psycopg2
       - postgresql-sber-edition
       - etcd
+      - confd
       - haproxy
       - pg_probackup-11
 
@@ -71,6 +73,7 @@
       with_items:
         - "{{ PGHOME }}"
         - "{{ etcd_files.conf_dir }}"
+        - "{{ confd_files.conf_dir }}"
         - "{{ pgbouncer_files.conf_dir }}"
         - "{{ patroni_files.conf_dir }}"
         - "{{ haproxy_files.conf_dir }}"
@@ -83,3 +86,8 @@
   become_user: root
   become: true
   ignore_errors: yes
+
+
+
+
+

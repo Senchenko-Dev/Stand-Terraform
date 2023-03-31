@@ -1,3 +1,16 @@
+- name: Check etcd initialized key
+  shell: etcdctl get service/{{ clustername }}/initialize
+  register: initialize_key
+  ignore_errors: yes
+  run_once: yes
+  become: true
+  become_user: postgres
+  when: master is defined
+
+- name: Check that patroni cluster doesn't initialize
+  fail: msg='Cluster have been initialized earlier, patroni wont start'
+  when: master is defined and initialize_key.stdout != ""
+
 - name: Create new python virtual environment with patroni
   include_role:
     name: checkup
@@ -36,14 +49,6 @@
         group: postgres
         mode: 0600
 
-    - name: copy patroni version file
-      copy:
-        src: "{{ local_distr_path }}/patroni/version"
-        dest: "{{ python.patroni_venv }}/bin/version"
-        owner: postgres
-        group: postgres
-        mode: 0600
-
     - name: write shell profile file
       lineinfile:
         path: "{{ shell_profile_file }}"
@@ -67,6 +72,57 @@
         mode: 0700
       become: true
       become_user: root
+    
+    - name: encrypt passwords
+      block:
+
+        - name: delete newline symbol from tuz_password
+          set_fact:
+            ldap_bind_tuz_password: "{{ ldap_bind_tuz_password | replace('\n', '')}}"
+
+        - name: encrypt patroni_yml_pass
+          block:
+
+            - name: encrypt patroni_yml_pass
+              include_role:
+                name: postgresql
+                tasks_from: create_encrypt_password
+              vars:
+                password: "{{ patroni_yml_pass }}"
+
+            - name: update patroni_yml_pass
+              set_fact:
+                encpassword_restapi: "{{ _createencryptpass_password[0:-1] }}"
+
+        - name: encrypt patroni_etcd_pass
+          block:
+          
+            - name: encrypt patroni_etcd_pass
+              include_role:
+                name: postgresql
+                tasks_from: create_encrypt_password
+              vars:
+                password: "{{ patroni_etcd_pass }}"
+
+            - name: update patroni_etcd_pass
+              set_fact:
+                encpassword_etcd: "{{ _createencryptpass_password[0:-1] }}"
+
+        - name: encrypt ldap_bind_tuz_password
+          block:
+          
+            - name: encrypt ldap_bind_tuz_password
+              include_role:
+                name: postgresql
+                tasks_from: create_encrypt_password
+              vars:
+                password: "{{ ldap_bind_tuz_password }}"
+
+            - name: update ldap password
+              set_fact:
+                ldap_bind_tuz_password: "{{ _createencryptpass_password[0:-1] }}"
+
+      no_log: "{{ nolog }}"
 
     - name: copy patroni configuration files to nodes
       template:
@@ -85,6 +141,18 @@
         group: postgres
         mode: 0500
         trim_blocks: False
+
+    - name: update password for restapi and etcd
+      replace:
+        path: "{{ patroni_files.conf_dir }}/postgres.yml"
+        after: "{{ item.after }}"
+        regexp: "{{ item.rexexp }}"
+        replace: "{{ item.replace }}"
+      loop:
+        - { after: "username: patroniyml", rexexp: "^(.*)        password:.*", replace: '        password: {{ encpassword_restapi }}'}
+        - { after: "username: patronietcd", rexexp: "^(.*)    password:.*",    replace: '    password: {{ encpassword_etcd }}'}
+      no_log: "{{ nolog }}"
+      when: action_type == 'install'
 
     - name: create patroni configuration file for systemd
       template:

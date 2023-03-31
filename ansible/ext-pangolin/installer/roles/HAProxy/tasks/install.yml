@@ -16,12 +16,11 @@
         state: stopped
 
     - name: loop wait for haproxy stopped
-      systemd:
-        name: haproxy
+      shell: "systemctl show -p ActiveState haproxy | cut -d'=' -f2"
       register: result
-      until: result.status.ActiveState != 'active'
-      retries: 6
-      delay: 10
+      until: result.stdout == 'inactive'
+      retries: 60
+      delay: 1
 
     - name: remove haproxy package
       package:
@@ -67,7 +66,6 @@
         owner: postgres
         group: postgres
         mode: 0600
-        trim_blocks: False
 
     - name: start haproxy service
       service:
@@ -77,10 +75,8 @@
   become: true
 
 - name: Loop wait for haproxy started
-  systemd:
-    name: haproxy
+  shell: "systemctl show -p ActiveState haproxy | cut -d'=' -f2"
   register: result
-  until: result.status.ActiveState == 'active'
-  retries: 6
-  delay: 10
-  become: true
+  until: result.stdout == 'active'
+  retries: 60
+  delay: 1

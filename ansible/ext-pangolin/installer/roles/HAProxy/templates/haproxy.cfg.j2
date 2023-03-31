@@ -4,9 +4,7 @@
 global
     log         127.0.0.1  local0 debug
     log         127.0.0.1  local1 notice
-    {% if ssl_mode %}
-    tune.ssl.default-dh-param 2048
-    {% endif %}
+ 
     chroot      {{ haproxy_files.socket_dir }}
     pidfile     /var/run/haproxy.pid
     maxconn     4000
@@ -51,16 +49,11 @@ backend be_postgres
    http-check expect status 200
    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions #
    {% for host in groups['postgres_group'] %}
-server {{ hostvars[host].ansible_fqdn }} {{ hostvars[host].ansible_fqdn }}:{{ hostvars[host].ports.pgbouncer }} {% if ssl_mode %}verify none check-ssl{% endif %} check port {{ hostvars[host].ports.patroni }}
+server {{ hostvars[host].ansible_fqdn }} {{ hostvars[host].ansible_fqdn }}:{{ hostvars[host].ports.pgbouncer }} maxconn 100 check port {{ hostvars[host].ports.patroni }}
    {% endfor %}
 
 listen stats
     mode http
-    bind *:7000 {% if ssl_mode %}ssl crt {{ pg_certs_pwd.haproxy_cert }}{% endif %}
+    bind *:7000
     stats enable
     stats uri /
-    {% if ssl_mode %}
-    stats auth {{ haproxy_stat_login }}:{{ haproxy_stat_pass }}
-    acl whitelist src {{ hosts_access_list }}
-    tcp-request connection reject if ! whitelist
-    {% endif %}

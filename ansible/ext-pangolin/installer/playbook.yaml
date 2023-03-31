@@ -1,3 +1,11 @@
+- name: Vault secrets
+  hosts: all
+  tasks:
+    - name: Import secrets
+      include_vars: "../../{{ vault_file }}"
+      when: vault_file is defined
+  tags: always
+
 - name: Get ping response and gather packages info
   hosts: localhost:all
   tasks:
@@ -9,35 +17,35 @@
 - hosts: master
   roles:
     - { role: checkup, tags: standalone-postgresql-only }
-    - { role: rsyslog, tags: standalone-postgresql-only }
+    - { role: rsyslog, tags: standalone-postgresql-only, when: rsyslog is defined and rsyslog }
     - { role: postgresql, tags: standalone-postgresql-only, vars: {master: true, patroni: false} }
-    - { role: configure, tags: standalone-postgresql-only, operation_type: main_configure, vars: {patroni: false} }
-    - { role: SRC, tags: standalone-postgresql-only, operation_type: install_rpm, vars: { _nstllrpm_pgbackup: "{{ PGBACKUP }}",
-                                                                                          _nstllrpm_pgdata: "{{ PGDATA }}" } }
+    - { role: tls, tags: standalone-postgresql-only, when: ldap_tls is defined and ldap_tls }
+    - { role: configure, tags: standalone-postgresql-only, vars: {patroni: false} }
+    - { role: SRC, tags: standalone-postgresql-only, operation_type: install_rpm }
     - { role: SRC, tags: standalone-postgresql-only, operation_type: initialize_pg_server, when: SRC is defined and SRC }
     - { role: SRC, tags: standalone-postgresql-only-gen-specs, operation_type: generate_src_specs, when: SRC is defined and SRC }
-    - { role: finally, tags: standalone-postgresql-only, operation_type: switch_to_original_configs }
-    - { role: tests, tags: standalone-postgresql-only, vars: {postgres: true, cluster: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
-    - { role: configure, tags: standalone-postgresql-only, operation_type: finish_configure, vars: {patroni: false, is_patroni_exists: false } }
-    - { role: pg_auth_reencrypt, tags: standalone-postgresql-only, operation_type: install_and_update, vars: { _reencrypt_pgdata: "{{ PGDATA }}" } }
+    - { role: doc, tags: standalone-postgresql-only }
+    - { role: migration_tools, tags: standalone-postgresql-only}
+    - { role: finally, tags: standalone-postgresql-only, operation_type: turn_on_pp, vars: {patroni: false }}
+    - { role: tests, tags: standalone-postgresql-only, vars: {postgres: true, cluster: false, confd: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
     - { role: finally, tags: standalone-postgresql-only, operation_type: change_linux_password }
 
 # standalone-postgresql-pgbouncer
 - hosts: master
   roles:
     - { role: checkup, tags: standalone-postgresql-pgbouncer }
-    - { role: rsyslog, tags: standalone-postgresql-pgbouncer }
+    - { role: rsyslog, tags: standalone-postgresql-pgbouncer, when: rsyslog is defined and rsyslog }
     - { role: postgresql, tags: standalone-postgresql-pgbouncer, vars: {master: true, patroni: false} }
     - { role: pgbouncer, tags: standalone-postgresql-pgbouncer }
-    - { role: configure, tags: standalone-postgresql-pgbouncer, operation_type: main_configure, vars: {patroni: false} }
-    - { role: SRC, tags: standalone-postgresql-pgbouncer, operation_type: install_rpm, vars: { _nstllrpm_pgbackup: "{{ PGBACKUP }}",
-                                                                                               _nstllrpm_pgdata: "{{ PGDATA }}" } }
+    - { role: tls, tags: standalone-postgresql-pgbouncer, when: ldap_tls is defined and ldap_tls }
+    - { role: configure, tags: standalone-postgresql-pgbouncer, vars: {patroni: false} }
+    - { role: SRC, tags: standalone-postgresql-pgbouncer, operation_type: install_rpm }
     - { role: SRC, tags: standalone-postgresql-pgbouncer, operation_type: initialize_pg_server, when: SRC is defined and SRC }
     - { role: SRC, tags: standalone-postgresql-pgbouncer-gen-specs, operation_type: generate_src_specs, when: SRC is defined and SRC }
-    - { role: finally, tags: standalone-postgresql-pgbouncer, operation_type: switch_to_original_configs }
-    - { role: tests, tags: standalone-postgresql-pgbouncer, vars: {postgres: true, cluster: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test}
-    - { role: configure, tags: standalone-postgresql-pgbouncer, operation_type: finish_configure, vars: {patroni: false, is_patroni_exists: false } }
-    - { role: pg_auth_reencrypt, tags: standalone-postgresql-pgbouncer, operation_type: install_and_update, vars: { _reencrypt_pgdata: "{{ PGDATA }}" } }
+    - { role: doc, tags: standalone-postgresql-pgbouncer }
+    - { role: migration_tools, tags: standalone-postgresql-pgbouncer}
+    - { role: finally, tags: standalone-postgresql-pgbouncer, operation_type: turn_on_pp, vars: {patroni: false }}
+    - { role: tests, tags: standalone-postgresql-pgbouncer, vars: {postgres: true, cluster: false, confd: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test}
     - { role: finally, tags: standalone-postgresql-pgbouncer, operation_type: change_linux_password }
 
 # standalone-patroni-etcd-pgbouncer
@@ -47,22 +55,20 @@
     - { role: etcd, tags: standalone-patroni-etcd-pgbouncer }
 - hosts: master
   roles:
-    - { role: rsyslog, tags: standalone-patroni-etcd-pgbouncer }
+    - { role: rsyslog, tags: standalone-patroni-etcd-pgbouncer, when: rsyslog is defined and rsyslog }
     - { role: postgresql, tags: standalone-patroni-etcd-pgbouncer, vars: {master: true, patroni: true} }
     - { role: patroni, tags: standalone-patroni-etcd-pgbouncer, vars: {master: true} }
     - { role: pgbouncer, tags: standalone-patroni-etcd-pgbouncer }
-    - { role: configure, tags: standalone-patroni-etcd-pgbouncer, operation_type: main_configure, vars: {patroni: true} }
-    - { role: SRC, tags: standalone-patroni-etcd-pgbouncer, operation_type: install_rpm, vars: { _nstllrpm_pgbackup: "{{ PGBACKUP }}",
-                                                                                                 _nstllrpm_pgdata: "{{ PGDATA }}" } }
+    - { role: tls, tags: standalone-patroni-etcd-pgbouncer, when: ldap_tls is defined and ldap_tls }
+    - { role: configure, tags: standalone-patroni-etcd-pgbouncer, vars: {patroni: true} }
+    - { role: SRC, tags: standalone-patroni-etcd-pgbouncer, operation_type: install_rpm }
     - { role: SRC, tags: standalone-patroni-etcd-pgbouncer, operation_type: initialize_pg_server, when: SRC is defined and SRC }
     - { role: SRC, tags: standalone-patroni-etcd-pgbouncer-gen-specs, operation_type: generate_src_specs, when: SRC is defined and SRC }
-    - { role: finally, tags: standalone-patroni-etcd-pgbouncer, operation_type: switch_to_original_configs }
-    #when we turn on etcd v3
-    #- { role: finally, tags: standalone-patroni-etcd-pgbouncer, operation_type: turn_off_etcd_v2 }
-    - { role: tests, tags: standalone-patroni-etcd-pgbouncer, vars: {postgres: true, cluster: true, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
-    - { role: tests, tags: standalone-patroni-etcd-pgbouncer, vars: {postgres: false, cluster: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
-    - { role: configure, tags: standalone-patroni-etcd-pgbouncer, operation_type: finish_configure, vars: {patroni: true, is_patroni_exists: true } }
-    - { role: pg_auth_reencrypt, tags: standalone-patroni-etcd-pgbouncer, operation_type: install_and_update, vars: { _reencrypt_pgdata: "{{ PGDATA }}" } }
+    - { role: doc, tags: standalone-patroni-etcd-pgbouncer }
+    - { role: migration_tools, tags: standalone-patroni-etcd-pgbouncer}
+    - { role: finally, tags: standalone-patroni-etcd-pgbouncer, operation_type: turn_on_pp, vars: {patroni: true }}
+    - { role: tests, tags: standalone-patroni-etcd-pgbouncer, vars: {postgres: true, cluster: true, confd: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
+    - { role: tests, tags: standalone-patroni-etcd-pgbouncer, vars: {postgres: false, cluster: false, confd: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
     - { role: finally, tags: standalone-patroni-etcd-pgbouncer, operation_type: change_linux_password }
 
 #cluster-patroni-etcd-pgbouncer
@@ -72,7 +78,7 @@
     - { role: etcd, tags: cluster-patroni-etcd-pgbouncer }
 - hosts: master
   roles:
-    - { role: rsyslog, tags: cluster-patroni-etcd-pgbouncer }
+    - { role: rsyslog, tags: cluster-patroni-etcd-pgbouncer, when: rsyslog is defined and rsyslog }
     - { role: postgresql, tags: cluster-patroni-etcd-pgbouncer, vars: {master: true, patroni: true} }
     - { role: patroni, tags: cluster-patroni-etcd-pgbouncer, vars: {master: true} }
 - hosts: master:replica
@@ -91,22 +97,19 @@
 - hosts: postgres_nodes
   roles:
     - { role: pgbouncer, tags: cluster-patroni-etcd-pgbouncer }
-    - { role: configure, tags: cluster-patroni-etcd-pgbouncer, operation_type: main_configure, vars: {patroni: true} }
-    - { role: SRC, tags: cluster-patroni-etcd-pgbouncer, operation_type: install_rpm, vars: { _nstllrpm_pgbackup: "{{ PGBACKUP }}",
-                                                                                              _nstllrpm_pgdata: "{{ PGDATA }}" } }
+    - { role: confd, tags: cluster-patroni-etcd-pgbouncer }
+    - { role: tls, tags: cluster-patroni-etcd-pgbouncer, when: ldap_tls is defined and ldap_tls }
+    - { role: configure, tags: cluster-patroni-etcd-pgbouncer, vars: {patroni: true} }
+    - { role: SRC, tags: cluster-patroni-etcd-pgbouncer, operation_type: install_rpm }
     - { role: SRC, tags: cluster-patroni-etcd-pgbouncer, operation_type: initialize_pg_server, when: SRC is defined and SRC }
     - { role: SRC, tags: cluster-patroni-etcd-pgbouncer-gen-specs, operation_type: generate_src_specs, when: SRC is defined and SRC }
-    - { role: finally, tags: cluster-patroni-etcd-pgbouncer, operation_type: switch_to_original_configs }
-    - { role: tests, tags: cluster-patroni-etcd-pgbouncer, vars: {postgres: true, cluster: true, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
+    - { role: doc, tags: cluster-patroni-etcd-pgbouncer }
+    - { role: migration_tools, tags: cluster-patroni-etcd-pgbouncer}
+    - { role: finally, tags: cluster-patroni-etcd-pgbouncer, operation_type: turn_on_pp, vars: {patroni: true }}
+    - { role: tests, tags: cluster-patroni-etcd-pgbouncer, vars: {postgres: true, cluster: true, confd: true, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
 - hosts: master:replica:etcd
   roles:
-    #when we turn on etcd v3
-    #- { role: finally, tags: cluster-patroni-etcd-pgbouncer, operation_type: turn_off_etcd_v2 }
-    - { role: tests, tags: cluster-patroni-etcd-pgbouncer, vars: {postgres: false, cluster: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
-- hosts: master:replica:etcd
-  roles:
-    - { role: configure, tags: cluster-patroni-etcd-pgbouncer, operation_type: finish_configure, vars: {patroni: true, is_patroni_exists: true } }
-    - { role: pg_auth_reencrypt, tags: cluster-patroni-etcd-pgbouncer, operation_type: install_and_update, vars: { _reencrypt_pgdata: "{{ PGDATA }}" } }
+    - { role: tests, tags: cluster-patroni-etcd-pgbouncer, vars: {postgres: false, cluster: false, confd: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
     - { role: finally, tags: cluster-patroni-etcd-pgbouncer, operation_type: change_linux_password }
 
 #cluster-patroni-etcd-pgbouncer-haproxy
@@ -116,7 +119,7 @@
     - { role: etcd, tags: cluster-patroni-etcd-pgbouncer-haproxy }
 - hosts: master
   roles:
-    - { role: rsyslog, tags: cluster-patroni-etcd-pgbouncer-haproxy }
+    - { role: rsyslog, tags: cluster-patroni-etcd-pgbouncer-haproxy, when: rsyslog is defined and rsyslog }
     - { role: postgresql, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {master: true, patroni: true} }
     - { role: patroni, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {master: true} }
 - hosts: master:replica
@@ -136,22 +139,18 @@
   roles:
     - { role: pgbouncer, tags: cluster-patroni-etcd-pgbouncer-haproxy }
     - { role: HAProxy, tags: cluster-patroni-etcd-pgbouncer-haproxy }
-    - { role: configure, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: main_configure, vars: {patroni: true} }
-    - { role: SRC, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: install_rpm, vars: { _nstllrpm_pgbackup: "{{ PGBACKUP }}",
-                                                                                                      _nstllrpm_pgdata: "{{ PGDATA }}" } }
+    - { role: tls, tags: cluster-patroni-etcd-pgbouncer-haproxy, when: ldap_tls is defined and ldap_tls }
+    - { role: configure, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {patroni: true} }
+    - { role: SRC, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: install_rpm }
     - { role: SRC, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: initialize_pg_server, when: SRC is defined and SRC }
     - { role: SRC, tags: cluster-patroni-etcd-pgbouncer-haproxy-gen-specs, operation_type: generate_src_specs, when: SRC is defined and SRC }
-    - { role: finally, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: switch_to_original_configs }
-    - { role: tests, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {postgres: true, cluster: true, haproxy: true}, when: run_smoke_test is defined and run_smoke_test }
+    - { role: doc, tags: cluster-patroni-etcd-pgbouncer-haproxy }
+    - { role: migration_tools, tags: cluster-patroni-etcd-pgbouncer-haproxy}
+    - { role: finally, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: turn_on_pp, vars: {patroni: true }}
+    - { role: tests, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {postgres: true, cluster: true, confd: false, haproxy: true}, when: run_smoke_test is defined and run_smoke_test }
 - hosts: master:replica:etcd
   roles:
-    #when we turn on etcd v3
-    #- { role: finally, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: turn_off_etcd_v2 }
-    - { role: tests, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {postgres: false, cluster: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
-- hosts: master:replica:etcd
-  roles:
-    - { role: configure, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: finish_configure, vars: { patroni: true, is_patroni_exists: true } }
-    - { role: pg_auth_reencrypt, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: install_and_update, vars: { _reencrypt_pgdata: "{{ PGDATA }}" } }
+    - { role: tests, tags: cluster-patroni-etcd-pgbouncer-haproxy, vars: {postgres: false, cluster: false, confd: false, haproxy: false}, when: run_smoke_test is defined and run_smoke_test }
     - { role: finally, tags: cluster-patroni-etcd-pgbouncer-haproxy, operation_type: change_linux_password }
 
 - name: Finish playbook for cluster

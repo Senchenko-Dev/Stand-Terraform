@@ -35,28 +35,4 @@
         PGDATA: "{{ _redefinevars_pgdata }}"
       when: _redefinevars_pgdata is defined
 
-    - name: use current client cert
-      set_fact:
-        pg_certs_pwd: "{{ pg_certs_pwd|combine(data, recursive=True) }}"
-      vars:
-        data:
-          postgres_cert: "{{ _redefinevars_client_cert }}"
-      when: _redefinevars_client_cert is defined
-
-    - name: use current client key
-      set_fact:
-        pg_certs_pwd: "{{ pg_certs_pwd|combine(data, recursive=True) }}"
-      vars:
-        data:
-          postgres_key: "{{ _redefinevars_client_key }}"
-      when: _redefinevars_client_key is defined
-
-    - name: use current client root
-      set_fact:
-        pg_certs_pwd: "{{ pg_certs_pwd|combine(data, recursive=True) }}"
-      vars:
-        data:
-          root_ca: "{{ _redefinevars_client_ca }}"
-      when: _redefinevars_client_ca is defined
-
   when: "inventory_hostname != 'etcd'"

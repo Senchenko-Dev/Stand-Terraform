@@ -10,7 +10,8 @@
 
     - name: create a test table
       postgresql_query:
-        session_role: "{{ as_group }}"
+        login_user: "{{ as_group }}"
+        login_password: "{{ db_group_roles.as_admin.pass.open }}"
         port: "{{ ports.pg }}"
         db: "{{ db_name }}"
         query: 'CREATE TABLE "{{ schema_name }}".table_test (id int);'
@@ -25,7 +26,8 @@
 
     - name: insert data into a test table
       postgresql_query:
-        session_role: tuz_for_test
+        login_user: tuz_for_test
+        login_password: "{{ db_group_roles.transport.pass.open }}"
         port: "{{ the_subinterface_port }}"
         db: "{{ db_name }}"
         query: 'INSERT INTO "{{ schema_name }}".table_test (id) VALUES (1);'
@@ -49,7 +51,8 @@
 
     - name: select data from a test table
       postgresql_query:
-        session_role: tuz_for_test
+        login_user: tuz_for_test
+        login_password: "{{ db_group_roles.transport.pass.open }}"
         port: "{{ the_subinterface_port }}"
         db: "{{ db_name }}"
         query: 'SELECT * FROM "{{ schema_name }}".table_test;'
@@ -64,7 +67,8 @@
 
     - name: update data in the test table
       postgresql_query:
-        session_role: tuz_for_test
+        login_user: tuz_for_test
+        login_password: "{{ db_group_roles.transport.pass.open }}"
         port: "{{ the_subinterface_port }}"
         db: "{{ db_name }}"
         query: 'UPDATE "{{ schema_name }}".table_test SET id = 2 WHERE id = 1;'
@@ -79,7 +83,8 @@
 
     - name: select data from a test table
       postgresql_query:
-        session_role: tuz_for_test
+        login_user: tuz_for_test
+        login_password: "{{ db_group_roles.transport.pass.open }}"
         port: "{{ the_subinterface_port }}"
         db: "{{ db_name }}"
         query: 'SELECT * FROM "{{ schema_name }}".table_test;'
@@ -94,7 +99,8 @@
 
     - name: delete a test table by the TUZ user
       postgresql_query:
-        session_role: tuz_for_test
+        login_user: tuz_for_test
+        login_password: "{{ db_group_roles.transport.pass.open }}"
         port: "{{ the_subinterface_port }}"
         db: "{{ db_name }}"
         query: 'DROP TABLE "{{ schema_name }}".table_test;'
@@ -122,7 +128,10 @@
         fail_msg: "the test table was not deleted successfully"
         success_msg: "the test table was successfully deleted"
 
-  environment: "{{ db_connection_args }}"
+  environment:
+    - PGHOST: "{{ current_master }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
   become: yes
   become_user: postgres
   when: "postgres|bool and schema_name|length > 0 and db_name|length > 0 and tablespace_name|length > 0 and ansible_fqdn == current_master"

@@ -1,151 +1,145 @@
-- name: Install src module to Pangolin hosts
-  block:
+- name: Gather packages info
+  package_facts:
+    manager: "auto"
+  no_log: "{{ nolog }}"
 
-    - name: gather packages info
-      package_facts:
-        manager: "auto"
-      no_log: "{{ nolog }}"
+- name: find personal agent in /etc/services
+  shell: "cat /etc/services | grep '5555' | grep '^personal-agent'"
+  failed_when: false
+  changed_when: false
+  register: services_stdout
 
-    - name: find personal agent in /etc/services
-      shell: "cat /etc/services | grep '5555' | grep '^personal-agent'"
-      failed_when: false
-      changed_when: false
-      register: services_stdout
+- name: comment lines in /etc/services
+  when: services_stdout is defined and services_stdout.rc == 0
+  replace:
+    path: /etc/services
+    regexp: "^{{ item }}"
+    replace: "#{{ item }}"
+  with_items: "{{ services_stdout.stdout_lines }}"
+  become: true
 
-    - name: comment lines in /etc/services
-      replace:
-        path: /etc/services
-        regexp: "^{{ item }}"
-        replace: "#{{ item }}"
-      with_items: "{{ services_stdout.stdout_lines }}"
-      become: true
-      when: services_stdout is defined and services_stdout.rc == 0
+- name: Install xinetd package
+  package:
+    name: xinetd
+    state: present
+  become: true
 
-    - name: install xinetd package, if not installed
-      package:
-        name: xinetd
-        state: present
-      become: true
+- name: Start xinetd
+  systemd:
+    name: xinetd
+    state: started
+  become: true
 
-    - name: restart xinetd
-      systemd:
-        name: xinetd
-        state: restarted
-      become: true
+- name: remove installed OB2 packages
+  package:
+    name: "{{ item }}"
+    state: absent
+  failed_when: false
+  become: true
+  with_items:
+  - 'OB2-TS-CORE.x86_64'
+  - 'OB2-DA.x86_64'
+  - 'OB2-CORE.x86_64'
+  - 'OB2-INTEG.x86_64'
+  - 'OB2-POSTGRESQL.x86_64'
 
-    - name: remove installed OB2 packages
-      package:
-        name: "{{ item }}"
-        state: absent
-      with_items:
-      - 'OB2-TS-CORE.x86_64'
-      - 'OB2-DA.x86_64'
-      - 'OB2-CORE.x86_64'
-      - 'OB2-INTEG.x86_64'
-      - 'OB2-POSTGRESQL.x86_64'
-      failed_when: false
-      become: true
+- name: clear broken rpm
+  command:
+    cmd: "rpm --erase --noscripts OB2-TS-CORE.x86_64"
+    warn: no
+  ignore_errors: True
+  become: true
 
-    - name: clear broken rpm
-      command:
-        cmd: "rpm --erase --noscripts OB2-TS-CORE.x86_64"
-        warn: no
-      ignore_errors: true
-      become: true
+- name: Clear omni directories
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "/etc/opt/omni/"
+    - "/opt/omni/"
+    - "/var/opt/omni/"
+  become: true
 
-    - name: clear omni directories
-      file:
-        path: "{{ item }}"
-        state: absent
-      with_items:
-        - "/etc/opt/omni/"
-        - "/opt/omni/"
-        - "/var/opt/omni/"
-        - "{{ manage_backup_bin }}"
-      become: true
+- name: Setup required variables
+  set_fact:
+    required_backup_packages:
+      - "{{ distrib_server_ob2_path }}OB2-CORE-A.{{ distrib_ob2_version }}-1.x86_64.rpm"
+      - "{{ distrib_server_ob2_path }}OB2-TS-CORE-A.{{ distrib_ob2_version }}-1.x86_64.rpm"
+      - "{{ distrib_server_ob2_path }}OB2-DA-A.{{ distrib_ob2_version }}-1.x86_64.rpm"
+    not_install_backup_packages: []
 
-    - name: setup required variables
-      set_fact:
-        required_backup_packages:
-          - "{{ distrib_server_ob2_path }}OB2-CORE-A.{{ distrib_ob2_version }}-1.x86_64.rpm"
-          - "{{ distrib_server_ob2_path }}OB2-TS-CORE-A.{{ distrib_ob2_version }}-1.x86_64.rpm"
-          - "{{ distrib_server_ob2_path }}OB2-DA-A.{{ distrib_ob2_version }}-1.x86_64.rpm"
-        not_install_backup_packages: []
+- name: Checking installed backup packages
+  set_fact:
+    not_install_backup_packages: "{{ not_install_backup_packages + [item] }}"
+  when: "item not in ansible_facts.packages"
+  with_items: "{{ required_backup_packages }}"
 
-    - name: checking installed backup packages
-      set_fact:
-        not_install_backup_packages: "{{ not_install_backup_packages + [item] }}"
-      when: "item not in ansible_facts.packages"
-      with_items: "{{ required_backup_packages }}"
+- name: Install requared packages
+  package:
+    state: present
+    name: "{{ not_install_backup_packages }}"
+  become: true
 
-    - name: install requared packages
-      package:
-        state: present
-        name: "{{ not_install_backup_packages }}"
-      become: true
+- name: Create bin backup module to remote hosts
+  copy:
+    src: "{{ local_distr_path }}/pg_backup/manage_backup.bin"
+    dest: "{{ manage_backup_bin }}/{{ pg_major_version }}_manage_backup.bin"
+    owner: root
+    group: root
+    mode: 0751
+  become: true
 
-    - name: create bin backup module to remote hosts
-      copy:
-        src: "{{ local_distr_path }}/pg_backup/manage_backup.bin"
-        dest: "{{ manage_backup_bin }}/{{ pg_major_version }}_manage_backup.bin"
-        owner: root
-        group: root
-        mode: 0751
-      become: true
+- name: Copy templates sh scripts for start-stop backup
+  template:
+    src: "{{ item.source }}"
+    dest: "{{ manage_backup_bin }}/{{ pg_major_version }}_{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0751
+  with_items:
+    - { source: 'pg_se_archlogs.sh.j2', dest: 'pg_se_archlogs.sh' }
+    - { source: 'manage_backup.sh.j2', dest: 'manage_backup.sh' }
+  become: true
 
-    - name: copy templates sh scripts for start-stop backup
-      template:
-        src: "{{ item.source }}"
-        dest: "{{ manage_backup_bin }}/{{ pg_major_version }}_{{ item.dest }}"
-        owner: root
-        group: root
-        mode: 0751
-      with_items:
-        - { source: 'pg_se_archlogs.sh.j2', dest: 'pg_se_archlogs.sh' }
-        - { source: 'manage_backup.sh.j2', dest: 'manage_backup.sh' }
-      become: true
-      vars:
-        src_bin_version: "{{ pg_major_version }}"
+- name: Setup update_local_port for omnicc
+  shell: "/opt/omni/bin/omnicc -update_local_port 5555"
 
-    - name: setup update_local_port for omnicc
-      shell: "/opt/omni/bin/omnicc -update_local_port 5555"
+- name: Update omnicc hosts list
+  shell: "/opt/omni/bin/omnicc -secure_comm -configure_peer {{ data_protector_host }} -accept_host"
+  become: true
 
-    - name: update omnicc hosts list
-      shell: "/opt/omni/bin/omnicc -secure_comm -configure_peer {{ data_protector_host }} -accept_host"
-      become: true
+- name: Write variables to file
+  lineinfile:
+    path: "{{ local_distr_path }}/variables"
+    line: "{{item}}"
+    insertafter: EOF
+    create: yes
+  with_items:
+    - "{{ hostvars['master'].ansible_hostname }},"
+    - "{{ hostvars['master'].ansible_fqdn }},"
+    - "{{ PGDATA }},"
+    - "{{ PGBACKUP }},"
+    - "{{ pg_major_version }},"
+    - "{{ tablespace_location }}"
+  delegate_to: localhost
+  run_once: true
+  when: installation_type == 'standalone'
 
-    - name: write variables to file
-      lineinfile:
-        path: "{{ local_distr_path }}/variables"
-        line: "{{item}}"
-        insertafter: EOF
-        create: yes
-      with_items:
-        - "{{ hostvars['master'].ansible_hostname }},"
-        - "{{ hostvars['master'].ansible_fqdn }},"
-        - "{{ PGDATA }},"
-        - "{{ PGBACKUP }},"
-        - "{{ pg_new_version_without_zeros }},"
-        - "{{ tablespace_location }}"
-      delegate_to: localhost
-      run_once: true
-      when: installation_type == 'standalone'
-
-    - name: write variables to file
-      lineinfile:
-        path: "{{ local_distr_path }}/variables"
-        line: "{{item}}"
-        insertafter: EOF
-        create: yes
-      with_items:
-        - "{{ hostvars['master'].ansible_hostname }},"
-        - "{{ hostvars['replica'].ansible_hostname }},"
-        - "{{ hostvars['master'].ansible_fqdn }},"
-        - "{{ hostvars['replica'].ansible_fqdn }},"
-        - "{{ PGDATA }},"
-        - "{{ PGBACKUP }},"
-        - "{{ pg_new_version_without_zeros }},"
-        - "{{ tablespace_location }}"
-      delegate_to: localhost
-      run_once: true
-      when: installation_type == 'cluster'
+- name: Write variables to file
+  lineinfile:
+    path: "{{ local_distr_path }}/variables"
+    line: "{{item}}"
+    insertafter: EOF
+    create: yes
+  with_items:
+    - "{{ hostvars['master'].ansible_hostname }},"
+    - "{{ hostvars['replica'].ansible_hostname }},"
+    - "{{ hostvars['master'].ansible_fqdn }},"
+    - "{{ hostvars['replica'].ansible_fqdn }},"
+    - "{{ PGDATA }},"
+    - "{{ PGBACKUP }},"
+    - "{{ pg_major_version }},"
+    - "{{ tablespace_location }}"
+  delegate_to: localhost
+  run_once: true
+  when: installation_type == 'cluster'

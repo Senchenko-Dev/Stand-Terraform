@@ -7,7 +7,7 @@
     headers:
       Accept: "application/json"
       Content-Type: "application/json"
-      Authorization: "{{ monitoring_params.token_main }}"
+      Authorization: "{{ monitoring_params.token_main }"
   with_items:
     - { hostname: "{{ hostvars['master'].ansible_hostname }}", address: "{{ hostvars['master'].ansible_default_ipv4.address }}" }
   delegate_to: localhost
@@ -23,7 +23,7 @@
     headers:
       Accept: "application/json"
       Content-Type: "application/json"
-      Authorization: "{{ monitoring_params.token_main }}"
+      Authorization: "{{ monitoring_params.token_main }"
   with_items:
     - { hostname: "{{ hostvars['master'].ansible_hostname }}", address: "{{ hostvars['master'].ansible_default_ipv4.address }}" }
   delegate_to: localhost
@@ -39,7 +39,7 @@
     headers:
       Accept: "application/json"
       Content-Type: "application/json"
-      Authorization: "{{ monitoring_params.token_main }}"
+      Authorization: "{{ monitoring_params.token_main }"
   with_items:
     - { hostname: "{{ hostvars['replica'].ansible_hostname }}", address: "{{ hostvars['replica'].ansible_default_ipv4.address }}" }
   delegate_to: localhost

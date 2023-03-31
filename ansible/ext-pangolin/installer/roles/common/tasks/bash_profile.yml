@@ -20,30 +20,28 @@
         path:        "{{ shell_profile_file }}"
         line:        "{{ item }}"
         state:       present
-        create:      yes
-        mode:        0600
         insertafter: EOF
       with_items:
         - export LD_LIBRARY_PATH={{ PGHOME }}/lib
-        - export PATH=$PATH:{{ PGHOME }}/bin
+        - export PATH={{ PGHOME }}/bin:$PATH
         - export PG_PLUGINS_PATH={{ PGHOME }}/lib
         - export PGHOME={{ PGHOME }}
         - export PGDATABASE=postgres
         - export PGUSER=postgres
         - export PGHOST={{ ansible_default_ipv4.address }}
         - export PGPORT={{ ports.pg }}
-        - export PGSSLCERT={{ pg_certs_pwd.postgres_cert }}
-        - export PGSSLKEY={{ pg_certs_pwd.postgres_key }}
-        - export PGSSLROOTCERT={{ pg_certs_pwd.root_ca }}
+        - export PGSSLCERT={{ pg_certs.ssl_cert }}
+        - export PGSSLKEY={{ pg_certs.ssl_key }}
+        - export PGSSLROOTCERT={{ PGSSL }}/root.crt
         - export PGCLIENTENCODING=UTF8
         - export CLNAME={{ clustername }}
         - NOW=$(date +"%Y-%m-%d")
         - export PGDATA={{ PGDATA }}
-        - export MANPATH=$MANPATH:$PGHOME/share/man
+        - export MANPATH=$PGHOME/share/man:$MANPATH
         - alias errors="ls -t {{ PGLOGS }}/postgresql-$NOW*.log | head -1 | xargs tail -F | grep -E 'WARNING|ERROR|FATAL'"
         - alias hba='vim $PGDATA/pg_hba.conf'
         - alias pglog='ls -t {{ PGLOGS }}/postgresql-$NOW*.log | head -1 | xargs tail -300'
-        - alias pgver="psql -c 'select version();' | sed \"s| on | (\$(psql --single-line --no-align -c 'select product_version();' | sed '2q;d' )) on |\""
+        - alias pgver="psql -c 'select version();'"
 
   become: true
   become_user: postgres
@@ -76,17 +74,14 @@
         path:        "{{ shell_profile_file }}"
         line:        "{{ item }}"
         state:       present
-        create:      yes
-        mode:        0600
         insertafter: EOF
       with_items:
-        - export PATH=$PATH:{{ python.patroni_venv }}/bin
+        - export PATH={{ python.patroni_venv }}/bin:$PATH
         - export CLNAME={{ clustername }}
-        #- export ETCDCTL_API=3 #when we turn on etcd v3
         - alias fail='patronictl -c {{ patroni_files.conf_dir }}/postgres.yml failover $CLNAME'
-        - alias hist='patronictl -c {{ patroni_files.conf_dir }}/postgres.yml history $CLNAME'
-        - alias list='patronictl -c {{ patroni_files.conf_dir }}/postgres.yml list $CLNAME'
-        - alias pgconfig='curl -s -m {{ curl_connect_timeout }} {{ protocol }}://{{ ansible_fqdn }}:8008/config | jq'
+        - alias hist='patronictl -d etcd://localhost:2379 history $CLNAME'
+        - alias list='patronictl -d etcd://localhost:2379 list $CLNAME'
+        - alias pgconfig='curl -s http://localhost:8008/config | jq'
         - alias ptlog='sudo journalctl -u patroni'
         - alias ptver="patronictl version"
         - alias reload='patronictl -c {{ patroni_files.conf_dir }}/postgres.yml reload $CLNAME'
@@ -101,42 +96,24 @@
 - name: Install or update only etcd part of bash_profile
   block:
 
-    - name: remove old exports and aliases аfo etcd
-      lineinfile:
-        path: ~/.bash_profile
-        regexp: '{{ item }}'
-        state: absent
+    - name: remove old exports and aliases
+      shell: "{{ item }}"
       with_items:
-        - ^alias health
-        - ^alias members
-        - ^alias etcd_cfg
-        - ^alias elist
-        - ^alias elog
+        - sed -i "/alias.*health=.*\$/d"   "{{ shell_profile_file }}"
+        - sed -i "/alias.*members=.*\$/d"  "{{ shell_profile_file }}"
+        - sed -i "/alias.*etcd_cfg=.*\$/d" "{{ shell_profile_file }}"
 
     - name: write new exports and aliases to bash_profile file if istallation with etcd
       lineinfile:
         path:        "{{ shell_profile_file }}"
         line:        "{{ item }}"
         state:       present
-        create:      yes
-        mode:        0600
         insertafter: EOF
       with_items:
         - export CLNAME={{ clustername }}
-        #- export ETCDCTL_API=3 #when we turn on etcd v3
-        - alias members='ETCDCTL_API=3 etcdctl {{ endpoints_v3_bp }} {% if ssl_mode %}{{ etcdv3_ssl_connect }}{% endif %} member list -w table'
-        - alias elist='ETCDCTL_API=3 etcdctl {{ endpoints_v3_bp }} {% if ssl_mode %}{{ etcdv3_ssl_connect }}{% endif %} endpoint status -w table --cluster'
-        - alias elog='sudo journalctl -u etcd'
-        - alias health='ETCDCTL_API=2 etcdctl {{ endpoints_v2_bp }} {% if ssl_mode %}{{ etcdv2_ssl_connect }}{% endif %} cluster-health 2>&1'
-        # when we turn on etcd v3
-        # - alias health={% if installation_type == 'cluster' -%}
-        #                   '{% for host in groups['cluster'] -%}
-        #                     curl -m {{ curl_connect_timeout }} http://{{ hostvars[host].ansible_fqdn }}:{{ ports.etcd_inner }}/health;
-        #                     echo " http://{{ hostvars[host].ansible_fqdn }}:{{ ports.etcd_inner }}"{% if not loop.last -%};{% endif -%}
-        #                   {% endfor -%}'
-        #                 {% else -%}
-        #                   'curl -m {{ curl_connect_timeout }} http://{{ ansible_fqdn }}:{{ ports.etcd_inner }}/health;echo " http://{{ ansible_fqdn }}:{{ ports.etcd_inner }}"'
-        #                 {% endif -%}
+        - alias health='ETCDCTL_API=2 etcdctl cluster-health 2>&1'
+        - alias members='ETCDCTL_API=3 etcdctl member list -w table'
+        - alias etcd_cfg='ETCDCTL_API=2 etcdctl get /service/{{ clustername }}/config | jq .'
   
   become: true
   become_user: postgres

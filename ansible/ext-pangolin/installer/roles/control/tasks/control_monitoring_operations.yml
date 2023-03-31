@@ -5,18 +5,9 @@
       set_fact:
         previous_python_interpreter: "{{ ansible_python_interpreter }}"
 
-    - name: found python interpretator
-      stat:
-        path: '{{ python.postgresql_venv }}/bin/python3'
-      register: _found_python_interpretator
-
     - name: set python interpretator
       set_fact:
-        ansible_python_interpreter: "{% if _found_python_interpretator.stat.exists %}\
-                                    {{ python.postgresql_venv }}/bin/python3\
-                                    {% else %}\
-                                    {{ PGHOME_OLD }}/postgresql_venv/bin/python3\
-                                    {% endif %}"
+        ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
 
     - name: define default value for disable and enable variables
       set_fact:
@@ -68,15 +59,7 @@
                 Accept: "application/json"
                 Content-Type: "application/json"
                 Authorization: "{{ monitoring_params.token_for_pause }}"
-          register: result_disable_mon_standalone
-          ignore_errors: true
           when: disable_mon
-
-        - name: check result_disable_mon_standalone
-          debug:
-            msg: "{{ control_name }}.WARNING__Не удалось установить соединение с сервером мониторинга для постановки на паузу. \
-                  Обновление продолжится с включенным мониторингом__{{ control_name }}.WARNING"
-          when: "disable_mon and result_disable_mon_standalone.status != 200"
 
         - name: enable monitoring
           uri:
@@ -88,15 +71,7 @@
                 Accept: "application/json"
                 Content-Type: "application/json"
                 Authorization: "{{ monitoring_params.token_for_pause }}"
-          register: result_enable_mon_standalone
-          ignore_errors: true
           when: enable_mon
-
-        - name: check result_enable_mon_standalone
-          debug:
-            msg: "{{ control_name }}.WARNING__Не удалось установить соединение с сервером мониторинга для снятия с паузы. \
-                  Обновление продолжится. Снятие с паузы произойдет автоматически через {{ monitoring_params.pause_period }} минут__{{ control_name }}.WARNING"
-          when: "enable_mon and result_enable_mon_standalone.status != 200"
 
       delegate_to: localhost
       run_once: true
@@ -116,15 +91,7 @@
                 Accept: "application/json"
                 Content-Type: "application/json"
                 Authorization: "{{ monitoring_params.token_for_pause }}"
-          register: result_disable_mon_cluster
-          ignore_errors: true
           when: disable_mon
-
-        - name: check result_disable_mon_cluster
-          debug:
-            msg: "{{ control_name }}.WARNING__Не удалось установить соединение с сервером мониторинга для постановки на паузу. \
-                  Обновление продолжится с включенным мониторингом__{{ control_name }}.WARNING"
-          when: "disable_mon and result_disable_mon_cluster.status != 200"
 
         - name: enable monitoring
           uri:
@@ -136,20 +103,13 @@
                 Accept: "application/json"
                 Content-Type: "application/json"
                 Authorization: "{{ monitoring_params.token_for_pause }}"
-          register: result_enable_mon_cluster
-          ignore_errors: true
           when: enable_mon
-
-        - name: check result_enable_mon_cluster
-          debug:
-            msg: "{{ control_name }}.WARNING__Не удалось установить соединение с сервером мониторинга для снятия с паузы. \
-                  Обновление продолжится. Снятие с паузы произойдет автоматически через {{ monitoring_params.pause_period }} минут__{{ control_name }}.WARNING"
-          when: "enable_mon and result_enable_mon_cluster.status != 200"
 
       delegate_to: localhost
       run_once: true
       become: false
       when: installation_type == 'cluster'
+            
 
   always:
 
@@ -159,8 +119,7 @@
 
   environment:
     - PGHOST: "{{ ansible_fqdn }}"
-    - PGSSLCERT: "{{ pg_certs_pwd.postgres_cert }}"
-    - PGSSLKEY: "{{ pg_certs_pwd.postgres_key }}"
-    - PGSSLROOTCERT: "{{ pg_certs_pwd.root_ca }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
   become: true
   become_user: postgres

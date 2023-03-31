@@ -1,11 +1,6 @@
 - name: Common task for master, replica and etcd
   block:
 
-    - name: save PGDATA_OLD to etcd host
-      set_fact:
-        PGDATA_OLD: "{{ PGDATA_OLD }}"
-      run_once: true
-
     - name: ensure {{ backup.etcd }} directory exist
       file:
         path: "{{ item.src }}"
@@ -15,27 +10,19 @@
         - { src: "{{ backup.etcd }}",                           state: "absent" }
         - { src: "{{ backup.etcd }}{{ etcd_files.conf_dir }}/", state: "directory" }
         - { src: "{{ backup.etcd }}/db_backup",                 state: "directory" }
-        - { src: "{{ backup.etcd }}/{{ PGDATA_OLD }}/",         state: "directory" }
 
-    - name: save version etcd old
-      set_fact:
-        etcd_old_version: "{{ ansible_facts.packages['etcd'][0].version }}"
-
-    - name: download previous etcd package but do not install it
+    - name: get installed etcd version
+      uri:
+        url: "http://localhost:{{ ports.etcd_inner }}/version"
+      register: installed_version_etcd
+      
+    - name: download the etcd package but do not install it
       yum:
         name:
-          - "etcd-{{ ansible_facts.packages['etcd'][0].version }}"
+          - "etcd-{{ installed_version_etcd.json.etcdserver }}"
         state: present
         download_only: true
         download_dir: "{{ backup.etcd }}"
-      when: ansible_os_family == "RedHat"
-    
-    - name: download previous etcd package but do not install it
-      shell: "{{ item }}"
-      with_items:
-        - "apt-get install -dy --reinstall etcd={{ ansible_facts.packages['etcd'][0].version }}"
-        - "cp /var/cache/apt/archives/etcd_* {{ backup.etcd }}"
-      when: ansible_os_family == "Altlinux"
 
     - name: copy etcd files to {{ backup.etcd }}
       copy:
@@ -62,15 +49,5 @@
         group: etcd
         mode: 0700
         remote_src: yes
-
-    - name: backup patroni.dynamic.json
-      copy:
-        src: "{{ PGDATA_OLD }}/patroni.dynamic.json"
-        dest: "{{ backup.etcd }}/{{ PGDATA_OLD }}/patroni.dynamic.json"
-        owner: postgres
-        group: postgres
-        remote_src: yes
-        mode: 0600
-      when: inventory_hostname != 'etcd'
         
   become: true

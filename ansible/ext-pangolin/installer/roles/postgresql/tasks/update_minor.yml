@@ -1,36 +1,7 @@
-- name: Minor update of Pangolin
+- name: Minor update of PG SE
   block:
 
-    - name: turn on synchronous mode and wait cluster synchronoused, needed for switchover
-      block:
-
-        - name: set type of error for recovery
-          set_fact:
-            update_errors: "{{ update_errors|combine(data, recursive=True) }}"
-            cacheable: yes
-          vars:
-            data:
-              types:
-                pg: 
-                  minor_before_first_switchover: true
-
-        - debug: msg="{{ update_error_types_breakpoint_msg }}"
-          when: is_recovery_test_mode and postgresql_error_umin001m and inventory_hostname == 'master'
-
-        - name: turn on synchronous mode and then switchover
-          include_role:
-            name: patroni
-            tasks_from: update_run_switchover
-          vars:
-            current_database_port: "{{ ports.pg }}"
-            _runswitchover_pghome: "{{ PGHOME_OLD }}"
-            PGHOME: "{{ PGHOME_OLD }}"
-
-      become_user: postgres
-      when: "installation_type == 'cluster' \
-             and inventory_hostname == 'master'"
-
-    - name: set type of error for recovery
+    - name: prepare update started
       set_fact:
         update_errors: "{{ update_errors|combine(data, recursive=True) }}"
         cacheable: yes
@@ -38,8 +9,7 @@
         data:
           types:
             pg: 
-              minor_before_first_switchover: false
-              minor_before_bin_updated: true
+              not_started_db: true
 
     - name: gather packages info
       package_facts:
@@ -50,24 +20,42 @@
       set_fact:
         ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
 
-    - name: check database connect to Pangolin
+    - name: check database connect to PG SE (master and replica)
       shell: '{{ PGHOME_OLD }}/bin/pg_isready -h 127.0.0.1 -p {{ ports.pg }}'
-      register: result
-      until: result.stdout.find("accepting connections") != -1
-      retries: 6
-      delay: 10
+      become: true
       become_user: postgres
 
-    - name: copy package with new version Pangolin to remote hosts
+    - name: copy package with new version PG SE to remote hosts
       copy:
         src: "{{ local_distr_path }}/{{ postgresql_package_file }}"
         dest: "{{ REMOTE_TMP }}"
+      become: true
 
     - name: find package files in directory
       find:
         paths: "{{ REMOTE_TMP }}"
         use_regex: yes
         patterns:  '{{ postgresql_package_file }}'
+      become: true
+
+    # перейти в асинхронный режим, чтобы текущий мастер продолжил работать на "запись"
+    - name: turn off synchronous mode
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        change_params: "{{ item }}"
+      with_items:
+        - "synchronous_mode: false"
+        - "synchronous_mode_strict: false"
+
+    #чтобы patroni не выполнял failover в момент выключения одного из участников кластера
+    - name: turn on PAUSE mode
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        change_params: "pause: true"
 
     - name: ensure data and log dirs exists
       file:
@@ -81,28 +69,142 @@
         - { path: '{{ PGLOGS }}/',                  state: 'directory' }
         - { path: '{{ PGSSL }}',                    state: 'directory' }
         - { path: '/var/run/postgresql/',           state: 'directory' }
+        - { path: '{{ PGDATA_OLD }}/pg_pp_cache/',  state: 'directory' }
         - { path: '{{ PGHOME }}',                   state: 'directory' }
         - { path: '{{ PGETCDIR }}/',                state: 'directory' }
+      become: true
+
+    - name: migrate third-party PG SE extensions
+      copy:
+        src: "{{ backup.postgresql }}/{{ PGHOME_OLD_NAME }}/"
+        dest: "{{ PGHOME }}/"
+        owner: postgres
+        group: postgres
+        mode: 0700
+        remote_src: yes
+      become: true
+
+    - name: remove old scripts from previouse PGSE version, if exist
+      file:
+        path: "{{ PGHOME }}/bin/{{ item }}"
+        state: absent
+      with_items:
+        - "auto_initprotection"
+        - "auto_setup_kms_credentials"
+      become: true
+
+    - name: remove pgaudit extension files
+      block:
+
+        - name: find files
+          find:
+            paths: "{{ PGHOME }}"
+            patterns: [ ".*pgaudit*" ]
+            use_regex: yes
+            recurse: yes
+          register: found_files
+
+        - name: delete files
+          file:
+            path: '{{ item.path }}'
+            state: absent
+          with_items: '{{ found_files.files }}'
+
+      become: true
+
+    - name: apply new {{ PGDATA }} path
+      block:
+
+        - name: check exists new {{ PGDATA }}
+          stat: 
+            path: '{{ pgdata_new_string.stdout }}'
+          register: new_pgdata_exists
+
+        - name: create symlink for new {{ PGDATA }}
+          file:
+            src: '{{ pgdata_old_string.stdout }}'
+            dest: '{{ pgdata_new_string.stdout }}'
+            state: link
+            force: yes
+            owner: postgres
+            group: postgres
+          when: not new_pgdata_exists.stat.exists
+
+        - name: special symbol link for version < 4.2.5
+          block:
+
+            - name: ensure {{ tablespace_location }}
+              file:
+                path: "{{ pgdata_new_string.stdout }}/tablespaces/"
+                state: directory
+                owner: postgres
+                group: postgres
+                mode: 0700
+
+            - name: create symlink from {{ PGDATA_OLD }}/ts to {{ tablespace_location }}, if version >= 4.2.1
+              file:
+                src: '{{ pgdata_old_string.stdout }}/ts'
+                dest: '{{ pgdata_new_string.stdout }}/tablespaces/{{ tablespace_name }}'
+                state: link
+                force: yes
+                owner: postgres
+                group: postgres
+              when: ( [ pg_current_version, '4.2.1' ] | compare_pg_se_versions )|int != 0
+
+            - name: create {{ pgdata_new_string.stdout }}/tablespaces/{{ tablespace_name }} directory, if version < 4.2.1
+              file:
+                path: "{{ pgdata_new_string.stdout }}/tablespaces/{{ tablespace_name }}"
+                state: directory
+                owner: postgres
+                group: postgres
+                mode: 0700
+              when: ( [ pg_current_version, '4.2.1' ] | compare_pg_se_versions )|int == 0
+
+          when: ( [ pg_current_version, '4.2.5' ] | compare_pg_se_versions )|int == 0
+
+      become_user: root
+      become: true
+      when: PGDATA_OLD != PGDATA
+
+    - name: create PGBACKUP directory
+      block:
+
+        - name: check that new pgarclogs directory is exists
+          stat:
+            path: "{{ PGBACKUP }}"
+          register: new_pgarclogs_exists
+
+        - name: check that old pgarclogs directory is exists
+          stat:
+            path: "{{ previous_pgbackup_dir }}"
+          register: old_pgarclogs_exists
+
+        - name: create symlink for {{ PGBACKUP }}
+          file:
+            src: "{{ previous_pgbackup_dir }}"
+            dest: "{{ PGBACKUP }}"
+            state: link
+            force: yes
+            owner: postgres
+            group: postgres
+          when: "old_pgarclogs_exists.stat.exists and old_pgarclogs_exists.stat.isdir and \
+                not new_pgarclogs_exists.stat.exists"
+
+        - name: create {{ PGBACKUP }} dir if previous backup directory doesn't exist
+          file:
+            path: "{{ PGBACKUP }}"
+            state: directory
+            owner: postgres
+            group: postgres
+            mode: 0700
+          when: not old_pgarclogs_exists.stat.exists
+
+      become: true
 
     - name: include role for run checkpoint
       include_tasks: update_run_checkpoint.yml
       vars:
         _runcheckpoint_database_port: "{{ ports.pg }}"
-
-    # перейти в асинхронный режим, чтобы текущий мастер продолжил работать на "запись"
-    #чтобы patroni не выполнял failover в момент выключения одного из участников кластера
-    - name: turn off synchronous mode and turn on PAUSE mode
-      include_role:
-        name: patroni
-        tasks_from: update_with_patronictl.yml
-      vars:
-        change_params: "{{ item }}"
-        PGHOME: "{{ PGHOME_OLD }}"
-      with_items:
-        - "pause: true"
-        - "synchronous_mode: false"
-        - "synchronous_mode_strict: false"
-      when: is_patroni_exists
 
     - name: write new exports and aliases to bash_profile and update sudoers
       include_role:
@@ -115,76 +217,54 @@
       lineinfile:
         path: "{{ shell_profile_file }}"
         insertafter: EOF
-        line: "export PATH=$PATH:{{ PYTHON_VENV_OLD }}/bin"
+        line: "export PATH={{ PYTHON_VENV_OLD }}/bin:$PATH"
         state: present
+      become: true
       become_user: postgres
-      when: is_patroni_exists
 
-    - name: safety stop Pangolin
+    - name: safety restart PostgreSQL SE
       block:
 
-        - name: stop postgresql as daemon
-          shell: "{{ PGHOME_OLD }}/bin/pg_ctl stop -D {{ PGDATA_OLD }}"
-          become_user: postgres
-          when: is_patroni_exists
+        - name: stop patroni and pgse
+          block:
 
-        - name: stop old version Pangolin as service
+            - name: stop postgresql daemon
+              shell: "{{ PGHOME_OLD }}/bin/pg_ctl stop -D {{ PGDATA_OLD }}"
+              become_user: postgres
+
+            - name: stop patroni service
+              service:
+                name: patroni
+                state: stopped
+              when: ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0
+          
+          when: patroni
+
+        - name: check exists pg service
+          stat: path="{{ service_path_dir }}/postgresql.service"
+          register: pg_service_exists
+
+        - name: stop old version PG SE
           service:
             name: postgresql
             state: stopped
-          when: not is_patroni_exists
+          when: pg_service_exists.stat.exists and not patroni
 
-        - name: check that postgresql is stopped
-          shell: '{{ PGHOME_OLD }}/bin/pg_ctl status -D {{ PGDATA_OLD }}'
-          register: result
-          until: result.stdout.find("no server running") != -1
-          retries: 6
-          delay: 10
-          failed_when: result.rc != 3
+        - name: stop old version PG SE (only 4.1.0 PG version)
+          shell: "{{ PGHOME_OLD }}/bin/pg_ctl stop -D {{ PGDATA_OLD }}"
           become_user: postgres
-
-    - name: safety update Pangolin files
-      block:
+          when: not pg_service_exists.stat.exists and not patroni
 
         - name: set python interpretator
           set_fact:
             ansible_python_interpreter: '{{ python.global_bin_2 }}'
 
-        - debug: msg="{{ update_error_types_breakpoint_msg }}"
-          when: is_recovery_test_mode and postgresql_error_umin002m and inventory_hostname == 'master'
-        - debug: msg="{{ update_error_types_breakpoint_msg }}"
-          when: is_recovery_test_mode and postgresql_error_umin002r and inventory_hostname == 'replica'
-
-        - name: update Pangolin by new package
+        - name: update PG SE by new package
           package:
             name: "{{ REMOTE_TMP }}/{{ postgresql_package_file }}"
             state: latest
-          when: ansible_os_family == 'RedHat'
 
-        - name: update Pangolin by new package
-          shell: "apt-get install {{ REMOTE_TMP }}/{{ postgresql_package_file }}"
-          when: ansible_os_family == 'Altlinux'
-
-        - name: set type of error for recovery
-          set_fact:
-            update_errors: "{{ update_errors|combine(data, recursive=True) }}"
-            cacheable: yes
-          vars:
-            data:
-              types:
-                pg:
-                  minor_before_bin_updated: false
-                  minor_before_first_db_started: true
-
-        - name: сopy product version file
-          copy:
-            src: "{{ playbook_dir }}/files/version"
-            dest: "{{ PGHOME }}/share/version"
-            owner: postgres
-            group: postgres
-            mode: u=rw,g=r,o=r
-
-        - name: сhange permissions postgresql python bin
+        - name: Change permissions postgresql python bin
           file:
             path: "{{ python.postgresql_venv }}/bin/"
             state: "directory"
@@ -192,16 +272,11 @@
             group: postgres
             mode: 0700
             recurse: yes
+          become_user: root
+          become: true
 
         - name: copy 3rdparty extensions
           import_tasks: copy_3rdparty_extensions.yml
-
-        - name: copy utilities
-          include_tasks: utilities.yml
-
-        - name: copy documentation
-          include_role:
-            name: doc
 
         - name: copy timescaledb to PGHOME
           copy:
@@ -209,67 +284,155 @@
             dest: "{{ item.dest }}"
             owner: postgres
             group: postgres
-            mode: 0700
+            mode: "{{ item.mode }}"
             directory_mode: yes
           with_items:
-            - { src: '{{ local_distr_path }}/timescaledb{{ PGHOME }}/lib/',             dest: '{{ PGHOME }}/lib' }
-            - { src: '{{ local_distr_path }}/timescaledb{{ PGHOME }}/share/extension/', dest: '{{ PGHOME }}/share/extension' }
+            - { src: '{{ local_distr_path }}/timescaledb{{ PGHOME }}/lib/', dest: '{{ PGHOME }}/lib', mode: 700 }
+            - { src: '{{ local_distr_path }}/timescaledb{{ PGHOME }}/share/extension/', dest: '{{ PGHOME }}/share/extension', mode: 700 }
 
-        - name: copy merged patroni config
-          copy:
-            src: "{% if patroni %}\
-                       {{ merge_cfg.result_pgse_patroni }}\
-                  {% else %}\
-                       {{ merge_cfg.result_pgse }}\
-                  {% endif %}/postgres.yml"
-            dest: "{{ patroni_files.conf_dir }}/postgres.yml"
-            owner: postgres
-            group: postgres
-            mode: 0600
-            remote_src: yes
-          when: is_patroni_exists
+        - name: fix patroni service and update postgres.yml
+          block:
 
-        - name: copy merged Pangolin configs
-          copy:
-            src: "{{ merge_cfg.result_pgse }}/{{ item }}"
-            dest: "{{ PGDATA }}/{{ item }}"
-            owner: postgres
-            group: postgres
-            mode: 0600
-            remote_src: yes 
-          with_items:
-            - "postgresql.conf"
-            - "pg_hba.conf"
+            # у systemctl нет доступа к переменным из ENV напрямую, но для запуска новой версии ПГ необходимо обязательно обновить PG_PLUGINS_PATH
+            - name: fix patroni.service
+              shell: sed -i 's|Environment="PG_PLUGINS_PATH={{ PGHOME_OLD }}/lib"|Environment="PG_PLUGINS_PATH={{ PGHOME }}/lib"|' {{ service_path_dir }}/patroni.service
 
-        - name: set permission files protect
-          import_tasks: set_permission_files_protect.yml
+            - name: fix kill mode of patroni linux service
+              lineinfile:
+                path: "{{ service_path_dir }}/patroni.service"
+                insertafter: '^Restart=on-failure'
+                line: KillMode=process
 
-        - name: update postgresql.service if exists
-          template:
-            src: postgresql.service.j2
-            dest: "{{ service_path_dir }}/postgresql.service"
-          when: not is_patroni_exists
+            - name: just force systemd to reread configs (2.4 and above)
+              systemd:
+                daemon_reload: yes
 
-        - name: update patroni.service if exists
-          template:
-            src: "{{ playbook_dir }}/roles/patroni/templates/patroni.service.j2"
-            dest: "{{ service_path_dir }}/patroni.service"
-          when: is_patroni_exists
+            - name: check patroni (must be stopped)
+              shell: "ps aux | grep patroni | grep -v 'grep' | awk -F' ' '{print$1F}'"
+              register: result
+              until: result.stdout.find("postgres") == -1
+              retries: 60
+              delay: 10
+              become_user: postgres
 
-        - name: just force re-read systemd services
-          systemd:
-            daemon_reload: yes
+          when: ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0
 
-        - name: restart patroni service
+        - name: create encrypt space for patroni db user and update postgres.yml
+          block:
+
+            - name: check exists {{ pg_encrypt_cfg }}
+              stat: 
+                path: "{{ pg_encrypt_cfg }}"
+              register: pg_encrypt_cfg_exists
+              become_user: root
+
+            - name: create encrypt space for postgres
+              include_role:
+                name: postgresql
+                tasks_from: create_encrypt_space
+              vars:
+                username: "{{ item.username }}"
+                database: "{{ item.database }}"
+                password: "{{ item.password }}"
+                address: "{{ item.address }}"
+              with_items: 
+                - { username: "patroni", database: "postgres",    password: "{{ patroni_user_pass }}", address: "{{ hostvars['master'].ansible_fqdn }}" }
+                - { username: "patroni", database: "postgres",    password: "{{ patroni_user_pass }}", address: "localhost" }
+                - { username: "patroni", database: "replication", password: "{{ patroni_user_pass }}", address: "{{ hostvars['master'].ansible_fqdn }}" }
+                - { username: "patroni", database: "replication", password: "{{ patroni_user_pass }}", address: "localhost" }
+              when: not pg_encrypt_cfg_exists.stat.exists
+
+            - name: create encrypt space for postgres
+              include_role:
+                name: postgresql
+                tasks_from: create_encrypt_space
+              vars:
+                username: "{{ item.username }}"
+                database: "{{ item.database }}"
+                password: "{{ item.password }}"
+                address: "{{ item.address }}"
+              with_items: 
+                - { username: "patroni", database: "postgres",    password: "{{ patroni_user_pass }}", address: "{{ hostvars['replica'].ansible_fqdn }}" }
+                - { username: "patroni", database: "replication", password: "{{ patroni_user_pass }}", address: "{{ hostvars['replica'].ansible_fqdn }}" }
+              when: "installation_type == 'cluster' and not pg_encrypt_cfg_exists.stat.exists"
+
+            - name: copy merged configs
+              copy:
+                src: "{{ merge_cfg.result_pgse }}/postgres.yml"
+                dest: "{{ patroni_files.conf_dir }}/postgres.yml"
+                owner: postgres
+                group: postgres
+                mode: 0600
+                remote_src: yes
+          
+          when: patroni
+
+        - name: update configs and service file
+          block:
+
+            - name: encrypt ldap
+              block:
+
+                - name: encrypt ldap passwords 
+                  shell: >
+                    {{ PGHOME }}/bin/pg_auth_password enc -W "{{ ldap_bind_tuz_password }}" 
+                  register: encpassword_ldap
+    
+                - name: update ldap password
+                  set_fact:
+                    ldap_bind_tuz_password: "{{ encpassword_ldap.stdout[0:-1] }}"
+                
+              no_log: "{{ nolog }}"
+
+            - name: copy merged configs
+              copy:
+                src: "{{ merge_cfg.result_pgse }}/{{ item }}"
+                dest: "{{ PGDATA }}/{{ item }}"
+                owner: postgres
+                group: postgres
+                mode: 0600
+                remote_src: yes 
+              with_items:
+                - "postgresql.conf"
+                - "pg_hba.conf"
+            
+            - name: change pg_hba ldap password
+              shell: "sed -i '/{{ ldap_bind_tuz_name }}/s@ldapbindpasswd=.*[\\w+/]* @ldapbindpasswd=\"{{ ldap_bind_tuz_password }}\" @g' {{ PGDATA }}/pg_hba.conf"
+              become: true
+              become_user: postgres
+              no_log: "{{ nolog }}"
+
+            - name: remove postgres replication
+              lineinfile:
+                path: "{{ PGDATA }}/pg_hba.conf"
+                regexp: "replication postgres"
+                state: absent
+
+            - name: update postgresql.service
+              template:
+                src: postgresql.service.j2
+                dest: "{{ service_path_dir }}/postgresql.service"
+
+            - name: just force systemd to reread configs (2.4 and above)
+              systemd:
+                daemon_reload: yes
+              
+          when: not patroni
+
+        - name: generate certificates
+          include_role:
+            name: postgresql
+            tasks_from: generate_certs.yml
+
+        - name: started patroni
           systemd:
             name: patroni
-            state: restarted
-          when: is_patroni_exists
+            state: started
+            enabled: yes
+            daemon_reload: yes
+          when: patroni and ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0
 
-    - name: safaty start new version of pangolin
-      block:
-
-        - name: set type of error for recovery
+        - name: prepare update is successfully
           set_fact:
             update_errors: "{{ update_errors|combine(data, recursive=True) }}"
             cacheable: yes
@@ -277,53 +440,61 @@
             data:
               types:
                 pg: 
-                  minor_before_first_db_started: false
-                  minor_after_first_db_started: true
+                  not_started_db: false
+                  started_db: true
 
         # при снятии режима "пауза" патрони сам поднимет ПГ, в качестве своего дочернего процесса
-        - name: if turn off PAUSE mode then started Pangolin
+        - name: turn off PAUSE mode
           include_role:
             name: patroni
             tasks_from: update_with_patronictl.yml
           vars:
             change_params: "pause: false"
-          when: is_patroni_exists
 
-        - name: start new version Pangolin as service
+        - name: start new version PG SE
           systemd:
             name: postgresql
             state: started
             enabled: yes
             daemon_reload: yes
-          when: not is_patroni_exists
-
-        - name: send reload command to postgresql
-          shell: "{{ PGHOME }}/bin/pg_ctl reload -D {{ PGDATA }}"
-          become_user: postgres
-          when: not is_patroni_exists
-
-        - name: send reload command to patroni
-          include_role:
-            name: patroni
-            tasks_from: update_with_patronictl
-          vars:
-            endpoint_name: reload
-          when: is_patroni_exists
+          when: not patroni
 
         - name: loop wait for pgsql started
           shell: '{{ PGHOME }}/bin/pg_isready -h 127.0.0.1 -p {{ ports.pg }}'
           register: result
           until: result.stdout.find("accepting connections") != -1
-          retries: 6
-          delay: 10
+          retries: 60
+          delay: 1
           become_user: postgres
-        
-        - debug: msg="{{ update_error_types_breakpoint_msg }}"
-          when: is_recovery_test_mode and postgresql_error_umin003m and inventory_hostname == 'master'
-        - debug: msg="{{ update_error_types_breakpoint_msg }}"
-          when: is_recovery_test_mode and postgresql_error_umin003r and inventory_hostname == 'replica'
 
-    - name: remove cron job
+        - name: turn on synchronous mode and wait cluster synchronous
+          block:
+
+            - name: turn on synchronous mode and then switchover
+              include_role:
+                name: patroni
+                tasks_from: update_run_switchover
+              vars:
+                current_database_port: "{{ ports.pg }}"
+
+            # свичевер произошел
+            - name: new version of PG SE successful started
+              set_fact:
+                update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+                cacheable: yes
+              vars:
+                data:
+                  types:
+                    pg: 
+                      started_db: false
+                      role_switched: true
+
+          become_user: postgres
+          when: installation_type == 'cluster'
+
+      become: true
+
+    - name: removes cron job
       cron:
         name: "a job for postgresql clean logs"
         state: absent
@@ -331,7 +502,7 @@
       become_user: postgres
       ignore_errors: yes
 
-    - name: setup deleting and compressing old logs
+    - name: setup delete and compress old logs
       template:
         src: postgresql_clean_logs.j2
         dest: "{{ global_scripts }}/postgresql_clean_logs"
@@ -340,70 +511,15 @@
         mode: 0751
       become: true
 
-    - name: create cron job
+    - name: creates cron job
       cron:
         name: "a job for postgresql clean logs"
         special_time: daily
         job: "{{ global_scripts }}/postgresql_clean_logs"
       become: true
       become_user: postgres
-
-    - name: turn on synchronous mode and wait cluster synchronous
-      block:
-
-        - name: set type of error for recovery
-          set_fact:
-            update_errors: "{{ update_errors|combine(data, recursive=True) }}"
-            cacheable: yes
-          vars:
-            data:
-              types:
-                pg: 
-                  minor_after_first_db_started: false
-                  minor_before_second_switchover: true
-
-        - name: turn on synchronous mode and then switchover
-          include_role:
-            name: patroni
-            tasks_from: update_run_switchover
-          vars:
-            current_database_port: "{{ ports.pg }}"
-
-        - debug: msg="{{ update_error_types_breakpoint_msg }}"
-          when: is_recovery_test_mode and postgresql_error_umin004m and inventory_hostname == 'master'
-
-      become_user: postgres
-      when: installation_type == 'cluster' and inventory_hostname == 'master'
-
-    # обновить данные раздела bootstrap, хранящиеся в etcd
-    - name: update bootstrap into etcd
-      block:
-
-        - name: set type of error for recovery
-          set_fact:
-            update_errors: "{{ update_errors|combine(data, recursive=True) }}"
-            cacheable: yes
-          vars:
-            data:
-              types:
-                pg: 
-                  minor_before_second_switchover: false
-                  minor_bootstrap: true
-        
-        - debug: msg="{{ update_error_types_breakpoint_msg }}"
-          when: is_recovery_test_mode and postgresql_error_umin005m and inventory_hostname == 'master'
-
-        - name: update bootstrap
-          import_tasks: update_bootstrap.yml
-
-      when: inventory_hostname == 'master' and etcd
-
-    - debug: msg="{{ update_error_types_breakpoint_msg }}"
-      when: is_recovery_test_mode and postgresql_error_umin006m and inventory_hostname == 'master'
-    - debug: msg="{{ update_error_types_breakpoint_msg }}"
-      when: is_recovery_test_mode and postgresql_error_umin006r and inventory_hostname == 'replica'
-
-    - name: set type of error for recovery
+    
+    - name: new version of PG SE successful started
       set_fact:
         update_errors: "{{ update_errors|combine(data, recursive=True) }}"
         cacheable: yes
@@ -411,9 +527,37 @@
         data:
           types:
             pg:
-              minor_after_first_db_started: false
-              minor_before_second_switchover: false
-              minor_bootstrap: false
+              started_db: false
+              role_switched: false
+
+    # обновить данные раздела bootstrap, хранящиеся в etcd
+    - name: update bootstrap into etcd
+      block:
+
+        - name: new version of PG SE successful started
+          set_fact:
+            update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+            cacheable: yes
+          vars:
+            data:
+              types:
+                pg:
+                  bootstrap: true
+
+        - name: update bootstrap
+          import_tasks: update_bootstrap.yml
+        
+        - name: new version of PG SE successful started
+          set_fact:
+            update_errors: "{{ update_errors|combine(data, recursive=True) }}"
+            cacheable: yes
+          vars:
+            data:
+              types:
+                pg: 
+                  bootstrap: false
+
+      when: inventory_hostname == 'master' and etcd
 
   rescue:
 
@@ -428,7 +572,6 @@
             replica: true
           components:
             pg: true
-      run_once: true
       when: inventory_hostname == 'replica'
 
     - name: master updated with error
@@ -442,7 +585,6 @@
             master: true
           components:
             pg: true
-      run_once: true
       when: inventory_hostname == 'master'
 
   always:
@@ -450,5 +592,3 @@
     - name: set python interpretator
       set_fact:
         ansible_python_interpreter: '{{ python.global_bin_2 }}'
-
-  become: true

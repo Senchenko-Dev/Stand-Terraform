@@ -1,42 +1,30 @@
+local all all md5
 hostssl all postgres 127.0.0.1/32 cert
-{% if pg_profile.is_enable %}
-host all profile_tuz 127.0.0.1/32 scram-sha-256
-{% endif %}
-{% if 'patroni' in tag -%}
+{% if 'patroni' in tag %}
 host all patroni 127.0.0.1/32 scram-sha-256
 {% endif %}
+host all {{ as_group }} 0.0.0.0/0 scram-sha-256
 {% for host in groups['postgres_group'] %}
 hostssl all postgres {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} cert
-{% if 'patroni' in tag -%}
+{% if 'patroni' in tag%}
 host all patroni {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} scram-sha-256
 {% endif %}
-{% if pg_profile.is_enable %}
-host all profile_tuz {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} scram-sha-256
-{% endif %}
 {% endfor %}
-{% if 'patroni' in tag -%}
+{% if 'patroni' in tag%}
 host replication patroni 127.0.0.1/32 scram-sha-256
 {% endif %}
 {% for host in groups['postgres_group'] %}
-{% if 'patroni' in tag -%}
+{% if 'patroni' in tag%}
 host replication patroni {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} scram-sha-256
 {% endif %}
 {% endfor %}
-{% if action_type == 'install' -%}
-host all +as_TUZ, backup_user 0.0.0.0/0 scram-sha-256
-{% if admin_protection -%}
-{{ sec_admin_hba_rule.connection }} {{ sec_admin_hba_rule.databases }} {{ admin_protection_users.sec_admin.user_name }} {{ sec_admin_hba_rule.network }} {{ sec_admin_hba_rule.auth }}
-{% for item in sec_admin_backup_networks %}
-host all {{ admin_protection_users.sec_admin_backup.user_name }} {{ item }} scram-sha-256
-{% endfor %}
-{% endif %}
+{{ pam_hba }}
+{% if action_type == 'install' %}
+host all +as_TUZ, backup_user, zabbix_oasubd, monitoring_php, auditor 0.0.0.0/0 scram-sha-256
 {% else %}
-{% if pg_profile.is_enable %}
-host all cron 0.0.0.0/0 scram-sha-256
+host all cron, backup_user, zabbix_oasubd, monitoring_php, auditor 0.0.0.0/0 scram-sha-256
+host all +as_TUZ 0.0.0.0/0 md5
 {% endif %}
-{% endif %}
-{% for rule in hba_rules %}
-{% if rule %}
+{% for rule in other_hba %}
 {{ rule }}
-{% endif %}
 {% endfor %}

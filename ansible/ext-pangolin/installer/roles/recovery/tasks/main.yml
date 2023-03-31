@@ -1,44 +1,13 @@
-- name: define pangolin update status
-  set_fact: 
-    is_updated_pangolin_files: "{% if action_type == 'update_major' \
-                                      or (action_type == 'update_minor' \
-                                          and ( update_errors.components.checkup \
-                                                or update_errors.types.pg_auth_reencrypt.check_and_stop \
-                                                or update_errors.types.src.main \
-                                                or update_errors.components.rsyslog \
-                                                or update_errors.components.etcd \
-                                                or update_errors.types.patroni.main \
-                                                or (update_errors.components.pg \
-                                                    and update_errors.hosts.replica \
-                                                    and inventory_hostname == 'master') \
-                                                or (update_errors.types.pg.minor_before_first_switchover \
-                                                    and update_errors.hosts.master \
-                                                    and inventory_hostname == 'master' ) \
-                                                or (update_errors.types.pg.minor_before_bin_updated \
-                                                    and update_errors.hosts.master \
-                                                    and inventory_hostname == 'master' ) \
-                                                or (update_errors.types.pg.minor_before_bin_updated \
-                                                    and update_errors.hosts.replica \
-                                                    and inventory_hostname == 'replica' ) \
-                                                or (update_errors.types.patroni.finally \
-                                                    and update_errors.hosts.replica \
-                                                    and inventory_hostname == 'master' ) \
-                                                or (update_errors.components.pgbouncer \
-                                                    and update_errors.hosts.replica \
-                                                    and inventory_hostname == 'master' ) \
-                                                or (update_errors.components.haproxy \
-                                                    and update_errors.hosts.replica \
-                                                    and inventory_hostname == 'master' ) ) ) %}\
-                                      false\
-                                    {% else %}\
-                                      true\
-                                    {% endif %}"
-  when: is_updated_pangolin_files is undefined
+- name: Check that recovery is available
+  assert:
+    that: "(hostvars['master'].update_errors.components.pg or \
+           hostvars['master'].update_errors.components.etcd or \
+           hostvars['master'].update_errors.components.patroni or \
+           hostvars['master'].update_errors.components.pgbouncer) and \
+           hostvars['master'].update_errors.aggregate"
+    fail_msg: "Recovery operation is unavailable for this error types: {{ hostvars['master'].update_errors }}"
+  run_once: true
 
-- name: Import minor recovery
-  import_tasks: main_minor.yml
-  when: action_type == 'update_minor'
-
-- name: Import major recovery
-  import_tasks: main_major.yml
-  when: action_type == 'update_major'
+- name: Import {{ action_type }}
+  import_tasks: "{{ action_type }}_{{ recovery_type }}.yml"
+  when: handle_update_errors

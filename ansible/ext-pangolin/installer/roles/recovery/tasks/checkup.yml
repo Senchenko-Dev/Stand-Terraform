@@ -1,5 +1,0 @@
-- name: Recovery in checkup role
-  include_role:
-    name: checkup
-    tasks_from: revert.yml
-  when: is_recovery_checkup

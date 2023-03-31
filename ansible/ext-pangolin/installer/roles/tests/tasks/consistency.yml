@@ -30,45 +30,36 @@
   become: yes
   become_user: postgres
 
-- name: Get a list of files documentation in the distrib
-  find:
-    path: "{{ local_distr_path }}/documentation"
-    recurse: yes
+- name: Get a list of files doc
+  command: "ls {{ local_distr_path }}/doc/"
   run_once: true
-  register: internal_distrib_list
+  register: dir_out
   delegate_to: localhost
 
-- name: Replace paths
-  set_fact:
-    internal_node_list: "{{ internal_node_list | default([]) + [item.path | replace(local_distr_path, PGHOME)] }}"
-  with_items: "{{ internal_distrib_list.files }}"
-
-- name: Check for documentation
+- name: Check for doc
   block:
 
-    - name: retrieve directory status documentation
-      stat:
-        path: "{{ PGHOME }}/documentation"
-      register: internal_docdir_stat
+    - name: retrieve directory status doc
+      stat: path={{ PGHOME }}/doc
+      register: stat_doc
 
-    - name: check directory status documentation
+    - name: check directory status doc
       assert:
-        that: internal_docdir_stat.stat.exists
+        that: stat_doc.stat.exists
         fail_msg: "There is no doc directory in {{ PGHOME }}"
         success_msg: "There is a doc directory in {{ PGHOME }}"
 
-    - name: retrieve files status documentation
-      stat:
-        path: "{{ item }}"
-      register: internal_node_stat_list
-      with_items: "{{ internal_node_list }}"
+    - name: retrieve files status doc/*
+      stat: path="{{ PGHOME }}/doc/{{ item }}"
+      register: stat_doc_files
+      with_items: "{{ dir_out.stdout_lines }}"
 
-    - name: check files status documentation
+    - name: check files status doc
       assert:
         that: "{{ item.stat.exists }}"
-        fail_msg: "No file {{ item.item }}"
-        success_msg: "There is a file {{ item.item }}"
-      with_items: "{{ internal_node_stat_list.results }}"
+        fail_msg: "No file {{ item.stat.path }}"
+        success_msg: "There is a file {{ item.stat.path }}"
+      with_items: "{{ stat_doc_files.results }}"
 
   become: yes
   become_user: postgres

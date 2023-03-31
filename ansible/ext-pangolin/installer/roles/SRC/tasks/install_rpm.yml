@@ -1,101 +1,18 @@
-- name: Check args is correct
-  assert:
-    that: item.var not in ['null','']
-    fail_msg: "ERROR: {{ item.name }} is empty"
-    success_msg: "OK: {{ item.name }} is {{ item.var }}"
-  loop:
-    - { name: "_nstllrpm_pgbackup",           var: "{{ _nstllrpm_pgbackup }}" }
-    - { name: "_nstllrpm_pgdata",             var: "{{ _nstllrpm_pgdata }}" }
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
 
-- name: Initialize and configure pg_probackup
-  block:
+- name: Initialize PGBACKUP directory
+  shell: "{{ PGHOME }}/bin/pg_probackup init -B {{ PGBACKUP }}"
+  become_user: postgres
+  become: true
 
-    - name: initialize PGBACKUP directory by pg_probackup
-      pangolin_pg_probackup:
-        ANSIBLE_MODULE_ARGS:
-          method: init
-          path_backup: "{{ _nstllrpm_pgbackup }}"
-      become_user: postgres
-      become: true
-      become_flags: '-i'
+- name: Determine instance
+  shell: "{{ PGHOME }}/bin/pg_probackup add-instance -B {{ PGBACKUP }} -D {{ PGDATA }} --instance {{ clustername }}"
+  become_user: postgres
+  become: true
 
-    - name: determine instance
-      pangolin_pg_probackup:
-        ANSIBLE_MODULE_ARGS:
-          method: add_instance
-          path_backup: "{{ _nstllrpm_pgbackup }}"
-          path_data: "{{ _nstllrpm_pgdata }}"
-          instance: "{{ clustername }}"
-      become_user: postgres
-      become: true
-      become_flags: '-i'
-
-    - name: add parameters to config
-      pangolin_pg_probackup:
-        ANSIBLE_MODULE_ARGS:
-          method: set_config
-          path_backup: "{{ _nstllrpm_pgbackup }}"
-          path_data: "{{ _nstllrpm_pgdata }}"
-          instance: "{{ clustername }}"
-          base_name: postgres
-          host: "{{ ansible_host }}"
-          port: "{{ ports.pg }}"
-          user_db: backup_user
-      become_user: postgres
-      become: true
-      become_flags: '-i'
-
-    - debug: msg="{{ update_error_types_breakpoint_msg }}"
-      when: is_recovery_test_mode and src_error_um02m and inventory_hostname == 'master'
-    - debug: msg="{{ update_error_types_breakpoint_msg }}"
-      when: is_recovery_test_mode and src_error_um02r and inventory_hostname == 'replica'
-
-  rescue:
-
-    - name: replica updated with error
-      set_fact:
-        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
-        cacheable: yes
-      vars:
-        data:
-          aggregate: true
-          hosts:
-            replica: true
-          components:
-            src: true
-          types:
-            src:
-              install_pg_probackup: true
-      run_once: true
-      when: inventory_hostname == 'replica'
-
-    - name: master updated with error
-      set_fact:
-        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
-        cacheable: yes
-      vars:
-        data:
-          aggregate: true
-          hosts:
-            master: true
-          components:
-            src: true
-          types:
-            src:
-              install_pg_probackup: true
-      run_once: true
-      when: inventory_hostname == 'master'
-
-  always:
-
-    - name: to stop install process if error
-      fail: msg='Install process must be stopped by error'
-      when: "action_type == 'install' and \
-            hostvars['master' or 'replica'].update_errors.aggregate"
-
-    - name: unset args
-      set_fact:
-        _nstllrpm_pgbackup: 'null'
-        _nstllrpm_pgdata: 'null'
-
-  when: inventory_hostname != 'etcd'
+- name: Add parameters to config
+  shell: "{{ PGHOME }}/bin/pg_probackup set-config -B {{ PGBACKUP }} -D {{ PGDATA }} --instance {{ clustername }} -d postgres -h {{ ansible_host }} -p {{ ports.pg }} -U backup_user"
+  become_user: postgres
+  become: true

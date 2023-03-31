@@ -1,6 +1,0 @@
-- name: Recovery pg_auth_reencrypt
-  include_role:
-    name: pg_auth_reencrypt
-    tasks_from: revert.yml
-  when: "update_errors.aggregate \
-         and not update_errors.components.checkup"

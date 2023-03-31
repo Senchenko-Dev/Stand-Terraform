@@ -1,42 +1,6 @@
 - name: Revert etcd
   block:
 
-    - name: turn off pause mode (to control that pangolin started)
-      block:
-
-        - name: select actual PGHOME
-          set_fact:
-            actual_local_pghome: "{% if update_errors.components.checkup \
-                                        or update_errors.types.pg_auth_reencrypt.check_and_stop \
-                                        or update_errors.types.src.main \
-                                        or update_errors.components.rsyslog \
-                                        or update_errors.components.etcd \
-                                        or update_errors.types.patroni.main \
-                                        or (update_errors.components.pg \
-                                            and update_errors.hosts.replica \
-                                            and inventory_hostname == 'replica') %}\
-                                    {{ PGHOME_OLD }}\
-                                  {% else %}\
-                                    {{ PGHOME }}\
-                                  {% endif %}"
-
-        - name: turn off pause mode (to control that pangolin started)
-          include_role:
-            name: patroni
-            tasks_from: update_with_patronictl
-          vars:
-            change_params: "pause: true"
-            PGHOME: "{{ actual_local_pghome }}"
-
-      rescue:
-
-        - debug: msg="it is ok"
-
-      run_once: true
-      when: "inventory_hostname != 'etcd' \
-             and is_patroni_exists \
-             and action_type == 'update_minor'"
-
     - name: clean etcd db
       include_role:
         name: etcd
@@ -52,35 +16,23 @@
             patterns:  '*rpm'
           register: etcd_distributive_exists
 
-        - name: reinstall RHEL etcd
-          block:
+        - name: remove installed new etcd
+          yum:
+            name: etcd
+            state: absent
+          ignore_errors: yes
 
-            - name: remove installed new etcd
-              yum:
-                name: etcd
-                state: absent
-              ignore_errors: yes
+        - name: install prev etcd rpm from a local file
+          yum:
+            name: "{{ etcd_distributive_exists.files.0.path }}"
+            state: present
+          when: etcd_distributive_exists.matched|int != 0
 
-            - name: install prev etcd rpm from a local file
-              yum:
-                name: "{{ etcd_distributive_exists.files.0.path }}"
-                state: present
-              when: etcd_distributive_exists.matched|int != 0
-
-            - name: install prev etcd rpm from repo
-              yum:
-                name: etcd-{{ etcd_old_version }}
-                state: latest
-              when: etcd_distributive_exists.matched|int == 0
-
-          when: ansible_os_family == "RedHat"
-
-        - name: remove new version and install prev etcd from local file
-          shell: "apt-get {{ item }}"
-          with_items:
-            - "remove -y etcd"
-            - "install -y {{ etcd_distributive_exists.files.0.path }}"
-          when: ansible_os_family == "Altlinux"
+        - name: install prev etcd rpm from repo
+          yum:
+            name: etcd-{{ installed_version_etcd.json.etcdserver }}
+            state: latest
+          when: etcd_distributive_exists.matched|int == 0
 
     - name: copy etcd files from {{ backup.etcd }}
       copy:
@@ -95,39 +47,27 @@
         - etcd.conf.base
 
     - name: check exists backup shell profile
-      stat: path="{{ backup.etcd }}{{ shell_profile_file }}"
+      stat: path="{{ backup.etcd_intermediate }}{{ shell_profile_file }}"
       register: bash_profile_exists
 
     - name: revert shell profile
       copy:
-        src: "{{ backup.etcd }}{{ shell_profile_file }}"
+        src: "{{ backup.etcd_intermediate }}{{ shell_profile_file }}"
         dest: "{{ shell_profile_file }}"
         remote_src: yes
         owner: postgres
         group: postgres
       when: bash_profile_exists.stat.exists
 
-    - name: recovery sudoers
-      shell: "cp -p {{ backup_root_dir }}{{ sudoers_file }} {{ sudoers_file }}"
-
-    - name: define username of etcd service
-      set_fact:
-        username_of_etcd_service: "{% if ([ pg_current_version, '5.1.0' ] | compare_pg_se_versions )|int == 0 %}\
-                                      root\
-                                   {% else %}\
-                                      postgres\
-                                   {% endif %}"
-
     - name: revert etcd service
       copy:
-        src: "{{ backup_root_dir }}{{ etcd_files.service_file }}"
-        dest: "{{ etcd_files.service_file }}"
+        src: "{{ backup_root_dir }}{{ service_path_dir }}/etcd.service"
+        dest: "{{ service_path_dir }}/etcd.service"
         remote_src: yes
-        owner: "{{ username_of_etcd_service }}"
-        group: "{{ username_of_etcd_service }}"
-        mode: 0640
+        owner: root
+        group: root
 
-    - name: revert etcd data for current node
+    - name: backup etcd data for current node
       copy:
         src: "{{ backup.etcd }}/db_backup/etcd"
         dest: "/var/lib/"
@@ -136,49 +76,43 @@
         mode: 0700
         remote_src: yes
 
-    - name: create PGDATA_OLD
-      file:
-        path: "{{ PGDATA_OLD }}"
-        state: directory
-        owner: postgres
-        group: postgres
-        mode: 0700
-      when: "inventory_hostname != 'etcd' and is_patroni_exists"
-
-    - name: revert patroni.dynamic.json
-      copy:
-        dest: "{{ PGDATA_OLD }}/patroni.dynamic.json"
-        src: "{{ backup.etcd }}/{{ PGDATA_OLD }}/patroni.dynamic.json"
-        owner: postgres
-        group: postgres
-        remote_src: yes
-        mode: 0600
-      when: "inventory_hostname != 'etcd' and is_patroni_exists"
-
-    - name: define username of etcd service
-      set_fact:
-        owner_of_etcd_data_dir: "{% if ([ pg_current_version, '5.1.0' ] | compare_pg_se_versions )|int == 0 %}\
-                                    etcd\
-                                 {% else %}\
-                                    postgres\
-                                 {% endif %}"
-
-    - name: change permissions for etcd directory
-      file:
-        path: "{{ item.dir }}"
-        recurse: yes
-        owner: "{{ item.owner }}"
-        group: "{{ item.owner }}"
-        mode: 0700
-      with_items:
-        - { dir: "{{ etcd_files.conf_dir }}", owner: postgres }
-        - { dir: "{{ etcd_files.data_dir }}", owner: "{{ owner_of_etcd_data_dir }}" }
-
     - name: reload systemd and start service
       systemd:
         name: etcd
         state: restarted
         daemon_reload: yes
         enabled: yes
+
+    - name: loop wait for etcd started
+      command:
+        cmd:  etcdctl cluster-health
+      register: result
+      until: result.stdout.find("cluster is healthy") != -1
+      retries: 10
+      delay: 1
+
+    - name: start patroni service
+      service:
+        name: patroni
+        state: started
+      when: "(inventory_hostname == 'master' and not (update_errors.hosts.master and update_errors.components.patroni)) or \
+             (inventory_hostname == 'replica' and not (update_errors.hosts.replica and update_errors.components.patroni))"
+
+    - name: turn off pause mode
+      block:
+
+        - name: turn on pause mode
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: false"
+          when: "inventory_hostname == 'master' and not (update_errors.hosts.master and update_errors.components.patroni)"
+      
+      rescue:
+
+        - name: it is normal
+          debug:
+            msg: "It is normal"
 
   become: true

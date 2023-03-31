@@ -18,7 +18,10 @@
       postgresql_query:
         port: "{{ _runcheckpoint_database_port }}"
         query: checkpoint;
-      environment: "{{ db_connection_args }}"
+      environment:
+        - PGHOST: "{{ ansible_fqdn }}"
+        - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+        - PGSSLKEY: "{{ pg_certs.ssl_key }}"
 
   always:
 

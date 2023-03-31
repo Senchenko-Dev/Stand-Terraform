@@ -4,30 +4,16 @@ name: {{ ansible_fqdn }}
 restapi:
     listen: 0.0.0.0:{{ ports.patroni }}
     connect_address: {{ ansible_fqdn }}:{{ ports.patroni }}
-    allowlist: [{{ allowlist_rest_api }}]
-    allowlist_include_members: true
-    {%- if ssl_mode %}
-    verify_client: optional
-    cafile: {{ pg_certs_pwd.root_ca }}
-    certfile: {{ pg_certs_pwd.server_cert }}
-    keyfile: {{ pg_certs_pwd.server_key }}
-    {%- endif %}
     authentication:
         username: patroniyml
         password: '{{ patroni_yml_pass }}'
 
 etcd:
     {% if installation_type == 'cluster' -%}
-    hosts: {% for host in groups['cluster'] %}{{ hostvars[host].ansible_fqdn }}:{{ ports.etcd_inner }}{% if not loop.last %},{% endif %}{% endfor %}
+    hosts: {% for host in groups['cluster'] %}{{ hostvars[host].ansible_fqdn }}:2379{% if not loop.last %},{% endif %}{% endfor %}
     {% else -%}
-    host: {{ ansible_fqdn }}:{{ ports.etcd_inner }}
+    host: {{ ansible_fqdn }}:2379
     {% endif %}
-    {% if ssl_mode %}
-    protocol: https
-    cacert: {{ pg_certs_pwd.root_ca }}
-    cert: {{ pg_certs_pwd.patronietcd_cert }}
-    key: {{ pg_certs_pwd.patronietcd_key }}
-    {% endif -%}
     username: patronietcd
     password: '{{ patroni_etcd_pass }}'
 
@@ -49,39 +35,25 @@ bootstrap:
         loop_wait: 10
         maximum_lag_on_failover: 1048576
         {% if installation_type == 'cluster' -%}
-        synchronous_mode: {{ pg_synchronous_mode }}
-        synchronous_mode_strict: {{ pg_synchronous_mode_strict }}
+        synchronous_mode: true
+        synchronous_mode_strict: false
         {% endif -%}
         postgresql:
             parameters:
-                {% if ansible_processor_vcpus >= 16 %}
                 max_connections: '{{ pg_max_connections }}'
-                {% else %}
-                max_connections: '{{ 100 + superuser_reserved_connections }}'
-                {% endif %}
                 max_locks_per_transaction: '64'
-                max_worker_processes: '{%- if _upd_max_worker_processes is defined and _upd_max_worker_processes|int >= 32 -%}
-                                         {{ _upd_max_worker_processes }}
-                                       {%- elif ansible_processor_vcpus < 32 -%}
-                                         32
-                                       {%- else -%}
-                                         {{ ansible_processor_vcpus }}
-                                       {%- endif -%}'
+                max_worker_processes: '{{ ansible_processor_vcpus }}'
                 max_prepared_transactions: '{{ ansible_processor_vcpus*3 }}'
                 wal_level: 'replica'
                 wal_log_hints: on
                 track_commit_timestamp: off
-                wal_keep_size: '8GB'
-                max_wal_senders: '10'
-                max_replication_slots: '10'
-                logical_decoding_work_mem: '64MB'
-                auth_activity_period: '60'
             use_pg_rewind: true
             use_slots: true
 
     initdb:
     - encoding: UTF8
     - data-checksums
+
 postgresql:
     listen: 0.0.0.0:{{ ports.pg }}
     bin_dir: {{ PGHOME }}/bin
@@ -96,43 +68,26 @@ postgresql:
         replication:
             username: patroni
             database: replication
-    {%- if ssl_mode %}
-            sslmode: verify-ca
-            sslkey: {{ pg_certs_pwd.patroni_key }}
-            sslcert: {{ pg_certs_pwd.patroni_cert }}
-            sslrootcert: {{ pg_certs_pwd.root_ca }}
-            sslcrl: {{ crl_file }}
-    {%- endif %}
         superuser:
             username: patroni
-    {%- if ssl_mode %}
-            sslmode: verify-ca
-            sslkey: {{ pg_certs_pwd.patroni_key }}
-            sslcert: {{ pg_certs_pwd.patroni_cert }}
-            sslrootcert: {{ pg_certs_pwd.root_ca }}
-            sslcrl: {{ crl_file }}
-    {% endif %}
     {% if installation_type == 'cluster' -%}
     callbacks:
         on_role_change: '{{ patroni_files.conf_dir }}/reload_pgbouncer.sh'
     {% endif -%}
     parameters:
-        {%- if action_type == 'update_major' and inventory_hostname == 'master' %}
-        autovacuum: 'off'
-        {% endif %}
-        {% if stand == 'prom' -%}
+        {% if stand == 'prom' %}
         archive_mode: 'always'
-        {% else -%}
+        {% else %}
         archive_mode: 'off'
-        {% endif -%}
+        {% endif %}
         archive_command: '{{ PGHOME }}/bin/pg_probackup archive-push -B {{ PGBACKUP }} --instance {{ clustername }} --wal-file-path=%p --wal-file-name=%f --compress --overwrite -j 4 --batch-size=100'
         authentication_proxy: '1'
         authentication_port: '{{ ports.pgbouncer_pg_auth }}'
+        auth_activity_period: '60'
         archive_timeout: '180'
         autovacuum_work_mem: '{{ (ansible_memtotal_mb/48)|int|abs }}MB'
         checkpoint_completion_target: '0.9'
         checkpoint_timeout: '1800'
-        debug_pretty_print: 'off'
         #debug_print_parse: 'True'
         #debug_print_rewritten: 'True'
         #debug_print_plan: 'True'
@@ -155,7 +110,7 @@ postgresql:
         log_disconnections: 'True'
         log_file_mode: 0644
         log_filename: 'postgresql-%Y-%m-%d_%H%M%S.log'
-        log_line_prefix: '%t [%p]: [%l-1] app=%a,user=%u,db=%d,client=%h,type=%b '
+        log_line_prefix: '%t [%p]: [%l-1] app=%a,user=%u,db=%d,client=%h '
         log_lock_waits: 'on'
         log_min_duration_statement: '5000'
         log_min_error_statement: 'WARNING'
@@ -178,17 +133,18 @@ postgresql:
         maintenance_work_mem: '{{ (ansible_memtotal_mb/24)|int|abs }}MB'
         max_parallel_workers: '{{ ansible_processor_vcpus }}'
         max_parallel_workers_per_gather: '{{ (ansible_processor_vcpus/2)|int|abs }}'
+        max_replication_slots: '10'
         max_standby_archive_delay: '30s'
         max_standby_streaming_delay: '30s'
+        max_wal_senders: '10'
         max_wal_size: '4GB'
         min_wal_size: '2GB'
-        monitoring_ldap_servers: '^{{ ldap_server }}$'
-        pgaudit.log: 'ddl, role, connection, misc_set, protection'
-        {% if action_type == 'install' or actual_password_encryption is not defined %}
+        monitoring_ldap_servers: {% if segment == 'alpha' %}'^ca.sbrf.ru$|^omega.sbrf.ru$'
+                                 {% elif segment == 'sigma' %}'^sigma.sbrf.ru$'
+                                 {% elif segment == 'delta' %}'^delta.sbrf.ru$'
+                                 {% elif segment == 'sbercloud' %}'^ldap-todo.sw.sbc.space$'{% endif %}
+        pgaudit.log: 'ddl, role, connection, misc_set'
         password_encryption: 'scram-sha-256'
-        {% else %}
-        password_encryption: '{{ actual_password_encryption }}'
-        {% endif %}
         password_policy.deny_default: '{{ password_policy_params.deny_default }}'
         password_policy.reuse_time: '{{ password_policy_params.reuse_time }}'
         password_policy.in_history: '{{ password_policy_params.in_history }}'
@@ -216,115 +172,69 @@ postgresql:
         password_policy.password_strength_estimator_score: '{{ password_policy_params.password_strength_estimator_score }}'
         password_policy.deduplicate_ssl_no_ssl_fail_auth_attepmts: '{{ password_policy_params.deduplicate_ssl_no_ssl_fail_auth_attepmts }}'
         password_policy.allow_hashed_password: '{{ password_policy_params.allow_hashed_password }}'
-        {%- if performance_insights.is_enable %}
-        performance_insights.enable: 'True'
-        performance_insights.masking: '{{ performance_insights.masking }}'
-        performance_insights.sampling_enable: '{{ performance_insights.sampling_enable }}'
-        performance_insights.sampling_period: '{{ performance_insights.sampling_period }}'
-        performance_insights.num_samples_in_ram: '{{ performance_insights.num_samples_in_ram }}'
-        performance_insights.num_samples_in_files: '{{ performance_insights.num_samples_in_files }}'
-        {% endif %}
         psql_encrypt_password: 'on'
         password_policies_enable: 'on'
-        password_policy.transport_password_mark_automatic: '{{ password_policy_params.transport_password_mark_automatic }}'
-        password_policy.transport_password_life_time: '{{ password_policy_params.transport_password_life_time }}'
         pg_hint_plan.parse_messages: 'warning'
         pg_hint_plan.debug_print: 'off'
         pg_hint_plan.message_level: 'debug'
         cron.database_name: 'postgres'
         cron.max_running_jobs: '3'
-        {%- if pg_profile.is_enable %}
-        pg_profile.topn: '{{ pg_profile.topn }}'
-        pg_profile.max_sample_age: '{{ pg_profile.max_sample_age }}'
-        pg_profile.track_sample_timings: '{{ pg_profile.track_sample_timings }}'
-        {% endif %}
-        track_activities: '{{ pg_stat_track_activities }}'
-        track_counts: '{{ pg_stat_track_counts }}'
-        track_io_timing: '{{ pg_stat_track_io_timing }}'
-        track_functions: '{{ pg_stat_track_functions }}'
-        pg_stat_statements.track: '{{ pg_stat_statements_track }}'
-        pg_stat_statements.max: '{{ pg_stat_statements_max }}'
-        {% if tag is defined -%}
+        {% if tag is defined %}
         installer.cluster_type: '{{ tag }}'
-        {% endif -%}
+        {% endif %}
         port: '{{ ports.pg }}'
         random_page_cost: '2.0'
-        {% if pg_stat_kcache_is_enable %}
-        pg_stat_kcache.linux_hz: '{{ pg_stat_kcache_linux_hz }}'
-        {% endif %}
-        relnblocks_enable: '{{ relnblocks_enable }}'
-        relnblocks_hash_max_size: '{{ relnblocks_hash_max_size }}'
-        relnblocks_hash_init_size: '{{ relnblocks_hash_init_size }}'
-        relnblocks_hash_max_db: '{{ relnblocks_hash_max_db }}'
-        relnblocks_hash_init_db: '{{ relnblocks_hash_init_db }}'
         search_path: 'ext'
         shared_buffers:{% if ansible_memtotal_mb < 65536 %} '4GB'{% else %} '8GB'{% endif %}
-        shared_preload_libraries: 'auto_explain,pg_stat_statements,{% if pg_stat_kcache_is_enable %}pg_stat_kcache,{% endif %}pg_cron,pg_hint_plan,pg_outline,pg_pathman'
-        superuser_reserved_connections: '{{ superuser_reserved_connections }}'
+        shared_preload_libraries: 'auto_explain,pg_stat_statements,pg_cron,pg_hint_plan,pg_pathman'
+        {% if ansible_processor_vcpus <= 8 %}
+        superuser_reserved_connections: '4'
+        {% else %}
+        superuser_reserved_connections: '10'
+        {% endif %}
         synchronous_commit: 'on'
         unix_socket_directories: '/var/run/postgresql/'
         wal_buffers: '16MB'
+        wal_keep_segments: '500'
         wal_receiver_status_interval: '1s'
         wal_sync_method: 'fsync'
         work_mem:{% if ansible_memtotal_mb < 65536 %} '16384kB'{% else %} '32768kB'{% endif %}
         ssl: 'on'
-        ssl_cert_file: {{ pg_certs_pwd.server_cert }}
-        ssl_key_file: {{ pg_certs_pwd.server_key }}
-        ssl_ca_file: {{ pg_certs_pwd.root_ca }}
-        ssl_crl_file: {{ crl_file }}
-        {% if is_ssl_constraints %}
-        ssl_min_protocol_version: '{{ ssl_min_protocol_version }}'
-        {% endif %}
-        pg_plugins_path: '{{ PGHOME }}/lib'
-        {% if admin_protection is defined and admin_protection %}
-        sec_admin_default_auth: '{{ sec_admin_default_auth }}'
-        {% endif %}
-        {%- if tde is defined and tde %}
+        ssl_cert_file: {{ PGSSL }}/{{ ansible_fqdn }}.crt
+        ssl_key_file: {{ PGSSL }}/{{ ansible_fqdn }}.key
+        ssl_ca_file: {{ PGSSL }}/root.crt
+        {% if tde is defined and tde %}
         dynamic_shared_memory_type: 'posix'
         is_tde_on: 'on'
+        pg_plugins_path: '{{PGHOME}}/lib'
         mkeychecker_delay: '300'
-        pg_encryption_keys_capacity: '50000'
         {% else %}
         is_tde_on: 'off'
         {% endif %}
-        enabled_sec_admin_extra_auth_methods: '{{ enabled_sec_admin_extra_auth_methods }}'
-        enabled_extra_auth_methods: '{{ enabled_extra_auth_methods }}'
-        pg_outline.enable: 'off'
-        enable_monitor_object_modification_date: '{{ pg_enable_monitor_object_modification_date }}'
-        object_modification_date_keep_interval: '{{ pg_object_modification_date_keep_interval }}'
     pg_hba:
+        - local all all md5
         - hostssl all postgres 127.0.0.1/32 cert
-        {% if pg_profile.is_enable -%}
-        - host all profile_tuz 127.0.0.1/32 scram-sha-256
-        {% endif -%}
-        - {{ pg_hba_conn_type }} all patroni 127.0.0.1/32 scram-sha-256
-        {% for host in groups['postgres_group'] -%}
+        - host all patroni 127.0.0.1/32 scram-sha-256
+        - host all {{ as_group }} 0.0.0.0/0 scram-sha-256
+        {% for host in groups['postgres_group'] %}
         - hostssl all postgres {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} cert
-        - {{ pg_hba_conn_type }} all patroni {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} scram-sha-256
-        {% if pg_profile.is_enable -%}
-        - host all profile_tuz {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} scram-sha-256
-        {% endif -%}
-        {% endfor -%}
-        - {{ pg_hba_conn_type }} replication patroni 127.0.0.1/32 scram-sha-256
-        {% for host in groups['postgres_group'] -%}
-        - {{ pg_hba_conn_type }} replication patroni {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} scram-sha-256
-        {% endfor -%}
-        {% if action_type == 'install' -%}
-        - host all +as_TUZ, backup_user 0.0.0.0/0 scram-sha-256
-        {% if admin_protection %}
-        - {{ sec_admin_hba_rule.connection }} {{ sec_admin_hba_rule.databases }} {{ admin_protection_users.sec_admin.user_name }} {{ sec_admin_hba_rule.network }} {{ sec_admin_hba_rule.auth }}
-        {% for item in sec_admin_backup_networks -%}
-        - host all {{ admin_protection_users.sec_admin_backup.user_name }} {{ item }} scram-sha-256
+        - host all patroni {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} scram-sha-256
         {% endfor %}
-        {% endif -%}
-        {% else -%}
-        {% if pg_profile.is_enable %}
-        - host all cron 0.0.0.0/0 scram-sha-256
+        - host replication patroni 127.0.0.1/32 scram-sha-256
+        {% for host in groups['postgres_group'] %}
+        - host replication patroni {{ hostvars[host].ansible_default_ipv4.address | ipaddr('network/prefix') }} scram-sha-256
+        {% endfor %}
+        - {{ pam_hba }}
+        {% if action_type == 'install' %}
+        - host all +as_TUZ, backup_user, zabbix_oasubd, monitoring_php, auditor 0.0.0.0/0 scram-sha-256
+        {% else %}
+        - host all cron, backup_user, zabbix_oasubd, monitoring_php, auditor 0.0.0.0/0 scram-sha-256
+        - host all +as_TUZ 0.0.0.0/0 md5
         {% endif %}
-        {% endif -%}
-        {% for rule in hba_rules -%}
-        {% if rule %}- {{ rule }}{% endif %}
-        {% endfor %}
+        {% for rule in other_hba %}
+        - {{ rule }}
+        {% endfor%}
+
 tags:
     nofailover: false
     noloadbalance: false

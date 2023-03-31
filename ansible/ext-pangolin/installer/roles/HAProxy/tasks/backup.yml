@@ -11,6 +11,17 @@
         - { src: "{{ backup.haproxy }}{{ haproxy_files.socket_dir }}/", state: "directory" }
         - { src: "{{ backup.haproxy }}{{ haproxy_files.conf_dir }}/",   state: "directory" }
 
+    - name: check installed HAProxy version
+      shell: |
+        set -o pipefail
+        haproxy -v | head -1 | awk '{print $3}'
+      register: installed_version_haproxy
+      become_user: postgres
+
+    - name: save old haproxy version
+      set_fact:
+        HAPROXY_OLD_VERSION: "{{ installed_version_haproxy.stdout }}"
+
     - name: backup haproxy files
       copy:
         src: "{{ haproxy_files.conf_dir }}/haproxy.cfg"
@@ -23,18 +34,10 @@
     - name: download the HAProxy package but do not install it
       yum:
         name:
-          - "haproxy-{{ ansible_facts.packages['haproxy'][0].version }}"
-        state: latest
+          - "haproxy-{{ HAPROXY_OLD_VERSION }}"
+        state: present
         download_only: yes
         download_dir: "{{ backup.haproxy }}/"
         allow_downgrade: yes
-      when: ansible_os_family == "RedHat"
-    
-    - name: download previous etcd package but do not install it
-      shell: "{{ item }}"
-      with_items:
-        - "apt-get install -dy --reinstall haproxy={{ ansible_facts.packages['haproxy'][0].version }}"
-        - "cp /var/cache/apt/archives/haproxy* {{ backup.haproxy }}"
-      when: ansible_os_family == "Altlinux"
-
+   
   become: true

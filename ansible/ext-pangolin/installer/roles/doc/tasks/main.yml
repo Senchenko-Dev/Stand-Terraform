@@ -1,29 +1,29 @@
-- name: Documentation block for copy on nodes
-  block:
+- block:
   
-    - name: delete documentation directory
-      file:
-        path: "{{ PGHOME }}/documentation"
-        state: "absent"
+  - name: Clear and create doc directory
+    file:
+        path: "{{ PGHOME }}/doc"
+        state: "{{ item }}"
+    with_items:
+      - absent
+      - directory
 
-    - name: copy documentation to nodes
-      copy:
-        src: "{{ local_distr_path }}/documentation"
-        dest: "{{ PGHOME }}"
-        owner: postgres
-        group: postgres
-        mode: 0700
+  - name: Copy doc pdf to nodes
+    copy:
+         src: "{{ item }}"
+         dest: "{{ PGHOME }}/doc"
+    with_fileglob:
+      - "{{ local_distr_path }}/doc/*"
 
-    - name: copy readme and releasenotes to PGHOME
-      copy:
-        src: "{{ item }}"
+  - name: Copy readme to PGHOME
+    copy:
+        src: "{{ local_distr_path }}/readme.txt"
         dest: "{{ PGHOME }}"
-        owner: postgres
-        group: postgres
-        mode: 0700
-      with_items:
-        - "{{ local_distr_path }}/readme.txt"
-        - "{{ local_distr_path }}/releasenotes.json"
+
+  - name: Copy releasenotes to PGHOME
+    copy:
+        src: "{{ local_distr_path }}/releasenotes.json"
+        dest: "{{ PGHOME }}"
 
   become: true
   become_user: postgres

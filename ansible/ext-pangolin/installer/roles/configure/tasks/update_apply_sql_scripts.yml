@@ -10,6 +10,15 @@
         mode: 0644
       when: search_path_ext is defined
 
+    - name: copy moving script
+      template:
+        src: move_extensions_to_ext.sql.j2
+        dest: "{{ REMOTE_TMP }}/move_extensions_to_ext.sql"
+        owner: postgres
+        group: postgres
+        mode: 0644
+      when: moving_extensions is defined
+
     - name: copy get_role_passwd script
       copy:
         src: "get_role_passwd.sql"
@@ -18,15 +27,6 @@
         group: postgres
         mode: 0644
       when: monitoring_php_script is defined
-
-    - name: copy update_drop_roles script
-      copy:
-        src: "update_drop_roles.sql"
-        dest: "{{ REMOTE_TMP }}/update_drop_roles.sql"
-        owner: postgres
-        group: postgres
-        mode: 0644
-      when: drop_roles is defined
 
     - name: apply get_role_passwd script
       postgresql_query:
@@ -40,22 +40,27 @@
         path_to_script: "{{ REMOTE_TMP }}/search_path_ext.sql"
       when: search_path_ext is defined
 
-    - name: apply update_drop_roles script
+    - name: apply moving script to all databases
       postgresql_query:
         port: "{{ ports.pg }}"
-        path_to_script: "{{ REMOTE_TMP }}/update_drop_roles.sql"
-      when: drop_roles is defined
+        db: "{{ item.datname }}"
+        path_to_script: "{{ REMOTE_TMP }}/move_extensions_to_ext.sql"
+      with_items: "{{ current_dbs.query_result }}"
+      when: moving_extensions is defined
 
     - name: clean remote tmp
       file:
         state: absent
         path: "{{ item }}"
       with_items:
+        - "{{ REMOTE_TMP }}/move_extensions_to_ext.sql"
         - "{{ REMOTE_TMP }}/search_path_ext.sql"
         - "{{ REMOTE_TMP }}/get_role_passwd.sql"
-        - "{{ REMOTE_TMP }}/update_drop_roles.sql"
 
-  environment: "{{ db_connection_args }}"
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
   become: true
   become_user: postgres
   when: ansible_fqdn == current_master

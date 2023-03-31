@@ -10,26 +10,6 @@
   register: python_packets
   become: true
 
-- name: Prepare pip config file
-  block:
-
-  - name: ensure pip config dir
-    file:
-      path: "{{ PGUSERHOME }}/.config/pip"
-      state: directory
-      owner: postgres
-      group: postgres
-      mode: 0700
-
-  - name: copy pip config with repos
-    template:
-      src: pip.conf.j2
-      dest: "{{ python.pip_conf }}"
-      owner: postgres
-      group: postgres
-
-  become: true
-
 - name: Create {{ python.postgresql_venv }}
   block:
 
@@ -52,6 +32,7 @@
         virtualenv_command: "{{ python.global_virtualenv_bin }}"
         name: pip
         state: latest
+        extra_args: "--index-url={{ pip_repository.index_url }} --trusted-host={{ pip_repository.trusted_host }}"
 
     - name: create python environment
       pip:
@@ -70,6 +51,7 @@
           - pexpect==4.8.0
           - cryptography==3.3.1
           - ansible-core==2.11.5
+        extra_args: "--index-url={{ pip_repository.index_url }} --trusted-host={{ pip_repository.trusted_host }}"
       when: ansible_os_family in ('RedHat', 'Debian')
 
     - name: create python environment
@@ -89,17 +71,26 @@
           - pexpect==4.8.0
           - cryptography==3.3.1
           - ansible-core==2.11.5
+        extra_args: "--index-url={{ pip_repository.index_url }} --trusted-host={{ pip_repository.trusted_host }}"
       when: ansible_os_family == "Altlinux"
 
-    - name: copy created pip file to directory with python virtualenv
-      copy:
-        src: "{{ python.pip_conf }}"
-        dest: "{{ python.postgresql_venv }}/pip.conf"
-        remote_src: yes
+    - name: create pip config for python virtual environment
+      block:
+
+        - name: set external pip repository
+          shell: "source {{ python.postgresql_venv }}/bin/activate && \
+                  pip config set global.index-url {{ pip_repository.index_url }} && \
+                  pip config set global.trusted-host {{ pip_repository.trusted_host }}"
+
+        - name: copy created pip file to directory with python virtualenv
+          copy:
+            src: "~/.config/pip/pip.conf"
+            dest: "{{ python.postgresql_venv }}/pip.conf"
+            remote_src: yes
 
   become: true
   become_user: postgres
-  when: component_name is undefined
+  when: not postgresql_venv.stat.exists
 
 - name: Set python interpretator
   set_fact:
@@ -142,15 +133,15 @@
 
     - name: prepare clear old and create new {{ python.patroni_venv }}
       file:
-        path:  "{{ item.path }}"
+        path: "{{ python.patroni_venv }}"
         state: "{{ item.state }}"
-        owner:  postgres
-        group:  postgres
-        mode:   0700
+        owner: postgres
+        group: postgres
+        mode: 0700
         recurse: "{{ item.recurse }}"
       with_items:
-        - { state: absent,    path: "{{ python.patroni_venv }}", recurse: no  }
-        - { state: directory, path: "{{ python.patroni_venv }}", recurse: yes }
+        - { state: absent, recurse: no }
+        - { state: directory, recurse: yes }
       become_user: root
 
     - name: upgrade pip
@@ -170,11 +161,19 @@
         requirements:       "{{ python.packages }}/requirements.txt"
         extra_args:         "--no-index --find-links=file:///{{ python.packages }}"
 
-    - name: copy created pip file to directory with python virtualenv
-      copy:
-        src: "{{ python.pip_conf }}"
-        dest: "{{ python.patroni_venv }}/pip.conf"
-        remote_src: yes
+    - name: create pip config for python virtual environment
+      block:
+
+        - name: set external pip repository
+          shell: "source {{ python.patroni_venv }}/bin/activate && \
+                  pip config set global.index-url {{ pip_repository.index_url }} && \
+                  pip config set global.trusted-host {{ pip_repository.trusted_host }}"
+
+        - name: copy created pip file to directory with python virtualenv
+          copy:
+            src: "~/.config/pip/pip.conf"
+            dest: "{{ python.patroni_venv }}/pip.conf"
+            remote_src: yes
 
   become: true
   become_user: postgres

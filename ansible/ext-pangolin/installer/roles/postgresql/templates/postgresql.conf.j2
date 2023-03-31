@@ -12,7 +12,6 @@ archive_timeout = '180'
 autovacuum_work_mem = '{{ (ansible_memtotal_mb/48)|int|abs }}MB'
 checkpoint_completion_target = '0.9'
 checkpoint_timeout = '1800'
-debug_pretty_print = 'off'
 #debug_print_parse = 'True'
 #debug_print_rewritten = 'True'
 #debug_print_plan = 'True'
@@ -38,7 +37,7 @@ log_directory = '{{ PGLOGS }}'
 log_disconnections = 'True'
 log_file_mode = 0644
 log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
-log_line_prefix = '{{ log_prefix }}'
+log_line_prefix = '%t [%p]: [%l-1] app=%a,user=%u,db=%d,client=%h '
 log_lock_waits = 'on'
 log_min_duration_statement = '5000'
 log_min_error_statement = 'WARNING'
@@ -59,11 +58,7 @@ lc_numeric = 'en_US.utf8'
 lc_time = 'en_US.utf8'
 default_text_search_config = 'pg_catalog.english'
 maintenance_work_mem = '{{ (ansible_memtotal_mb/24)|int|abs }}MB'
-{% if ansible_processor_vcpus >= 16 %}
 max_connections = '{{ pg_max_connections }}'
-{% else %}
-max_connections = '{{ 100 + superuser_reserved_connections }}'
-{% endif %}
 max_locks_per_transaction = '64'
 max_parallel_workers = '{{ ansible_processor_vcpus }}'
 max_parallel_workers_per_gather = '{{ (ansible_processor_vcpus/2)|int|abs }}'
@@ -73,21 +68,18 @@ max_standby_archive_delay = '30s'
 max_standby_streaming_delay = '30s'
 max_wal_senders = '10'
 max_wal_size = '4GB'
-max_worker_processes = '{%- if _upd_max_worker_processes is defined and _upd_max_worker_processes|int >= 32 -%}
-                          {{ _upd_max_worker_processes }}
-                        {%- elif ansible_processor_vcpus < 32 -%}
-                          32
-                        {%- else -%}
-                          {{ ansible_processor_vcpus }}
-                        {%- endif -%}'
-min_wal_size = '2GB'
-monitoring_ldap_servers = '^{{ ldap_server }}$'
-pgaudit.log = 'ddl, role, connection, misc_set, protection'
-{% if action_type == 'install' or actual_password_encryption is not defined %}
-password_encryption = 'scram-sha-256'
-{% else %}
-password_encryption = '{{ actual_password_encryption }}'
+{% if ansible_processor_vcpus < 8 %}
+max_worker_processes = '8'
+{% else -%}
+max_worker_processes = '{{ ansible_processor_vcpus }}'
 {% endif %}
+min_wal_size = '2GB'
+monitoring_ldap_servers = {% if segment == 'alpha' %}'^ca.sbrf.ru$|^omega.sbrf.ru$'
+                          {% elif segment == 'sigma' %}'^sigma.sbrf.ru$'
+                          {% elif segment == 'delta' %}'^delta.sbrf.ru$'
+                          {% elif segment == 'sbercloud' %}'^ldap-todo.sw.sbc.space$'{% endif %}
+pgaudit.log = 'ddl, role, connection, misc_set'
+password_encryption = 'scram-sha-256'
 #password_policies
 password_policy.deny_default = '{{ password_policy_params.deny_default }}'
 password_policy.reuse_time = '{{ password_policy_params.reuse_time }}'
@@ -118,81 +110,42 @@ password_policy.deduplicate_ssl_no_ssl_fail_auth_attepmts = '{{ password_policy_
 password_policy.allow_hashed_password = '{{ password_policy_params.allow_hashed_password }}'
 psql_encrypt_password = 'on'
 password_policies_enable = 'on'
-password_policy.transport_password_mark_automatic = '{{ password_policy_params.transport_password_mark_automatic }}'
-password_policy.transport_password_life_time = '{{ password_policy_params.transport_password_life_time }}'
-{%- if performance_insights.is_enable %}
-performance_insights.enable = 'True'
-performance_insights.masking = '{{ performance_insights.masking }}'
-performance_insights.sampling_enable = '{{ performance_insights.sampling_enable }}'
-performance_insights.sampling_period = '{{ performance_insights.sampling_period }}'
-performance_insights.num_samples_in_ram = '{{ performance_insights.num_samples_in_ram }}'
-performance_insights.num_samples_in_files = '{{ performance_insights.num_samples_in_files }}'
-{% endif %}
 pg_hint_plan.parse_messages = 'warning'
 pg_hint_plan.debug_print = 'off'
 pg_hint_plan.message_level = 'debug'
 cron.database_name = 'postgres'
 cron.max_running_jobs = '3'
-{%- if pg_profile.is_enable %}
-pg_profile.topn = '{{ pg_profile.topn }}'
-pg_profile.max_sample_age = '{{ pg_profile.max_sample_age }}'
-pg_profile.track_sample_timings = '{{ pg_profile.track_sample_timings }}'
-{% endif %}
-track_activities = '{{ pg_stat_track_activities }}'
-track_counts = '{{ pg_stat_track_counts }}'
-track_io_timing = '{{ pg_stat_track_io_timing }}'
-track_functions = '{{ pg_stat_track_functions }}'
-pg_stat_statements.track = '{{ pg_stat_statements_track }}'
-pg_stat_statements.max = '{{ pg_stat_statements_max }}'
 port = '{{ ports.pg }}'
 random_page_cost = '2.0'
-{% if pg_stat_kcache_is_enable %}
-pg_stat_kcache.linux_hz = '{{ pg_stat_kcache_linux_hz }}'
-{% endif %}
-relnblocks_enable = '{{ relnblocks_enable }}'
-relnblocks_hash_max_size = '{{ relnblocks_hash_max_size }}'
-relnblocks_hash_init_size = '{{ relnblocks_hash_init_size }}'
-relnblocks_hash_max_db = '{{ relnblocks_hash_max_db }}'
-relnblocks_hash_init_db = '{{ relnblocks_hash_init_db }}'
 search_path = 'ext'
 shared_buffers ={% if ansible_memtotal_mb < 65536 %} '4GB'{% else %} '8GB'{% endif %}
-shared_preload_libraries = 'auto_explain,pg_stat_statements,{% if pg_stat_kcache_is_enable %}pg_stat_kcache,{% endif %}pg_cron,pg_hint_plan,pg_outline,pg_pathman'
-superuser_reserved_connections = '{{ superuser_reserved_connections }}'
+shared_preload_libraries = 'auto_explain,pg_stat_statements,pg_cron,pg_hint_plan,pg_pathman'
+{% if ansible_processor_vcpus <= 8 %}
+superuser_reserved_connections = '4'
+{% else %}
+superuser_reserved_connections = '10'
+{% endif %}
 synchronous_commit = 'on'
 track_commit_timestamp = 'off'
 unix_socket_directories = '/var/run/postgresql/'
 wal_buffers = '16MB'
-wal_keep_size = '8GB'
+wal_keep_segments = '500'
 wal_level = 'replica'
 wal_log_hints = 'on'
 wal_receiver_status_interval = '1s'
 wal_sync_method = 'fsync'
 work_mem ={% if ansible_memtotal_mb < 65536 %} '16384kB'{% else %} '32768kB'{% endif %}
-logical_decoding_work_mem = '64MB'
 ssl = 'on'
-ssl_cert_file = '{{ pg_certs_pwd.server_cert }}'
-ssl_key_file = '{{ pg_certs_pwd.server_key }}'
-ssl_ca_file = '{{ pg_certs_pwd.root_ca }}'
-ssl_crl_file = '{{ crl_file }}'
-{% if is_ssl_constraints %}
-ssl_min_protocol_version = '{{ ssl_min_protocol_version }}'
-{% endif %}
-pg_plugins_path = '{{ PGHOME }}/lib'
-{% if admin_protection is defined and admin_protection %}
-sec_admin_default_auth = '{{ sec_admin_default_auth }}'
-{% endif %}
+ssl_cert_file = '{{ PGSSL }}/{{ ansible_fqdn }}.crt'
+ssl_key_file = '{{ PGSSL }}/{{ ansible_fqdn }}.key'
+ssl_ca_file = '{{ PGSSL }}/root.crt'
 {% if tde is defined and tde %}
 dynamic_shared_memory_type = 'posix'
 is_tde_on = 'on'
+pg_plugins_path = '{{PGHOME}}/lib'
 mkeychecker_delay = '300'
-pg_encryption_keys_capacity = '50000'
 {% else %}
 is_tde_on = 'off'
 {% endif %}
 hba_file = '{{ PGDATA }}/pg_hba.conf'
 ident_file = '{{ PGDATA }}/pg_ident.conf'
-enabled_sec_admin_extra_auth_methods = '{{ enabled_sec_admin_extra_auth_methods }}'
-enabled_extra_auth_methods = '{{ enabled_extra_auth_methods }}'
-pg_outline.enable = 'off'
-enable_monitor_object_modification_date = '{{ pg_enable_monitor_object_modification_date }}'
-object_modification_date_keep_interval = '{{ pg_object_modification_date_keep_interval }}'

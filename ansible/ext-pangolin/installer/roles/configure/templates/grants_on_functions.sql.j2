@@ -49,6 +49,8 @@ GRANT EXECUTE ON FUNCTION pg_catalog.disable_policy TO "{{ as_group }}";
 REVOKE ALL ON FUNCTION pg_catalog.disable_policy_by_id FROM public;
 REVOKE ALL ON FUNCTION pg_catalog.disable_policy_by_id FROM "{{ TUZ_group }}";
 GRANT EXECUTE ON FUNCTION pg_catalog.disable_policy_by_id TO "{{ as_group }}";
+REVOKE ALL ON FUNCTION pg_catalog.edhe_exchange_public_numbers FROM public;
+REVOKE ALL ON FUNCTION pg_catalog.edhe_exchange_public_numbers FROM "{{ TUZ_group }}";
 GRANT EXECUTE ON FUNCTION pg_catalog.edhe_exchange_public_numbers TO "{{ as_group }}";
 REVOKE ALL ON FUNCTION pg_catalog.enable_policy FROM public;
 REVOKE ALL ON FUNCTION pg_catalog.enable_policy FROM "{{ TUZ_group }}";

@@ -12,14 +12,22 @@
         - "absent"
         - "directory"
 
-    - name: backup files whose use in src process
+    - name: backup files
       copy:
-        src: "{{ item }}"
-        dest: "{{ backup.src }}/{{ item.split('/')[-1] }}"
+        src: "{{ manage_backup_bin }}/11_{{ item }}"
+        dest: "{{ backup.src }}/11_{{ item }}"
         remote_src: true
-      with_items:
-        - "{{ path_to_manage_backup_sh_file }}"
-        - "{{ path_to_pg_se_archlogs_sh_file }}"
-        - "{{ path_to_manage_backup_module }}"
+      with_items: "{% if ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0 %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.py']|list}}\
+                   {% else %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.bin']|list}}{% endif %}"
+      when: ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 0
 
-  when: SRC and is_src_exists and not is_src_exists_and_not_correct
+    - name: backup files
+      copy:
+        src: "{{ manage_backup_bin }}/04_{{ item }}"
+        dest: "{{ backup.src }}/04_{{ item }}"
+        remote_src: true
+      with_items: "{% if ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0 %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.py']|list}}\
+                   {% else %}{{['pg_se_archlogs.sh', 'manage_backup.sh', 'manage_backup.bin']|list}}{% endif %}"
+      when: ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 1
+
+  when: SRC

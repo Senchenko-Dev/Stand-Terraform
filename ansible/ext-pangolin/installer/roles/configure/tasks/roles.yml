@@ -10,6 +10,17 @@
     - name: create roles and set passwords and grant privs
       block:
 
+        - name: create roles or alter pass, if exist
+          include_role:
+            name: configure
+            tasks_from: update_user_pass
+          vars:
+            username: '{{ item.role }}'
+            password: '{{ item.pass }}'
+          loop:
+            - { role: "{{ as_group }}",     pass: '{{ db_group_roles.as_admin.pass.scram }}' }
+            - { role: "{{ TUZ_group }}",    pass: '{{ db_group_roles.transport.pass.scram }}' }
+
         - name: create roles or configure, if exist
           postgresql_user:
             port: "{{ ports.pg }}"
@@ -18,27 +29,64 @@
             expires: 'infinity'
             role_attr_flags: "{{ item.privs }}"
           loop:
-            - { role: "{{ db_admin }}",     privs: "{% if action_type == 'install' or cfg_main_roles %}NOLOGIN,CREATEDB,CREATEROLE,SUPERUSER{% endif %}" }
-            - { role: "{{ as_group }}",     privs: "{% if action_type == 'install' or cfg_main_roles %}NOLOGIN,NOINHERIT{% endif %}" }
-            - { role: "{{ TUZ_group }}",    privs: "{% if action_type == 'install' or cfg_main_roles %}NOLOGIN,INHERIT{% endif %}" }
+            - { role: "{{ db_admin }}",     privs: 'NOLOGIN,CREATEDB,CREATEROLE,SUPERUSER' }
+            - { role: "{{ as_group }}",     privs: 'LOGIN,NOINHERIT' }
+            - { role: "{{ TUZ_group }}",    privs: 'NOLOGIN,INHERIT' }
             - { role: "as_admin_read",      privs: 'NOLOGIN,NOINHERIT' }
             - { role: "all-sa-pam-group",   privs: 'NOLOGIN,NOINHERIT' }
             - { role: "all-sa-pam19002",    privs: 'LOGIN,CREATEDB,CREATEROLE,SUPERUSER,NOINHERIT' }
-            - { role: "all-sa-pam19002_ro", privs: 'LOGIN,INHERIT' }
+            - { role: "all-sa-pam19002_ro", privs: 'LOGIN,NOINHERIT' }
+           #TODO- { role: "{{ sec_admin }}",    privs: 'NOLOGIN' }
 
-        - name: checking the current as_admin list
-          postgresql_query:
-            port: "{{ ports.pg }}"
-            query: SELECT rolname FROM pg_roles where 'role=as_admin' = ANY(rolconfig)
-          register: admins
-          when: "action_type in ['update_major', 'update_minor']"
+        - name: change tuzes group if update
+          block:
 
-        - name: configuring current as_admin roles with VALID UNTIL
-          postgresql_query:
-            port: "{{ ports.pg }}"
-            query: ALTER ROLE "{{ item.rolname }}" VALID UNTIL '{{ ROLES_EXPIRES_DATE }}'
-          with_items: "{{ admins.query_result }}"
-          when: "action_type in ['update_major', 'update_minor']"
+            - name: copy script to get wrong tuzes to master
+              template:
+                src: 'get_wrong_tuzes.sh.j2'
+                dest: '{{ REMOTE_TMP }}/get_wrong_tuzes.sh'
+                owner: postgres
+                group: postgres
+                mode: '0755'
+    
+            - name: run script to get corrupted TUZes
+              shell: 'timeout 10s {{ REMOTE_TMP }}/get_wrong_tuzes.sh'
+              register: old_tuzes
+
+            - name: set fact
+              set_fact:
+                tuzes_list: "{{ old_tuzes.stdout_lines|replace('\n', '') }}"
+
+            - name: check if tuzes are included in wrong group
+              postgresql_query:
+                query: "SELECT a.rolname AS user_role_name, c.rolname AS group_role_name FROM pg_roles a \
+                        INNER JOIN pg_auth_members b on a.oid=b.member \
+                        INNER JOIN pg_roles c on b.roleid=c.oid WHERE a.rolname = '{{ item }}' and c.rolname = '{{ as_group }}';"
+                port: "{{ ports.pg }}"
+              with_items: "{{ tuzes_list }}"
+              register: check_tuzes
+
+            - name: delete wrong tuzes from as_admin
+              postgresql_query:
+                query: "REVOKE {{ as_group }} FROM {{ item }};"
+                port: "{{ ports.pg }}"
+              with_items: "{{ tuzes_list }}"
+              loop: "{{ tuzes_list }}"
+              loop_control:
+                index_var: index
+              when: check_tuzes.results[index].rowcount|int != 0
+
+            - name: add wrong tuzes to {{ TUZ_group }}
+              postgresql_query:
+                query: 'GRANT "{{ TUZ_group }}" TO {{ item }};'
+                port: "{{ ports.pg }}"
+              with_items: "{{ tuzes_list }}"
+              loop: "{{ tuzes_list }}"
+              loop_control:
+                index_var: index
+              when: check_tuzes.results[index].rowcount|int != 0
+
+          when: "'update' in action_type"
 
     - name: create or alter ldap {{ as_admins }} role DEV
       postgresql_user:
@@ -73,22 +121,37 @@
       loop: "{{ as_admins }}"
       when: "'update' not in action_type"
 
-    - name: create {{ as_TUZ }} users
+    - name: drop ldap support roles
       block:
 
-        - name: create {{ as_TUZ }} users
+        - name: check exist support roles
           postgresql_query:
             port: "{{ ports.pg }}"
-            query: "CREATE USER \"{{ item }}\" {% if password_policy_params.is_temp_tuz_password %}TEMPORARY{% endif %} \
-                    PASSWORD '{{ db_group_roles.transport.pass.open }}' {{ inherit_role_attr }};"
-          loop: "{{ as_TUZ }}"
-
-        - name: grant {{ as_TUZ }} users to {{ TUZ_group }}
+            query: SELECT pg_roles.rolname FROM pg_roles WHERE rolname='{{ item }}'
+          loop: "{% if segment == 'sigma' %}{{ support_sigma }}\
+                 {% else %}{{ support_alpha }}{% endif %}"
+          register: is_roles
+    
+        - name: drop ldap support if exists
           postgresql_query:
             port: "{{ ports.pg }}"
-            query: GRANT "{{ TUZ_group }}" TO "{{ item }}"
-          loop: "{{ as_TUZ }}"
+            query: DROP ROLE IF EXISTS "{{ item }}"
+          loop: "{% if segment == 'sigma' %}{{ support_sigma }}\
+                 {% else %}{{ support_alpha }}{% endif %}"
+          loop_control:
+            index_var: index
+          when: is_roles.results[index].rowcount|int != 0
 
+      when: "'update' in action_type"
+
+    - name: create or alter TUZ roles
+      postgresql_user:
+        groups: "{{ TUZ_group }}"
+        port: "{{ ports.pg }}"
+        name: "{{ item }}"
+        password: "{{ db_group_roles.transport.pass.open }}"
+        role_attr_flags: "{{ inherit_role_attr }}"
+      loop: "{{ as_TUZ }}"
       when: "'update' not in action_type"
 
     - name: create user for pg_probackup and added grant
@@ -104,7 +167,7 @@
               vars:
                 _genupdatepass_dbuser: backup_user
                 _genupdatepass_generated_pass: "{{ pg_backup_user_passwd }}"
-              when: inner_install
+              when: inner_install is defined
 
             - name: create backup_user role with random password
               include_role:
@@ -112,13 +175,13 @@
                 tasks_from: generate_and_update_db_user_pass.yml
               vars:
                 _genupdatepass_dbuser: backup_user
-              when: not inner_install
+              when: inner_install is undefined
 
             - name: save pg_backup_user_passwd
               set_fact:
                 pg_backup_user_passwd: "{{ _genupdatepass_generated_pass }}"
               no_log: "{{ nolog }}"
-              when: not inner_install
+              when: inner_install is undefined
 
           run_once: true
 
@@ -127,40 +190,71 @@
             port: "{{ ports.pg }}"
             query: "{{ item }}"
           with_items:
-            - ALTER USER "backup_user" WITH REPLICATION NOINHERIT;
-            - GRANT USAGE ON SCHEMA pg_catalog TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.current_setting(text) TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_is_in_recovery() TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_start_backup(text, boolean, boolean) TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_stop_backup(boolean, boolean) TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_create_restore_point(text) TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_switch_wal() TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_last_wal_replay_lsn() TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.txid_current() TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.txid_current_snapshot() TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.txid_snapshot_xmax(txid_snapshot) TO "backup_user";
-            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_control_checkpoint() TO "backup_user";
+            - ALTER USER backup_user WITH REPLICATION;
+            - GRANT USAGE ON SCHEMA pg_catalog TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.current_setting(text) TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_is_in_recovery() TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_start_backup(text, boolean, boolean) TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_stop_backup(boolean, boolean) TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_create_restore_point(text) TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_switch_wal() TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_last_wal_replay_lsn() TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.txid_current() TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.txid_current_snapshot() TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.txid_snapshot_xmax(txid_snapshot) TO backup_user;
+            - GRANT EXECUTE ON FUNCTION pg_catalog.pg_control_checkpoint() TO backup_user;
 
-    - name: create or update pass for zabbix_oasubd, monitoring_php and auditor users
+    - name: create or alter zabbix_oasubd user
       include_tasks: update_user_pass.yml
       vars:
-        username: "{{ item.uname }}"
-        password: "{{ item.pass }}"
-      with_items:
-        - { uname: "zabbix_oasubd",  pass: "{{ zabbix_oasubd_scram_pass }}" }
-        - { uname: "monitoring_php", pass: "{{ monitoring_php_scram_pass }}" }
-        - { uname: "auditor",        pass: "{{ auditor_scram_pass }}" }
+        username: "zabbix_oasubd"
+        password: "{{ zabbix_oasubd_scram_pass }}"
+
+    - name: create or alter monitoring_php user
+      include_tasks: update_user_pass.yml
+      vars:
+        username: "monitoring_php"
+        password: "{{ monitoring_php_scram_pass }}"
+
+    - name: create or alter auditor user
+      include_tasks: update_user_pass.yml
+      vars:
+        username: "auditor"
+        password: "{{ auditor_scram_pass }}"
 
     - name: include file with tasks for configure special password policies for TUZ users
       import_tasks: setup_special_pp_policies.yml
 
     - name: drop masteromni, pstgcmdb and sberpg roles
-      import_tasks: update_apply_sql_scripts.yml
-      vars:
-        drop_roles: true
-      when: "'update' in action_type and ( [ pg_current_version, '4.4.0' ] | compare_pg_se_versions )|int == 0"
+      block:
 
-  environment: "{{ db_connection_args }}"
+        - name: check exists masteromni
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: SELECT pg_roles.rolname FROM pg_roles WHERE rolname='masteromni'
+          register: is_roles
+ 
+        - name: drop priveleges from masteromni
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pg_catalog FROM masteromni
+          when: is_roles.rowcount|int != 0
+
+        - name: drop roles
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: DROP ROLE IF EXISTS "{{ item }}"
+          with_items:
+            - "masteromni"
+            - "pstgcmdb"
+            - "sberpg"
+
+      when: "'update' in action_type"
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
   become: true
   become_user: postgres
   when: ansible_fqdn == current_master

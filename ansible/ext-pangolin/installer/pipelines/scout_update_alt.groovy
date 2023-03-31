@@ -24,59 +24,89 @@ switch(hosts_list.split(" ").length)
         break
 }
 
+//recipient string
+delivery_team = env.list_emails
+
 //nexus variables
-switch(segment) {
-  case ["sbercloud"]:
-        nexusRestApiUrl = 'https://dzo.sw.sbc.space/nexus-cd'
+switch(segment)
+{
+  case ["sigma_installer"]:
+        nexusRestApiUrl = 'http://nexus.sigma.sbrf.ru:8099/nexus/service/local'
         nexusClassifier = "distrib"
-        groupId = 'Nexus_PROD'
+        groupId = 'as_postgresql'
         artifactId = artifactId_for_nexus
-        repoId = 'sbt_PROD_group'
-        pip_repository = 'https://spo.solution.sbt/python/simple'
-        nexusAddress = 'spo.solution.sbt'
+        repoId = 'SBT_CI_distr_repo'
+        nexusAddress = 'mirror.sigma.sbrf.ru'
+        pip_repository = 'http://mirror.sigma.sbrf.ru/pypi/simple'
         break
-  case ["sbercloud_archive"]:
-        nexusRestApiUrl = 'https://dzo.sw.sbc.space/nexus-ci'
+  case ["sigma_archive"]:
+        nexusRestApiUrl = 'http://nexus.sigma.sbrf.ru:8099/nexus/service/local'
         nexusClassifier = "distrib"
-        groupId = 'ru/sbt/pangolin/archive'
+        groupId = 'as_postgresql.archive'
         artifactId = artifactId_for_nexus
-        repoId = 'sbt_maven'
-        pip_repository = 'https://spo.solution.sbt/python/simple'
-        nexusAddress = 'spo.solution.sbt'
+        repoId = 'SBT_CI_distr_repo'
+        nexusAddress = 'mirror.sigma.sbrf.ru'
+        pip_repository = 'http://mirror.sigma.sbrf.ru/pypi/simple'
         break
-  case ["sbercloud_installer"]:
-        nexusRestApiUrl = env.NexusRestApiUrl
-        nexusClassifier = "distrib"
-        groupId = env.GroupId
-        artifactId = env.ArtifactId_for_nexus
-        repoId = env.RepoId
-        pip_repository = env.Pip_repository
-        nexusAddress = env.NexusAddress
-        break
+}
+
+if (segment == 'sigma_installer' || segment == 'sigma_archive')
+{
+  if (env.JENKINS_URL.contains('sbt-jenkins.sigma.sbrf.ru'))
+  {
+    devops_segment = 'CI'
+  }
+  else if (env.JENKINS_URL.contains('sbt-qa-jenkins.sigma.sbrf.ru'))
+  {
+    devops_segment = 'CDL'
+  }
+  else if (env.JENKINS_URL.contains('nlb-jenkins-sigma-psi.sigma.sbrf.ru'))
+  {
+    devops_segment = 'CDP'
+  }
+  else if (env.JENKINS_URL.contains('nlb-jenkins-sigma.sigma.sbrf.ru'))
+  {
+    devops_segment = 'PROD'
+  }
+}
+else
+{
+  if (env.JENKINS_URL.contains('sbt-jenkins.ca.sbrf.ru'))
+  {
+    devops_segment='CI'
+  }
+  else if (env.JENKINS_URL.contains('sbt-qa-jenkins.ca.sbrf.ru'))
+  {
+    devops_segment = 'CDL'
+  }
+  else if (env.JENKINS_URL.contains('nlb-jenkins-psi.ca.sbrf.ru'))
+  {
+    devops_segment = 'CDP'
+  }
+  else if (env.JENKINS_URL.contains('nlb-jenkins.ca.sbrf.ru'))
+  {
+    devops_segment = 'PROD'
+  }
 }
 
 @NonCPS
 def getNexusLink(nexusRestApiUrl, nexusArtifactId, nexusVersionId, nexusExtensionId, nexusRepositoryId, nexusGroupId, nexusClassifier, remoteUsername, remotePassword) {
-    if ( segment == "sbercloud" || segment == "sbercloud_archive" || segment == "sbercloud_installer") {
-      return "${nexusRestApiUrl}/repository/${nexusRepositoryId}/${nexusGroupId}/${nexusArtifactId}/${nexusVersionId}/${nexusArtifactId}-${nexusVersionId}-${nexusClassifier}.tar.gz"
-    } else {
-      def api = "${nexusRestApiUrl}/artifact/maven/redirect?r=${nexusRepositoryId}&g=${nexusGroupId}&a=${nexusArtifactId}&v=${nexusVersionId}&p=${nexusExtensionId}&c=${nexusClassifier}"
-      def con = new URL(api).openConnection()
-      println(con)
-      con.requestMethod = 'HEAD'
-      if (remoteUsername != null && remotePassword != null) {
-          def authString = "${remoteUsername}:${remotePassword}".getBytes().encodeBase64().toString()
-          con.setRequestProperty("Authorization", "Basic ${authString}")
-      }
-      con.setInstanceFollowRedirects(true)
-      con.connect()
-      def is = con.getInputStream()
-      is.close()
-      return con.getURL().toString()
+    def api = "${nexusRestApiUrl}/artifact/maven/redirect?r=${nexusRepositoryId}&g=${nexusGroupId}&a=${nexusArtifactId}&v=${nexusVersionId}&p=${nexusExtensionId}&c=${nexusClassifier}"
+    def con = new URL(api).openConnection()
+    println(con)
+    con.requestMethod = 'HEAD'
+    if (remoteUsername != null && remotePassword != null) {
+        def authString = "${remoteUsername}:${remotePassword}".getBytes().encodeBase64().toString()
+        con.setRequestProperty("Authorization", "Basic ${authString}")
     }
+    con.setInstanceFollowRedirects(true)
+    con.connect()
+    def is = con.getInputStream()
+    is.close()
+    con.getURL().toString()
 }
 
-node(env.jenkinsAgentLabel)
+node('masterLin')
 {
   timestamps
   {
@@ -88,7 +118,7 @@ node(env.jenkinsAgentLabel)
           withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'postgresql_nexus_cred', usernameVariable: 'remoteUsername', passwordVariable: 'remotePassword']])
           {
             url_to_distr = getNexusLink(nexusRestApiUrl, artifactId, version.toUpperCase(), "tar.gz", repoId, groupId, nexusClassifier, remoteUsername, remotePassword)
-            sh "wget -nv --no-check-certificate --user=${remoteUsername} --password=${remotePassword} ${url_to_distr}"
+            sh "wget --user=${remoteUsername} --password=${remotePassword} ${url_to_distr}"
           }
         }
         stage('Unarchive distributive')
@@ -113,7 +143,7 @@ node(env.jenkinsAgentLabel)
           sh """
               virtualenv pg_se_venv --python=python3
               source pg_se_venv/bin/activate
-              pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' ansible==2.9.18
+              pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' ansible==2.9.25
               pip install --index-url='${pip_repository}' --trusted-host='${nexusAddress}' -r distributive/installer/files/slave.txt
              """
         }
@@ -191,6 +221,7 @@ node(env.jenkinsAgentLabel)
                                         ansible_arguments + ' -u ' + ssh_user +
                                         ' --extra-vars \"local_distr_path=' + distributive_path +
                                                       ' segment=' + segment_type.first() +
+                                                      ' manual_run=yes' +
                                                       ' action_type=' + action_type +
                                                       ' custom_config=' + custom_config +
                                                       ' stand=' + stand +'\"'
@@ -207,7 +238,6 @@ node(env.jenkinsAgentLabel)
                 println('Update failed')
                 println(r)
                 currentBuild.result = 'FAILURE'
-                error ">>> Scouting failed <<<"
               }
             }
           }

@@ -1,2 +1,3 @@
+etcd_cluster_name: "{{ '' | default('test', true) }}"
 clustername: "{{ '' | default('clustername', true) }}"
 installation_type: cluster

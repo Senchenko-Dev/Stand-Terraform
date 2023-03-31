@@ -1,299 +1,360 @@
-- name: Checkup
+- name: Check passed action type
+  assert:
+    that: action_type in supported_action_types.installer
+    fail_msg: "Action {{ action_type }} doesnt' exist in installer"
+  run_once: true
+
+- name: Check and use custom_config
+  import_tasks: check_and_use_custom_config.yml
+
+# - name: Import gpg
+#   import_tasks: gpg.yml
+#   run_once: true
+#   delegate_to: localhost
+#   when: "not gpg_decrypt_file is match('TBF')"
+
+- name: Import tls checkup
+  include_role:
+    name: tls
+    tasks_from: checkup.yml
+  when: "custom_config|length > 0"
+
+- name: Check ansible environment
+  import_tasks: ansible_env.yml
+  run_once: true
+
+- name: Check master before update
+  import_tasks: define_current_master.yml
+  run_once: true
+  when: "inventory_hostname == 'master' and installation_type == 'cluster' and 'update' in action_type"
+
+- name: Check input variables
+  import_tasks: verify_variables.yml
+  run_once: true
+
+- name: Check fqnd of hosts
+  assert:
+    that: not 'localhost' in ansible_fqdn
+    fail_msg: "{{ inventory_hostname }} имеет проблемы с получением сетевого имени от DNS сервера. \
+               Проверьте корректность файлов /etc/hosts и /etc/resolv.conf."
+
+- name: Check system version
+  assert:
+    that: ansible_distribution_version|float >= {{ required_os_version.min }} and ansible_distribution_version|float <= {{ required_os_version.max }}
+    fail_msg: "Current {{ ansible_distribution }} version: {{ ansible_distribution_version }}. Needed {{ ansible_distribution }} version: {{ required_os_version.min }} to {{ required_os_version.max }}"
+    success_msg: "{{ ansible_distribution }} version is correct"
+
+- name: Check python version
+  assert:
+     that: ansible_python_version|version == 2.7
+     fail_msg: "Current python version: {{ ansible_python_version }}. Needed python version: 2.7"
+     success_msg: "Version of python interpretator is correct"
+  when: ansible_os_family == "RedHat"
+
+- name: Get name of package
+  import_tasks: find_package.yml
+
+- set_fact:
+    pgdata_string: "/{{ PGDATA.split('/')[1] }} | tail -1 | awk '{print $NF}'"
+    pgbackup_string: "/{{ PGBACKUP.split('/')[1] }} | tail -1 | awk '{print $NF}'"
+    pglogs_string: "/{{ PGLOGS.split('/')[1] }} | tail -1 | awk '{print $NF}'"
+
+- name: Check if /{{ PGDATA.split('/')[1] }} exists
+  stat:
+    path: "/{{ PGDATA.split('/')[1] }}"
+  register: pgdata_exists
+
+- name: Check if /{{ PGBACKUP.split('/')[1] }} exists
+  stat:
+    path: "/{{ PGBACKUP.split('/')[1] }}"
+  register: pgbackup_exists
+
+- name: Check if /{{ PGLOGS.split('/')[1] }} exists
+  stat:
+    path: "/{{ PGLOGS.split('/')[1] }}"
+  register: pglogs_exists
+
+- name: Check physical space on directories/mount points
+  block:
+  - shell: "df {{ pgdata_string }}"
+    register: pgdata_mp
+    when: pgdata_exists.stat.exists
+
+  - shell: "df {{ pgbackup_string }}"
+    register: pgbackup_mp
+    when: pgbackup_exists.stat.exists
+
+  - shell: "df {{ pglogs_string }}"
+    register: pglogs_mp
+    when: pglogs_exists.stat.exists
+
+  - set_fact:
+      pgdata_mp_free: "{{ (item.size_available / 1024 / 1024 / 1024)|int }}"
+    with_items: "{{ ansible_mounts }}"
+    when: pgdata_exists.stat.exists and item.mount == pgdata_mp.stdout
+    no_log: "{{ nolog }}"
+
+  - set_fact:
+      pgbackup_mp_free: "{{ (item.size_available / 1024 / 1024 / 1024)|int }}"
+    with_items: "{{ ansible_mounts }}"
+    when: pgbackup_exists.stat.exists and item.mount == pgbackup_mp.stdout
+    no_log: "{{ nolog }}"
+
+  - set_fact:
+      pglogs_mp_free: "{{ (item.size_available / 1024 / 1024 / 1024)|int }}"
+    with_items: "{{ ansible_mounts }}"
+    when: pglogs_exists.stat.exists and item.mount == pglogs_mp.stdout
+    no_log: "{{ nolog }}"
+
+  - assert:
+      that: pgdata_mp_free|int >= min_space_pgdata
+      fail_msg: "{{ PGDATA }} mount point has {{ pgdata_mp_free }}GB free space, but need at least {{ min_space_pgdata }}GB"
+      success_msg: "Correct. {{ PGDATA }} mount point has the required amount of free physical space "
+    when: pgdata_exists.stat.exists and min_space_pgdata > 0
+
+  - assert:
+      that: pgbackup_mp_free|int >= min_space_pgarclogs
+      fail_msg: "{{ PGBACKUP }} mount point has {{ pgbackup_mp_free }}GB free space, but need at least {{ min_space_pgarclogs }}GB"
+      success_msg: "Correct. {{ PGBACKUP }} mount point has the required amount of free physical space "
+    when: pgbackup_exists.stat.exists and min_space_pgarclogs > 0
+
+  - assert:
+      that: pglogs_mp_free|int >= min_space_pgerrorlogs
+      fail_msg: "{{ PGLOGS }} mount point has {{ pglogs_mp_free }}GB free space, but need at least {{ min_space_pgerrorlogs }}GB"
+      success_msg: "Correct. {{ PGLOGS }} mount point has the required amount of free physical space "
+    when: pglogs_exists.stat.exists and min_space_pgerrorlogs > 0
+  when: "inventory_hostname == 'master' or inventory_hostname == 'replica'"
+
+#TODO Checking free virtual memory
+- name: Check PGHOME not exist, if actual type is install
   block:
 
-    - name: copy info about user agreement status
-      block:
+    - name: check PGHOME not exist
+      stat: path="{{ PGHOME }}"
+      register: pghome_exists
 
-        - name: get UTC current time
-          command: "date '+%Y-%m-%d_%H:%M:%S'"
-          register: date_utc
-          environment:
-            TZ: UTC
+    - name: check that PGHOME doesn't exists
+      assert:
+        that: not pghome_exists.stat.exists
+        fail_msg: "PGHOME exists, please remove it manually"
+        success_msg: "PGHOME doesn't exists, continue..."
 
-        - name: create {{ PGUSERHOME }}/.user_agreement_statuses if it doesn't exists
-          file:
-            path: "{{ PGUSERHOME }}/.user_agreement_statuses"
-            state: directory
-            mode: '0700'
-            owner: 'postgres'
-            group: 'postgres'
-            recurse: yes
+  when: action_type == 'install'
 
-        - name: copy info about user agreement status
-          copy:
-            src: "{{ playbook_dir }}/files/user_agreement.json"
-            dest: "{{ PGUSERHOME }}/.user_agreement_statuses/user_agreement_{{ date_utc.stdout }}.json"
-            owner: postgres
-            group: postgres
-            mode: u=r,g=r,o=r
+- name: Check connect to KMS server
+  block:
 
+    - name: get status of kms serves
+      wait_for:
+        host: "{{ KMS_HOST }}"
+        port: "{{ KMS_PORT }}"
+        timeout: 5
+      register: kms_status
+      ignore_errors: yes
+
+    - name: check that kms server started
+      assert:
+        that: not kms_status.failed
+        fail_msg: "KMS server is not running. TDE and admin protection cannot be configured"
+
+    - name: get KMS version with api
+      uri:
+        url: "https://{{ KMS_HOST }}:{{ KMS_PORT }}/v1/sys/health"
+        validate_certs: no
+        return_content: yes
+      register: kms_version
+      when: not kms_status.failed
+
+    - name: check kms version
+      assert:
+        that: kms_version.json.version|version >= KMS_VERSION|version
+        fail_msg: "Current version of KMS: {{ kms_version.json.version }}. Needed {{ KMS_VERSION }}"
+        success_msg: "Version of KMS server is correct"
+      when: not kms_status.failed
+
+  delegate_to: localhost
+  run_once: true
+  when: "tde is defined and admin_protection is defined and (tde or admin_protection)"
+
+- name: Check needed packages
+  block:
+    - name: Setup required variables
+      set_fact:
+        postgresql_required_packages:
+          - "{{ local_distr_path }}/patroni/patroni.tar.gz"
+          - "{{ local_distr_path }}/pgbouncer"
+          - "{{ local_distr_path }}/3rdparty/confd/confd-0.16.0-linux-amd64"
+
+    - name: Check postgres needed packages
+      stat:
+        path: "{{ item }}"
+      with_items: "{{ postgresql_required_packages }}"
+      register: postgresql_required_packages_exists
+
+    - name: Check packages state
+      assert:
+        that: postgresql_required_packages_exists.results[item].stat.exists == true
+        fail_msg: "{{ postgresql_required_packages_exists.results[item].item }} not exists"
+        success_msg: "{{ postgresql_required_packages_exists.results[item].item }} exists"
+      with_items: [0, 1, 2]
+
+  delegate_to: localhost
+  run_once: true
+
+- name: Check remote linux environment
+  import_tasks: linux_env.yml
+
+- name: Write to process status file that install process started
+  include_role:
+    name: common
+    tasks_from: add_process_status_logs
+  vars:
+    process_work_status: "{{ process_work_statuses.installation.start }}"
+  when: action_type == 'install'
+
+- name: Include task file for install python venv for ansible use
+  include_role:
+    name: checkup
+    tasks_from: python_env
+  when: inventory_hostname != 'etcd'
+
+- name: Generate random patroni_etcd_pass, etcd_root_pass passwords
+  block:
+
+    - name: generate passwords for patroni_etcd_pass, etcd_root_pass
+      password_generator:
+        ANSIBLE_MODULE_ARGS:
+          min_length: '{{ password_policy_params.min_length }}'
+          alpha_numeric: '{{ password_policy_params.alpha_numeric }}'
+          min_alpha_chars: '{{ password_policy_params.min_alpha_chars }}'
+          min_special_chars: '{{ password_policy_params.min_special_chars }}'
+          min_uppercase: '{{ password_policy_params.min_uppercase }}'
+          min_lowercase: '{{ password_policy_params.min_lowercase }}'
+          max_rpt_chars: '{{ password_policy_params.max_rpt_chars }}'
+      register: new_pass
+      environment:
+        - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
       become: true
-      when: "'update' in action_type and is_user_agreement_statuses_file"
-
-    - name: include update variables
-      include_vars:
-        file: "group_vars/update.yml"
-      no_log: "{{ nolog }}"
-      when: "action_type in ['update_major', 'update_minor']"
-
-    - name: include install variables
-      include_vars:
-        file: "group_vars/message.yml"
-      no_log: "{{ nolog }}"
-
-    - name: check passed action type
-      assert:
-        that: action_type in supported_action_types.installer
-        fail_msg: "{{ message_installer.fails.missing_configuration }}"
       run_once: true
+      loop: [patroni_etcd_pass, etcd_root_pass]
 
-    - name: import error info file for recovery test mode
-      include_vars: file="{{ playbook_dir }}/scripts/update_error_types.yml"
-      no_log: "{{ nolog }}"
-      when: is_recovery_test_mode
-
-    - name: check and use custom_config
-      import_tasks: check_and_use_custom_config.yml
-
-    - name: check KillUserProcesses in /etc/systemd/logind.conf
-      lineinfile:
-        dest: /etc/systemd/logind.conf
-        line: KillUserProcesses=yes
-      register: _kill_user_processes
-      check_mode: true
-      become: true
-
-    - name: assert if KillUserProcesses not change
-      assert:
-        that: _kill_user_processes.changed
-        fail_msg: "{{ message_installer.fails.kill_user_process_on | replace('host_name', inventory_hostname)}}"
-
-    - name: define cpu count for used
+    - name: save passwords for patroni_etcd_pass and etcd_root_pass
       set_fact:
-        proc_cpu_for_ansible_used: "{% if ansible_processor_vcpus >= 4 %}{{ ansible_processor_vcpus - 2 }}{% else %}1{% endif %}"
+        patroni_etcd_pass: '{{ new_pass.results[0].message }}'
+        etcd_root_pass: '{{ new_pass.results[1].message }}'
+      
+  no_log: "{{ nolog }}"
+  when: patroni
 
-    - name: import tls checkup
-      include_role:
-        name: tls
-        tasks_from: checkup.yml
-      when: "custom_config|length > 0 and action_type == 'install' and ldap_tls is defined and ldap_tls"
+- name: Prepare to update
+  block:
 
-    - name: check ansible environment
-      import_tasks: ansible_env.yml
-      run_once: true
-
-    - name: check input variables
-      import_tasks: verify_variables.yml
-      run_once: true
-      when: action_type == 'install'
-
-    - name: check fqdn of hosts
-      assert:
-        that: not 'localhost' in ansible_fqdn
-        fail_msg: "{{ message_installer.fails.incorrect_fqdn }}"
-
-    - name: check system version
-      assert:
-        that: ansible_distribution_version|float >= {{ required_os_version.min }} and ansible_distribution_version|float <= {{ required_os_version.max }}
-        fail_msg: "{{ message_installer.fails.system_version }}"
-        success_msg: "{{ message_installer.info.system_version }}"
-      when: skip_distr_and_os_version is not defined or (skip_distr_and_os_version is defined and not skip_distr_and_os_version)
-
-    - name: check python version
-      assert:
-        that: ansible_python_version|version == 2.7
-        fail_msg: "{{ message_installer.fails.python_version }}"
-        success_msg: "{{ message_installer.info.python_version }}"
-      when: ansible_os_family == "RedHat"
-
-    - name: set name of package
-      import_tasks: find_package.yml
-
-    - name: check remote linux environment
-      import_tasks: linux_env.yml
-
-    - name: check connect to KMS server
-      block:
-
-        - name: get status of kms serves
-          wait_for:
-            host: "{{ KMS_HOST }}"
-            port: "{{ KMS_PORT }}"
-            timeout: 5
-          register: kms_status
-          ignore_errors: yes
-
-        - name: check that kms server started
-          assert:
-            that: not kms_status.failed
-            fail_msg: "KMS server is not running. TDE and admin protection cannot be configured"
-
-        - name: get KMS version with api
-          uri:
-            url: "https://{{ KMS_HOST }}:{{ KMS_PORT }}/v1/sys/health"
-            validate_certs: no
-            return_content: yes
-          register: kms_version
-          when: not kms_status.failed
-
-        - name: check kms version
-          assert:
-            that: kms_version.json.version|version >= KMS_VERSION|version
-            fail_msg: "{{ message_installer.fails.kms_version.format(kms_version.json.version, KMS_VERSION) }}"
-            success_msg: "{{ message_installer.info.kms_version }}"
-          when: not kms_status.failed
-
-      delegate_to: localhost
-      run_once: true
-      when: "tde is defined and admin_protection is defined and (tde or admin_protection)"
-
-    #TODO Checking free virtual memory
-    - name: check PGHOME not exist, if actual type is install
-      block:
-
-        - name: check PGHOME not exist
-          find:
-            path: "{{ item.0 }}"
-            file_type: directory
-            use_regex: yes
-            patterns: "{{ item.1 }}"
-          with_nested:
-            - [ "/usr", "/usr/local" ]
-            - [ "pgsql*", "pangolin*"]
-          register: pghome_exists
-
-        - name: check that PGHOME doesn't exists
-          assert:
-            that: not item.matched
-            fail_msg: "{{ message_installer.fails.checking_exists_dir | replace('exists_path', '{}/{}'.format(item.item.0, item.item.1)) }}"
-            success_msg: "{{ message_installer.info.checking_exists_dir | replace('exists_path', '{}/{}'.format(item.item.0, item.item.1)) }}"
-          with_items: "{{ pghome_exists.results }}"
-
-      when: action_type == 'install'
-
-    - name: include task file for install python venv for ansible use
-      include_role:
-        name: checkup
-        tasks_from: python_env
-
-    - debug: msg="{{ update_error_types_breakpoint_msg }}"
-      when: is_recovery_test_mode and checkup_error_um001m and inventory_hostname == 'master'
-    - debug: msg="{{ update_error_types_breakpoint_msg }}"
-      when: is_recovery_test_mode and checkup_error_um001r and inventory_hostname == 'replica'
-    - debug: msg="{{ update_error_types_breakpoint_msg }}"
-      when: is_recovery_test_mode and checkup_error_um001e and inventory_hostname == 'etcd'
-
-    - name: check it when defined action only installation
-      import_tasks: check_action_install.yml
-      when: action_type == 'install'
-
-    - name: generate random patroni_etcd_pass, etcd_root_pass passwords
-      block:
-
-        - name: generate passwords for patroni_etcd_pass, etcd_root_pass
-          password_generator:
-            ANSIBLE_MODULE_ARGS:
-              min_length: '{{ password_policy_params.min_length }}'
-              alpha_numeric: '{{ password_policy_params.alpha_numeric }}'
-              min_alpha_chars: '{{ password_policy_params.min_alpha_chars }}'
-              min_special_chars: '{{ password_policy_params.min_special_chars }}'
-              min_uppercase: '{{ password_policy_params.min_uppercase }}'
-              min_lowercase: '{{ password_policy_params.min_lowercase }}'
-              max_rpt_chars: '{{ password_policy_params.max_rpt_chars }}'
-          register: new_pass
-          environment:
-            - PYTHONPATH: "{{ python.postgresql_venv_packages }}"
-          become: true
-          run_once: true
-          loop: [patroni_etcd_pass, etcd_root_pass]
-
-        - name: save passwords for patroni_etcd_pass and etcd_root_pass
-          set_fact:
-            patroni_etcd_pass: '{{ new_pass.results[0].message }}'
-            etcd_root_pass: '{{ new_pass.results[1].message }}'
-
-      no_log: "{{ nolog }}"
-
-    - name: check it when defined action only updating
-      import_tasks: check_action_update.yml
-      when: "action_type in ['update_major', 'update_minor']"
-
-    - name: set python interpretator
-      set_fact:
-        ansible_python_interpreter: '{{ python.global_bin_2 }}'
-
-    - name: include_role
-      include_role:
-        name: common
-        tasks_from: sudoers
-
-    - debug: msg="{{ update_error_types_breakpoint_msg }}"
-      when: is_recovery_test_mode and checkup_error_um002m and inventory_hostname == 'master'
-    - debug: msg="{{ update_error_types_breakpoint_msg }}"
-      when: is_recovery_test_mode and checkup_error_um002r and inventory_hostname == 'replica'
-    - debug: msg="{{ update_error_types_breakpoint_msg }}"
-      when: is_recovery_test_mode and checkup_error_um002e and inventory_hostname == 'etcd'
-
-  rescue:
-
-    - name: replica updated with error
+    - name: sync dictionary for each host
       set_fact:
         update_errors: "{{ update_errors|combine(data, recursive=True) }}"
         cacheable: yes
       vars:
         data:
-          aggregate: true
-          hosts:
-            replica: true
-          components:
-            checkup: true
-      run_once: true
-      when: inventory_hostname == 'replica'
+          aggregate: false
 
-    - name: master updated with error
-      set_fact:
-        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
-        cacheable: yes
-      vars:
-        data:
-          aggregate: true
-          hosts:
-            master: true
-          components:
-            checkup: true
-      run_once: true
-      when: inventory_hostname == 'master'
+    - name: get old env values
+      import_tasks: 'prepare_update.yml'
 
-    - name: etcd updated with error
-      set_fact:
-        update_errors: "{{ update_errors|combine(data, recursive=True) }}"
-        cacheable: yes
-      vars:
-        data:
-          aggregate: true
-          hosts:
-            etcd: true
-          components:
-            checkup: true
-      run_once: true
-      when: inventory_hostname == 'etcd'
-
-  always:
-
-    - name: write to process status work
+    - name: write to process status work that update process started
       include_role:
         name: common
         tasks_from: add_process_status_logs
       vars:
-        process_work_status: "{% if 'update' in action_type %}\
-                                  {{ process_work_statuses.all_updates.start }}\
-                              {% else %}\
-                                  {{ process_work_statuses.installation.start }}\
-                              {% endif %}"
-      when: "not update_errors.aggregate \
-             and inventory_hostname != 'etcd'"
+        process_work_status: "{{ process_work_statuses.update_minor.start }}"
 
-    - name: to stop install process if error
-      fail: msg='Install process must be stopped by error'
-      when: "action_type == 'install' and \
-            hostvars['master' or 'replica' or 'etcd'].update_errors.aggregate"
+    - name: redefine ports
+      import_tasks: redefine_variables.yml
+      vars:
+        _redefinevars_pgport: "{{ PGPORT_OLD }}"
+      # старые порты наверняка должны использоваться только для типов обновления Минорные и Конфигурации
+      when: "action_type != 'update_major'"
+
+    - name: redefine ports
+      import_tasks: redefine_variables.yml
+      vars:
+        _redefinevars_pgbouncer: "{{ PGBOUNCERPORT_OLD }}"
+      # старые порты наверняка должны использоваться только для типов обновления Минорные и Конфигурации
+      when: "pgbouncer and action_type != 'update_major'"
+
+    - name: redefine ports
+      import_tasks: redefine_variables.yml
+      vars:
+        _redefinevars_haproxyport: "{{ HAPROXYPORT_OLD }}"
+      # старые порты наверняка должны использоваться только для типов обновления Минорные и Конфигурации
+      when: "haproxy and action_type != 'update_major'"
+     
+    - name: backup old files
+      include_role:
+        name: common
+        tasks_from: backup_all
+
+    - name: auto megre postgresql.conf, pg_hba.conf, postgres.yml
+      include_role:
+        name: common
+        tasks_from: merge_configs
+
+    - name: define current master role of the cluster
+      include_role:
+        name: patroni
+        tasks_from: update_define_roles_of_nodes.yml
+      run_once: true
+
+    - name: change role of current host in cluster
+      include_role:
+        name: patroni
+        tasks_from: update_run_switchover
+      vars:
+        current_database_port: "{{ ports.pg }}"
+        _runswitchover_pghome: "{{ PGHOME_OLD }}"
+      run_once: true
+      when: installation_type == 'cluster' and hostvars['master'].ansible_fqdn != current_master
+
+    - name: check database connect to PG SE (master and replica)
+      shell: '{{ PGHOME_OLD }}/bin/pg_isready -h 127.0.0.1 -p {{ ports.pg }}'
+      become: true
+      become_user: postgres
+      when: inventory_hostname != 'etcd'
+
+    - name: create update disallow file
+      file:
+        path: "{{ update_status_files.disallow_update }}"
+        owner: postgres
+        group: postgres
+        mode: '600'
+        state: touch
+      become: true
+      when: inventory_hostname != 'etcd'
+  
+    - name: prepare patroni user
+      include_role:
+        name: postgresql
+        tasks_from: add_and_configure_patroni_db_user.yml
+      when: patroni
+
+    - name: disable backup_user in database
+      include_role:
+        name: common
+        tasks_from: disable_backup_user
+      when: SRC
+    
+  when: "'update' in action_type"
+
+- name: remove pgaudit as extension
+  include_role:
+    name: postgresql
+    tasks_from: update_remove_pgaudit_as_extension
+  when: "postgres and 'update' in action_type"
+
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+- name: Include_role
+  include_role:
+    name: common
+    tasks_from: sudoers
