@@ -1,0 +1,14 @@
+[Unit]
+Description=confd service
+After=confd.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+PermissionsStartOnly=true
+ExecStart=/opt/confd/bin/confd -watch -backend etcd -node http://127.0.0.1:2379
+
+[Install]
+WantedBy=multi-user.target

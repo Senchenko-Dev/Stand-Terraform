@@ -1,0 +1,194 @@
+- name: Run scout edit pg_hba scenario
+  block:
+
+    - name: set default error msg
+      set_fact:
+          _ctrlscouteditpghba_default_error_msg: "{{ control_msgs.fails.unexpected }}"
+      no_log: "{{ nolog }}"
+
+    - name: run control_pre_check
+      import_tasks: control_pre_check.yml
+      vars:
+        _controlprecheck_is_db_and_patroni_started: true
+        _controlprecheck_is_db_backup: true
+        _controlprecheck_is_db_lagging: true
+        _controlprecheck_is_maintenance_mode: true
+
+    - name: define default variable with scenario error
+      set_fact:
+        _ctrlscouteditpghba_scenario_error: false
+
+    - name: define version of current python interpreter
+      set_fact:
+        previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+    - name: check password_encryption, if not scram-sha-256
+      block:
+
+        - name: get password_encryption
+          reciter:
+            src: "{{ PGDATA_OLD }}/postgresql.conf"
+            action: get
+            parameter: password_encryption
+          register: password_encryption_val
+
+        - name: redefine error msg
+          set_fact:
+            _ctrlscouteditpghba_default_error_msg: "{{ control_msgs.fails.password_encryption_fail }}"
+          no_log: "{{ nolog }}"
+          when: "password_encryption_val.message != 'scram-sha-256'"
+
+        - name: check password_encryption
+          assert:
+            that: "password_encryption_val.message == 'scram-sha-256'"
+            fail_msg: "password_encryption is incorrect"
+
+      when: "control_name == 'RLM'"
+
+    - name: check exists patroni and define usage config
+      block:
+
+        - name: check exists patroni
+          stat: path="{{ PYTHON_VENV_OLD }}/bin/patroni"
+          register: patroni_exists
+
+        - name: use pg_hba.conf, if patroni not exists
+          set_fact:
+            _ctrlscouteditpghba_pg_hba_file: "{{ PGDATA }}/pg_hba.conf"
+          when: not patroni_exists.stat.exists
+
+        - name: use postgres.yml, if patroni exists
+          set_fact:
+            _ctrlscouteditpghba_pg_hba_file: "{{ patroni_files.conf_dir }}/postgres.yml"
+          when: patroni_exists.stat.exists
+
+    - name: save scouting data for control scenario
+      block:
+
+        - name: set default output scout strings
+          set_fact:
+            _ctrlscouteditpghba_allowed_type_conn: ""
+            _ctrlscouteditpghba_allowed_db: ""
+            _ctrlscouteditpghba_allowed_users: ""
+            _ctrlscouteditpghba_allowed_bits: ""
+            _ctrlscouteditpghba_disallowed_ips: ""
+            _ctrlscouteditpghba_allowed_conn_settings: ""
+
+        - name: set output string of allowed conn types
+          set_fact:
+            _ctrlscouteditpghba_allowed_type_conn: "{{ item }},{{ _ctrlscouteditpghba_allowed_type_conn }}"
+          loop: "{{ control_edit_pg_hba.allowed_type_conn }}"
+
+        - name: get list of databases
+          postgresql_query:
+            port: "{{ ports.pg }}"
+            query: SELECT datname FROM pg_database
+          register: allowed_db
+
+        - name: set output string of allowed databases
+          set_fact:
+            _ctrlscouteditpghba_allowed_db: "{{ item.datname }},{{ _ctrlscouteditpghba_allowed_db }}"
+          loop: "{{ allowed_db.query_result }}"
+          loop_control:
+            index_var: index
+          when: "'postgres' not in allowed_db.query_result[index].datname and\
+                'template' not in allowed_db.query_result[index].datname"
+
+        - name: set output string of databases (add db)
+          set_fact:
+            _ctrlscouteditpghba_allowed_db: "{{ item }},{{ _ctrlscouteditpghba_allowed_db }}"
+          loop: "{{ control_edit_pg_hba.allowed_db }}"
+          
+        - name: set output string of allowed users
+          set_fact:
+            _ctrlscouteditpghba_allowed_users: "{{ item }},{{ _ctrlscouteditpghba_allowed_users }}"
+          loop: "{{ control_edit_pg_hba.allowed_users }}"
+
+        - name: set output string of allowed mask bits
+          set_fact:
+            _ctrlscouteditpghba_allowed_bits: "{{ item }},{{ _ctrlscouteditpghba_allowed_bits }}"
+          loop: "{{ control_edit_pg_hba.allowed_bits }}"
+
+        - name: set output string of disallowed IPs
+          set_fact:
+            _ctrlscouteditpghba_disallowed_ips: "{{ item }},{{ _ctrlscouteditpghba_disallowed_ips }}"
+          loop: "{{ control_edit_pg_hba.disallowed_ips }}"
+
+        - name: set output string of allowed conn settengs
+          set_fact:
+            _ctrlscouteditpghba_allowed_conn_settings: "{{ item }},{{ _ctrlscouteditpghba_allowed_conn_settings }}"
+          loop: "{{ control_edit_pg_hba.allowed_conn_settings }}"
+
+        - name: set default output scout strings
+          set_fact:
+            _ctrlscouteditpghba_allowed_type_conn: "{% if _ctrlscouteditpghba_allowed_type_conn|length == 0 %}{{ _ctrlscouteditpghba_allowed_type_conn }}\
+                                              {% else %}{{ _ctrlscouteditpghba_allowed_type_conn[0:-1] }}{% endif %}"
+            _ctrlscouteditpghba_allowed_db: "{% if _ctrlscouteditpghba_allowed_db|length == 0 %}{{ _ctrlscouteditpghba_allowed_db }}\
+                                        {% else %}{{ _ctrlscouteditpghba_allowed_db[0:-1] }}{% endif %}"
+            _ctrlscouteditpghba_allowed_users: "{% if _ctrlscouteditpghba_allowed_users|length == 0 %}{{ _ctrlscouteditpghba_allowed_users }}\
+                                          {% else %}{{ _ctrlscouteditpghba_allowed_users[0:-1] }}{% endif %}"
+            _ctrlscouteditpghba_allowed_bits: "{% if _ctrlscouteditpghba_allowed_bits|length == 0 %}{{ _ctrlscouteditpghba_allowed_bits }}\
+                                          {% else %}{{ _ctrlscouteditpghba_allowed_bits[0:-1] }}{% endif %}"
+            _ctrlscouteditpghba_disallowed_ips: "{% if _ctrlscouteditpghba_disallowed_ips|length == 0 %}{{ _ctrlscouteditpghba_disallowed_ips }}\
+                                            {% else %}{{ _ctrlscouteditpghba_disallowed_ips[0:-1] }}{% endif %}"
+            _ctrlscouteditpghba_allowed_conn_settings: "{% if _ctrlscouteditpghba_allowed_conn_settings|length == 0 %}{{ _ctrlscouteditpghba_allowed_conn_settings }}\
+                                                  {% else %}{{ _ctrlscouteditpghba_allowed_conn_settings[0:-1] }}{% endif %}"
+
+    - name: get pg_hba rule strings with {{ control_edit_pg_hba.allowed_users }}
+      include_role:
+        name: common
+        tasks_from: use_auto_merge
+      vars:
+        _useamerge_old_cfg_file: "{{ _ctrlscouteditpghba_pg_hba_file }}"
+        _useamerge_pghba_mode: "get_pg_hba"
+        _useamerge_pghba_users: "{{ _ctrlscouteditpghba_allowed_users }}"
+
+    - name: print scout result
+      debug:
+        msg: "{{ control_name }}.INFO__\
+              {{ _ctrlscouteditpghba_allowed_type_conn }}|\
+              {{ _ctrlscouteditpghba_allowed_db }}|\
+              {{ _ctrlscouteditpghba_allowed_users }}|\
+              {{ _ctrlscouteditpghba_disallowed_ips }}|\
+              {{ _ctrlscouteditpghba_allowed_bits }}|\
+              {{ _ctrlscouteditpghba_allowed_conn_settings }}|\
+              {{ _useamerge_result }}\
+              __{{ control_name }}.INFO"
+
+  rescue:
+
+    - name: print variable with message
+      debug:
+        msg: "{{ _ctrlscouteditpghba_default_error_msg }}"
+
+    - name: redefine variable with scenario error
+      set_fact:
+        _ctrlscouteditpghba_scenario_error: true
+
+  always:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ previous_python_interpreter }}'
+
+    - name: check status scenario
+      assert:
+        that: not _ctrlscouteditpghba_scenario_error
+        fail_msg: "{{ control_msgs.fails.scenario }}"
+
+    - name: print result message
+      debug:
+        msg: "{{ control_msgs.ok.scout_edit_pg_hba }}"
+      when: not _ctrlscouteditpghba_scenario_error
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres
+  when: "inventory_hostname == 'master'"

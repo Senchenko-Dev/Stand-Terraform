@@ -1,0 +1,180 @@
+- name: Check backup mode, lagging between nodes and maintenance mode of patroni
+  import_tasks: control_pre_check.yml
+  vars:
+    _controlprecheck_is_db_and_patroni_started: true
+    _controlprecheck_is_db_backup: true
+    _controlprecheck_is_db_lagging: true
+    _controlprecheck_is_maintenance_mode: true
+
+- name: Preparation actions before stop
+  block:
+
+    - name: set variable with host to stop
+      set_fact:
+        hosts_to_stop: '{{ chosen_host_to_stopping }}'
+      when: chosen_host_to_stopping is defined
+
+    - name: define default value for variable with stopped hosts
+      set_fact:
+        json_structure:
+          stopped_hosts: "{{ hostvars['master'].ansible_fqdn }}"
+
+    - name: disable technical users and monitoring
+      import_tasks: control_monitoring_operations.yml
+      vars:
+        operation: disable
+      when: "monitoring_zabbix is defined and monitoring_zabbix"
+
+    - name: clear remote tmp directory
+      file:
+        path: "{{ control_files.tmp_dir }}"
+        state: absent
+
+    - name: create remote tmp directory
+      file:
+        path: "{{ control_files.tmp_dir }}"
+        state: directory
+        mode: '0700'
+        owner: 'postgres'
+        group: 'postgres'
+        recurse: yes
+
+    - name: create nodes.json file
+      file:
+        path: "{{ control_files.tmp_dir }}/{{ control_files.json_file }}"
+        state: touch
+        owner: postgres
+        group: postgres
+        mode: '600'
+
+    - name: check that nodes.json file
+      stat:
+        path: "{{ control_files.tmp_dir }}/{{ control_files.json_file }}"
+      register: json_with_stopped_nodes
+
+    - name: set error flag if file is not exists
+      set_fact:
+        control_error_flag: true
+      when: not json_with_stopped_nodes.stat.exists
+
+    - name: check that json file is exists
+      assert:
+        that: json_with_stopped_nodes.stat.exists
+        fail_msg: "{{ control_msgs.fails.json_not_exists }}"
+
+  become: true
+
+- name: Start scenario stop database
+  block:
+
+    - name: run checkpoint
+      include_role:
+        name: postgresql
+        tasks_from: update_run_checkpoint.yml
+      vars:
+        _runcheckpoint_database_port: "{{ ports.pg }}"
+
+    - name: define roles of nodes
+      include_role:
+        name: patroni
+        tasks_from: update_define_roles_of_nodes.yml
+
+    - name: stop cluster, replica of cluster or standalone with patroni
+      block:
+
+      # This block will execute when user selected one host of cluster for stopped
+
+        - name: turn off synchronous mode
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "{{ item }}"
+          with_items:
+            - "synchronous_mode: false"
+            - "synchronous_mode_strict: false"
+          when: hosts_to_stop == 'replica' and installation_type == 'cluster'
+          run_once: true
+
+      #This block will run, when user of control selected replica of cluster for stop
+        - name: stop replica
+          block:
+
+            - name: stop database on replica
+              service:
+                name: patroni
+                state: stopped
+              become_user: root
+
+            - name: check that postgresql is stopped
+              shell: '{{ PGHOME }}/bin/pg_ctl status -D {{ PGDATA }}'
+              register: result
+              until: result.stdout.find("no server running") != -1
+              failed_when: result.rc != 3
+
+          when: current_replica is defined and ansible_fqdn == current_replica and (hosts_to_stop == 'cluster' or hosts_to_stop == 'replica')
+
+      #This block will run, when user of control selected all nodes of cluster for stop or selected standalone host for stop
+        - name: stop master
+          block:
+
+            - name: stop database on master
+              service:
+                name: patroni
+                state: stopped
+              become_user: root
+              when: patroni
+
+            - name: stop database
+              service:
+                name: postgresql
+                state: stopped
+              become_user: root
+              when: not patroni
+
+            - name: check that postgresql is stopped
+              shell: '{{ PGHOME }}/bin/pg_ctl status -D {{ PGDATA }}'
+              register: result
+              until: result.stdout.find("no server running") != -1
+              failed_when: result.rc != 3
+
+          when: ansible_fqdn == current_master and (hosts_to_stop == 'cluster' or hosts_to_stop == 'master')
+
+        - name: redefine variable with stopped hosts if chosen cluster
+          set_fact:
+            json_structure: "{{ json_structure|combine(data, recursive=True) }}"
+          vars:
+            data:
+              previous_master: "{{ current_master }}"
+              stopped_hosts: ['{{ current_master }}', '{{ current_replica }}']
+          when: hosts_to_stop == 'cluster'
+
+        - name: redefine variable with stopped hosts if chosen replica
+          set_fact:
+            json_structure: "{{ json_structure|combine(data, recursive=True) }}"
+          vars:
+            data:
+              stopped_hosts: ['{{ current_replica }}']
+          when: hosts_to_stop == 'replica'
+
+        - name: write file with roles of nodes
+          copy:
+            content: "{{ json_structure | to_json }}"
+            dest: '{{ control_files.tmp_dir }}/{{ control_files.json_file }}'
+
+        - name: print result message
+          debug:
+            msg: "{{ control_msgs.ok.stop_database }}"
+          run_once: true
+
+  become: true
+  become_user: postgres
+  when: not control_error_flag
+
+  rescue:
+
+    - name: print variable with message
+      debug:
+        msg: "{{ control_msgs.fails.unexpected }}"
+      run_once: true
+      when: not control_error_flag

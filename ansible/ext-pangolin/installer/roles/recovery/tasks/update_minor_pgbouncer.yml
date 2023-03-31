@@ -1,0 +1,32 @@
+- name: Recovery pgbouncer
+  block:
+
+    - name: recovery master from cluster/standalone, if update had error in master
+      block:
+
+        - name: recovery replica, if update had error in replica node
+          include_role:
+            name: pgbouncer
+            tasks_from: revert.yml
+
+      when: inventory_hostname == 'replica' and update_errors.hosts.replica and update_errors.components.pgbouncer
+
+    - name: recovery master and replica from cluster/standalone
+      block:
+
+        - name: recovery master node from cluster/standalone
+          include_role:
+            name: pgbouncer
+            tasks_from: revert.yml
+          when: inventory_hostname == 'master'
+
+        - name: recovery replica node from cluster
+          include_role:
+            name: pgbouncer
+            tasks_from: revert.yml
+          when: inventory_hostname == 'replica'
+      
+      when: update_errors.hosts.master or (update_errors.hosts.replica and not update_errors.components.pgbouncer)
+
+  # pgbouncer is True - компонента была обновлена
+  when: pgbouncer and inventory_hostname != 'etcd' and (update_errors.components.pgbouncer or update_errors.components.haproxy)

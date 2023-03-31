@@ -1,0 +1,219 @@
+---
+#must be running only if ssl mode is turned on
+- name: Check pgdata, when current PG SE version equal 4.3.0
+  block:
+
+    - name: check /pgdata/04/data is PGDATA
+      shell: ps aux | grep postgres | grep /usr/pgsql-se-04 | grep -v 'grep' | grep -v 'patroni' | awk -F' ' '{print$13}'
+      register: pgdata_real
+
+    - name: raise msg if dir not exist
+      debug:
+        msg: "{{ control_name }}.FAIL__В кандидате на обновление обнаружено некорректное расположение PGDATA. Сейчас - {{ pgdata_real.stdout_lines }}. Должно быть - /pgdata/04/data__{{ control_name }}.FAIL"
+      when: "pgdata_real|length == 0 or ('/pgdata/04/data' not in pgdata_real.stdout)"
+
+  when: ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 1
+
+- name: Check pgdata, when current PG SE version less than 4.3.0
+  block:
+
+    - name: Check /pgdata/11/data is PGDATA
+      shell: ps aux | grep postgres | grep /usr/local/pgsql | grep -v 'grep' | grep -v 'patroni' | awk -F' ' '{print$13}'
+      register: pgdata_real
+
+    - name: Raise msg if dir not exist
+      debug:
+        msg: "{{ control_name }}.FAIL__В кандидате на обновление обнаружено некорректное расположение PGDATA. Сейчас - {{ pgdata_real.stdout_lines }}. Должно быть - /pgdata/11/data/__{{ control_name }}.FAIL"
+      when: "pgdata_real|length == 0 or ('/pgdata/11/data' not in pgdata_real.stdout)"
+
+  when: ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 0
+
+- name: Run scout scripts 
+  block:
+
+    - name: ensure {{ REMOTE_TMP }} directory exist
+      file:
+        path: "{{ REMOTE_TMP }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: 0750
+
+    - name: copy scripts to master
+      template:
+        src: '{{ item }}.sh.j2'
+        dest: '{{ REMOTE_TMP }}/{{ item }}.sh'
+        owner: postgres
+        group: postgres
+        mode: '0755'
+      with_items:
+        - 'check_public'
+        - 'check_unknown_ext'
+        - 'check_ports'
+    
+    - name: run scouting script for public
+      shell: 'timeout 10s {{ REMOTE_TMP }}/check_public.sh'
+      register: public_output
+      run_once: true
+      become_user: postgres
+
+    - name: write to stdout pre-update status public_output
+      debug:
+        msg: "{{ control_name }}.FAIL__Данные в схеме public существуют, необходимо руками их перенести в другую схему и повторить обновление. {{ public_output.stdout_lines }}__{{ control_name }}.FAIL"
+      when: public_output.stdout|length != 0
+    
+    - name: run scouting script for unknown extensions
+      shell: 'timeout 10s {{ REMOTE_TMP }}/check_unknown_ext.sh'
+      register: unknown_ext
+      run_once: true
+      become_user: postgres
+
+    - name: write to stdout pre-update status unknown_ext
+      debug:
+        msg: "{{ control_name }}.WARNING__Текущая версия СУБД содержит следующие расширения, невходящие в состав PGSE {{ unknown_ext.stdout_lines }}. Для дальнейшей работы данных расширений необходимо после обновления проверить их работоспособность.__{{ control_name }}.WARNING"
+      when: unknown_ext.stdout|length != 0
+    
+    - name: run scouting script for checking ports
+      shell: '{{ REMOTE_TMP }}/check_ports.sh'
+      register: check_ports
+
+    - name: new and old PGPORTs not equal
+      debug:
+        msg: "{{ control_name }}.WARNING__В кандидате на обновление обнаружено использование старого порта PGPORT={{ PGPORT_OLD }}, нерекомендуемого ДКБ и который возможно изменить во время мажорного обновления СУБД на {{ ports.pg }}.__{{ control_name }}.WARNING"
+      when: "postgres and ports.pg not in check_ports.stdout"
+
+    - name: new and old pgbounser ports not equal
+      debug:
+        msg: "{{ control_name }}.WARNING__В кандидате на обновление обнаружено использование старого pgbouncer порта {{ PGBOUNCERPORT_OLD }}, нерекомендуемого ДКБ и который возможно изменить во время мажорного обновления СУБД на {{ ports.pgbouncer }}.__{{ control_name }}.WARNING"
+      when: "pgbouncer and ports.pgbouncer not in check_ports.stdout"
+
+    - name: new and old haproxy ports not equal
+      debug:
+        msg: "{{ control_name }}.WARNING__В кандидате на обновление обнаружено использование старого haproxy порта {{ HAPROXYPORT_OLD }}, нерекомендуемого ДКБ и который возможно изменить во время мажорного обновления СУБД на {{ ports.haproxy }}.__{{ control_name }}.WARNING"
+      when: "haproxy and ports.haproxy not in check_ports.stdout"
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+    - name: check cluster configuration and component installed
+      block:
+
+        - name: get installer.cluster_type
+          postgresql_query:
+            port: "{{ PGPORT_OLD }}"
+            query: SHOW installer.cluster_type
+          register: current_cluster_type
+
+        - name: check cluster_type from DB and actual state
+          debug:
+            msg: "{{ control_name }}.WARNING__В кандидате на обновление обнаружено несоответствие установленных компонент кластера PG SE с текущим типом конфигурации.__{{ control_name }}.WARNING"
+          with_dict: "{{ current_cluster_type.query_result }}"
+          when: "item.value != tag"
+
+    - name: show users outside the role model
+      block:
+
+        - name: get list of users
+          postgresql_query:
+            query: SELECT usename FROM pg_user WHERE usesysid != all
+              ((SELECT grolist FROM pg_group WHERE groname = 'as_admin') ||
+              (SELECT grolist FROM pg_group WHERE groname = 'db_admin') ||
+              (SELECT grolist FROM pg_group WHERE groname = 'as_TUZ') ||
+              (SELECT grolist FROM pg_group WHERE groname = 'pg_read_all_settings') ||
+              (SELECT grolist FROM pg_group WHERE groname = 'as_admin_read') ||
+              (SELECT grolist FROM pg_group WHERE groname = 'all-sa-pam-group'))
+              AND usename NOT IN ('backup_user', 'postgres', 'auditor', 'pgbouncer', 'pstgcmdb', 'masteromni', 'patroni', 'cron')
+            port: "{{ PGPORT_OLD }}"
+          register: wrong_users
+
+        - name: prepare a list of users
+          set_fact:
+            list_wrong_users: []
+
+        - name: define a list of users
+          set_fact:
+            list_wrong_users: '{{ list_wrong_users + [item.usename] }}'
+          loop: '{{ wrong_users.query_result }}'
+
+        - name: show wrong users
+          debug:
+            msg: "{{ control_name }}.WARNING__Пользователь {{ list_wrong_users | join(',') }} не соответвует ролевой модели. Его настройка произведена не будет__{{ control_name }}.WARNING"
+          when: list_wrong_users|length != 0
+
+      become_user: postgres
+      when: inventory_hostname == 'master'
+
+    - name: check user and script for data protector integration
+      block:
+
+        - name: set variable with status of backup_user
+          set_fact:
+            backup_user_is_using_in_file: false
+            backup_user_exists_in_db: false
+            path_to_manage_backup_sh_file: "{{ manage_backup_bin }}/{% if ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 0 %}11\
+                                            {% elif ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 1 %}04{% endif %}_manage_backup.sh"
+
+        - name: get info about users from db
+          postgresql_query:
+            query: "SELECT * FROM pg_user"
+            port: "{{ PGPORT_OLD }}"
+          register: backup_user_query
+
+        - name: redefine backup_user_exists_in_db variable if user exists
+          set_fact:
+            backup_user_exists_in_db: true
+          loop: "{{ backup_user_query.query_result }}"
+          when: "item.usename == 'backup_user'"
+
+        - name: get content from mahage_backup.sh file and check user in content
+          block:
+
+            - name: check that mahage_backup.sh file is exists
+              stat:
+                path: "{{ path_to_manage_backup_sh_file }}"
+              register: manage_backup_sh_file_is_exists
+
+            - name: print content of file and register it into variable
+              command:
+                cmd: "cat {{ path_to_manage_backup_sh_file }}"
+              register: content_of_sh_file
+              no_log: "{{ nolog }}"
+              become_user: root
+              when: manage_backup_sh_file_is_exists.stat.exists
+
+            - name: check that backup_user is using in manage_backup.sh file
+              set_fact:
+                backup_user_is_using_in_file: "{{ content_of_sh_file.stdout | check_backup_user_in_file }}"
+
+          when: backup_user_exists_in_db
+
+        - name: print {{ control_name }} message if backup_user doesn't exists
+          assert:
+            that: backup_user_exists_in_db and backup_user_is_using_in_file
+            fail_msg: "{{ control_name }}.FAIL__Техническая учетная запись backup_user не используется в процессе резервного копирования. \
+                       Обратитесь к администраторам БД__{{ control_name }}.FAIL"
+
+      become_user: postgres
+      when: SRC
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  when: ssl_error is not defined
+
+- name: Write to stdout about ssl failure
+  debug:
+    msg: "{{ ssl_failure }}"
+  when: ssl_failure is defined
+
+- name: Write to stdout about ssl error
+  debug:
+    msg: "{{ ssl_error }}"
+  when: ssl_error is defined
+
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.global_bin_2 }}'

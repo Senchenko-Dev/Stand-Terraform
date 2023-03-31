@@ -1,0 +1,103 @@
+---
+- name: Run scrips for update functions
+  block:
+
+    - name: define version of current python interpreter
+      set_fact:
+        previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+    - name: copy scripts
+      copy:
+        src: "{{ item }}"
+        dest: "{{ REMOTE_TMP }}/{{ item }}"
+        owner: postgres
+        group: postgres
+        mode: 0644
+      with_items:
+        - "update_functions.sql"
+        - "unlock_pg_proc.sql"
+        - "lock_pg_proc.sql"
+        - "update_views.sql"
+
+    - name: unlock pg_proc postgres
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        path_to_script: "{{ REMOTE_TMP }}/unlock_pg_proc.sql"
+        db: "{{ item.datname }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: apply update_functions script postgres
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        path_to_script: "{{ REMOTE_TMP }}/update_functions.sql"
+        db: "{{ item.datname }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: lock pg_proc postgres
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        path_to_script: "{{ REMOTE_TMP }}/lock_pg_proc.sql"
+        db: "{{ item.datname }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: restart DB
+      include_role:
+        name: patroni
+        tasks_from: update_with_patronictl.yml
+      vars:
+        endpoint_name: restart
+      when: patroni
+
+    - name: check exists pg service
+      stat:
+        path: "{{ service_path_dir }}/postgresql.service"
+      register: postgresql_service_exists
+      become_user: root
+
+    - name: restart postgresql
+      block:
+
+        - name: stop old version PG SE
+          service:
+            name: postgresql
+            state: stopped
+          become_user: root
+
+        - name: start new version PG SE
+          systemd:
+            name: postgresql
+            state: started
+            enabled: yes
+            daemon_reload: yes
+          become_user: root
+
+        - name: loop wait for pgsql started
+          shell: '{{ PGHOME }}/bin/pg_isready -h 127.0.0.1 -p {{ ports.pg }}'
+          register: result
+          until: result.stdout.find("accepting connections") != -1
+          retries: 60
+          delay: 1
+
+      when: postgresql_service_exists.stat.exists and not patroni
+
+    - name: apply update_views script postgres
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        path_to_script: "{{ REMOTE_TMP }}/update_views.sql"
+        db: "{{ item.datname }}"
+      with_items: "{{ current_dbs.query_result }}"
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ previous_python_interpreter }}'
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres

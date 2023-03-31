@@ -1,0 +1,114 @@
+- name: Define variables and call to patroni endpoint
+  block:
+
+    - name: check authentication parameter in patroni config
+      reciter:
+        src: "{{ patroni_files.conf_dir }}/postgres.yml"
+        action: check
+        parameter: restapi
+        inner_parameter: username
+      register: auth_parameter
+
+    - name: define default host if input host is empty
+      set_fact:
+        the_host_name: "{{ ansible_fqdn }}"
+      when: host_name is undefined
+
+    - name: define host if input host is defined
+      set_fact:
+        the_host_name: "{{ host_name }}"
+      when: host_name is defined
+
+    - name: define default method if input method is empty
+      set_fact:
+        mthd: PATCH
+      when: method_name is undefined
+
+    - name: define method if input method is defined
+      set_fact:
+        mthd: "{{ method_name }}"
+      when: method_name is defined
+
+    - name: define default url if input endpoint is empty
+      set_fact:
+        endpoint: config
+      when: endpoint_name is undefined
+
+    - name: define default url if input endpoint is defined
+      set_fact:
+        endpoint: "{{ endpoint_name }}"
+      when: endpoint_name is defined
+
+    - name: call api when not restart or reload
+      block:
+
+        - name: call patroni {{ endpoint }} endpoint without credentials
+          uri:
+            url: "http://{{ the_host_name }}:{{ ports.patroni }}/{{ endpoint }}"
+            method: "{{ mthd }}"
+            body: "{{ body_json }}"
+            body_format: json
+            return_content: yes
+          when: not auth_parameter.message
+
+        - name: call patroni {{ endpoint }} endpoint with authentication
+          block:
+
+            - name: define patroni api password
+              include_tasks: update_define_auth_password.yml
+
+            - name: call patroni {{ endpoint }} endpoint with credentials
+              uri:
+                url: "http://{{ the_host_name }}:{{ ports.patroni }}/{{ endpoint }}"
+                url_username: patroniyml
+                url_password: "{{ patroni_api_password }}"
+                method: "{{ mthd }}"
+                body: "{{ body_json }}"
+                body_format: json
+                return_content: yes
+
+          when: auth_parameter.message
+
+        - name: wait when patroni reload configuration file
+          pause:
+            seconds: 20
+
+      when: endpoint != 'restart' and endpoint != 'reload' and endpoint != 'empty'
+
+    - name: restart and reload patroni via rest api
+      block:
+
+        - name: send {{ endpoint }} command without authentication
+          uri:
+            url: 'http://{{ the_host_name }}:{{ ports.patroni }}/{{ endpoint }}'
+            method: "{{ mthd }}"
+            status_code: 200, 202
+            return_content: yes
+          when: not auth_parameter.message
+
+        - name: call patroni {{ endpoint }} command with authentication
+          block:
+
+            - name: define patroni api password
+              include_tasks: update_define_auth_password.yml
+
+            - name: send {{ endpoint }} command with authentication
+              uri:
+                url: 'http://{{ the_host_name }}:{{ ports.patroni }}/{{ endpoint }}'
+                url_username: patroniyml
+                url_password: "{{ patroni_api_password }}"
+                method: "{{ mthd }}"
+                status_code: 200, 202
+                return_content: yes
+
+          when: auth_parameter.message
+
+        - name: wait when patroni reload configuration file
+          pause:
+            seconds: 20
+
+      when: endpoint == 'restart' or endpoint == 'reload'
+
+  become: true
+  become_user: postgres
+  when: inventory_hostname != 'etcd' and patroni

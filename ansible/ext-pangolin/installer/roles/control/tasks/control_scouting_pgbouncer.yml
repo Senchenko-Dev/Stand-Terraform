@@ -1,0 +1,180 @@
+- name: Run control_pre_check
+  import_tasks: control_pre_check.yml
+  vars:
+    _controlprecheck_is_db_and_patroni_started: true
+    _controlprecheck_is_db_backup: true
+    _controlprecheck_is_db_lagging: true
+    _controlprecheck_is_maintenance_mode: true
+
+- name: Define version of current python interpreter
+  set_fact:
+    previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+- name: Check exists or stopped pgbouncer on server
+  block:
+
+    - name: check exists pgbouncer
+      block:
+
+      - name: pgbouncer not exists
+        set_fact:
+          scenario_error_not_exist: True
+        when: not pgbouncer_exists.stat.exists
+
+      - name: update error
+        set_fact:
+          scenario_error_not_exist: "{{ [ hostvars.replica.scenario_error_not_exist, hostvars.master.scenario_error_not_exist ] | bcompare('OR') }}"        
+        when: installation_type == 'cluster'
+
+    - name: check running pgbouncer
+      block:
+        
+        - name: gather services facts
+          service_facts:
+          no_log: "{{ nolog }}"
+
+        - name: check pgbouncer service
+          set_fact:
+            scenario_error_stopped: True
+          when: ansible_facts.services['pgbouncer.service'].state != 'running'
+        
+        - name: update error
+          set_fact:
+            scenario_error_stopped: "{{ [ hostvars.replica.scenario_error_stopped, hostvars.master.scenario_error_stopped ] | bcompare('OR') }}"
+          when: installation_type == 'cluster'
+      
+      when: not scenario_error_not_exist
+
+    - name: compare configs on master and replica
+      block:
+      
+        - name: get pgbouncer params from file
+          reciter:
+            src: "{{ pgbouncer_files.conf_dir }}/pgbouncer.ini"
+            action: get
+            parameter: "{{ item }}"
+          register: pgbouncer_param
+          with_items: "{{ pgbouncer_parameters.list_pgbouncer_params }}"
+
+        - name: update error differ
+          set_fact:
+            scenario_error_differ: "{{ scenario_error_differ | compare_pgbouncer_configs(hostvars['master'].pgbouncer_param.results, hostvars['replica'].pgbouncer_param.results) }}"
+        
+      when: not scenario_error_not_exist and not scenario_error_stopped and installation_type == 'cluster'
+              
+  rescue:
+
+    - name: print variable with message
+      debug:
+        msg: "{{ control_msgs.fails.unexpected }}"
+      run_once: true
+
+    - name: redefine variable with scenario error
+      set_fact:
+        scenario_error: true
+
+  always:
+
+    - name: check status scenario
+      assert:
+        that: not scenario_error_not_exist
+        fail_msg: "{{ control_msgs.fails.not_exist_pgbouncer }}"
+      run_once: true
+
+    - name: check status scenario
+      assert:
+        that: not scenario_error_differ
+        fail_msg: "{{ control_msgs.fails.differ_pgbouncer }}"
+      run_once: true
+
+    - name: check status scenario
+      assert:
+        that: not scenario_error_stopped
+        fail_msg: "{{ control_msgs.fails.stopped_pgbouncer }}"
+      run_once: true
+
+    - name: check status scenario
+      assert:
+        that: not scenario_error
+        fail_msg: "{{ control_msgs.fails.scenario }}"
+      run_once: true
+
+  become: true
+  become_user: postgres
+  when: inventory_hostname != 'etcd'
+
+- name: Define roles of nodes
+  include_role:
+    name: patroni
+    tasks_from: update_define_roles_of_nodes.yml
+
+- name: Scouting pgBouncer params
+  block:
+    
+    - name: get pgbouncer from file
+      reciter:
+        src: "{{ pgbouncer_files.conf_dir }}/pgbouncer.ini"
+        action: get
+        parameter: "{{ item }}"
+      register: pgbouncer_param
+      with_items: "{{ pgbouncer_parameters.list_pgbouncer_params }}"
+    
+    - name: get recomend params
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: show max_connections
+      register: recomend_value
+
+    - name: update recommend value
+      set_fact:
+        default_recommend_base_db: "{{ recomend_value.query_result.0.max_connections|int - pg_coef_conns }}"
+    
+    - name: print pgbouncer params
+      debug:
+        msg: "{{ control_name }}.INFO__\
+              {{ item.item }}|\
+              {% if item.message != '' %}{{ item.message }}{% else %}\
+              {{ pgbouncer_parameters.default_community_value[item.item] }}{% endif %}|\
+              {{ pgbouncer_parameters.default_value[item.item] }}|\
+              {{ pgbouncer_parameters.need_recommend[item.item] }}\
+              __{{ control_name }}.INFO"
+      with_items:
+        - "{{ pgbouncer_param.results }}"
+
+  rescue:
+
+    - name: print variable with message
+      debug:
+        msg: "{{ control_msgs.fails.unexpected }}"
+
+    - name: redefine variable with scenario error
+      set_fact:
+        scenario_error: true
+
+  always:
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ previous_python_interpreter }}'
+
+    - name: check status scenario
+      assert:
+        that: not scenario_error
+        fail_msg: "{{ control_msgs.fails.scenario }}"
+
+    - name: print result message
+      debug:
+        msg: "{{ control_msgs.ok.scouting_pgbouncer }}"
+      when: not scenario_error
+
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres
+  when: ansible_fqdn == current_master

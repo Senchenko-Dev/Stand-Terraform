@@ -1,0 +1,16 @@
+do $$
+DECLARE
+                rec RECORD;
+                sqlstring varchar;
+BEGIN
+for rec in (SELECT e.extname, n.nspname FROM pg_extension e
+                JOIN pg_namespace n ON e.extnamespace=n.oid WHERE e.extrelocatable='true')
+loop
+                RAISE NOTICE 'moving extension % from schema % to schema ext', rec.extname, rec.nspname;
+                sqlstring := format('alter extension %s set schema ext', quote_ident(rec.extname));
+                execute sqlstring;
+                RAISE NOTICE 'done';
+end loop;
+END;
+$$
+LANGUAGE plpgsql;

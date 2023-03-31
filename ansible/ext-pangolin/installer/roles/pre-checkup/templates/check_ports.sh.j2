@@ -1,0 +1,5 @@
+#!/bin/bash
+ 
+netstat -tulpn 2>/dev/null | grep postgres | awk '{print $4}' | awk -F ":" '{print $2}'
+netstat -tulpn 2>/dev/null | grep pgbouncer | awk '{print $4}' | awk -F ":" '{print $2}'
+netstat -tulpn 2>/dev/null | grep haproxy | awk '{print $4}' | awk -F ":" '{print $2}'

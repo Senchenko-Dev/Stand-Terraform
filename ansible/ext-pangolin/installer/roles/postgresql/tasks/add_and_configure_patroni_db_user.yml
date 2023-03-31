@@ -1,0 +1,88 @@
+- name: Define version of current python interpreter
+  set_fact:
+    previous_python_interpreter: "{{ ansible_python_interpreter }}"
+
+- name: Set python interpretator
+  set_fact:
+    ansible_python_interpreter: '{{ python.postgresql_venv }}/bin/python3'
+
+- name: Setting patroni user
+  block:
+
+    - name: create patroni role with random password
+      block:
+
+        - name: create patroni role with random password
+          include_role:
+            name: postgresql
+            tasks_from: generate_and_update_db_user_pass.yml
+          vars:
+            _genupdatepass_dbuser: patroni
+
+        - name: save patroni_user_pass
+          set_fact:
+            patroni_user_pass: "{{ _genupdatepass_generated_pass }}"
+          no_log: "{{ nolog }}"
+
+      when: inventory_hostname == 'master'
+
+    - name: save patroni_user_pass
+      set_fact:
+        patroni_user_pass: "{{ patroni_user_pass }}"
+      no_log: "{{ nolog }}"
+      run_once: true
+      when: "'update' in action_type"
+       
+    - name: configure patroni role
+      postgresql_query:
+        port: "{{ ports.pg }}"
+        query: ALTER ROLE "patroni" LOGIN SUPERUSER REPLICATION VALID UNTIL 'infinity' CONNECTION LIMIT 5
+      when: inventory_hostname == 'master' 
+    
+    - name: check exists {{ pg_encrypt_cfg }}
+      stat: 
+        path: "{{ pg_encrypt_cfg }}"
+      register: pg_encrypt_cfg_exists
+      become_user: root
+
+    - name: create encrypt space for postgres
+      include_role:
+        name: postgresql
+        tasks_from: create_encrypt_space
+      vars:
+        username: "{{ item.username }}"
+        database: "{{ item.database }}"
+        password: "{{ item.password }}"
+        address: "{{ item.address }}"
+      with_items: 
+        - { username: "patroni", database: "postgres",    password: "{{ patroni_user_pass }}", address: "{{ hostvars['master'].ansible_fqdn }}" }
+        - { username: "patroni", database: "postgres",    password: "{{ patroni_user_pass }}", address: "localhost" }
+        - { username: "patroni", database: "replication", password: "{{ patroni_user_pass }}", address: "{{ hostvars['master'].ansible_fqdn }}" }
+        - { username: "patroni", database: "replication", password: "{{ patroni_user_pass }}", address: "localhost" }
+      when: "action_type == 'install' or pg_encrypt_cfg_exists.stat.exists"
+
+    - name: create encrypt space for postgres
+      include_role:
+        name: postgresql
+        tasks_from: create_encrypt_space
+      vars:
+        username: "{{ item.username }}"
+        database: "{{ item.database }}"
+        password: "{{ item.password }}"
+        address: "{{ item.address }}"
+      with_items: 
+        - { username: "patroni", database: "postgres",    password: "{{ patroni_user_pass }}", address: "{{ hostvars['replica'].ansible_fqdn }}" }
+        - { username: "patroni", database: "replication", password: "{{ patroni_user_pass }}", address: "{{ hostvars['replica'].ansible_fqdn }}" }
+      when: "installation_type == 'cluster' and (action_type == 'install' or pg_encrypt_cfg_exists.stat.exists)"
+  
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ previous_python_interpreter }}'
+  
+  environment:
+    - PGHOST: "{{ ansible_fqdn }}"
+    - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+    - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+  become: true
+  become_user: postgres
+  when: inventory_hostname != 'etcd'

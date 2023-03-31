@@ -1,0 +1,3 @@
+#!/bin/bash
+
+grep "host all .* 0.0.0.0/0 md5" {{ the_configure_pgdata }}/pg_hba.conf | sed "s/,/, /g" | awk '{for (i=3; i<=NF; i++) print $i}' | awk '$NF != "md5"' | awk '$NF != "0.0.0.0/0"' | grep -P '(?=^((?!(backup_user)|(monitoring_php)|(auditor)|(as_TUZ)).)*$)' | awk -F "," '{ print $1 }'

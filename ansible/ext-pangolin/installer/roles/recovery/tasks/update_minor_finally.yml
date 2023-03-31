@@ -1,0 +1,69 @@
+- name: Finally recovery 
+  block:
+
+    - name: check exists patroni
+      stat: path="{{ PYTHON_VENV_OLD }}/bin/patroni"
+      register: patroni_exists
+
+    - name: turn off pause mode and restart cluster if needed
+      block:
+
+        - name: turn off pause mode after patroni nodes updated
+          include_role:
+            name: patroni
+            tasks_from: update_with_patronictl.yml
+          vars:
+            change_params: "pause: false"
+          
+        - name: restart cluster if needed
+          include_role: 
+            name: patroni
+            tasks_from: pending_restart.yml
+          vars:
+            current_python_venv: "{{ PYTHON_VENV_OLD }}"
+            current_pghome: "{{ PGHOME_OLD }}"
+            current_pgport: "{{ ports.pg }}"
+            current_patroni_port: "{{ ports.patroni }}"
+
+      when: patroni_exists.stat.exists
+
+    - name: recovery pgaudit for needed databases
+      block:
+
+        - name: set python interpretator
+          set_fact:
+            ansible_python_interpreter: '{{ PGHOME_OLD }}/postgres_venv/bin/python3'
+
+        - name: read dbs from file
+          block:
+
+            - name: fetch {{ update_status_files.pgaudit_bases }} file from master
+              fetch:
+                src: '{{ update_status_files.dir }}/{{ update_status_files.pgaudit_bases }}'
+                dest: '{{ REMOTE_TMP }}'
+
+            - name: read json file with pgaudit dbs
+              include_vars:
+                file: "{{ REMOTE_TMP }}/master/{{ update_status_files.dir }}/{{ update_status_files.pgaudit_bases }}"
+
+        - name: recovery pgaudit as extension
+          postgresql_ext:
+            port: "{{ ports.pg }}"
+            name: pgaudit
+            db: "{{ item }}"
+          with_items: "{{ dbs_with_audit_lst }}"
+          environment:
+            - PGHOST: "127.0.0.1"
+            - PGSSLCERT: "{{ pg_certs.ssl_cert }}"
+            - PGSSLKEY: "{{ pg_certs.ssl_key }}"
+          become_user: postgres    
+
+      when: ( [ pg_current_version, '4.3.0' ] | compare_pg_se_versions )|int == 0
+
+    - name: set python interpretator
+      set_fact:
+        ansible_python_interpreter: '{{ python.global_bin_2 }}'
+
+  become: true
+  # inventory_hostname == 'master' потому что в конце checkup/main.yml выполняется синхронизация current master с host master => OK
+  when: inventory_hostname == 'master'

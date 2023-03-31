@@ -1,0 +1,7 @@
+- name: Import install
+  import_tasks: install.yml
+  when: action_type == 'install'
+
+- name: Import minor update
+  import_tasks: update.yml
+  when: action_type == 'update_minor'

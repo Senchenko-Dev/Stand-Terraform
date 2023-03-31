@@ -1,0 +1,12 @@
+- name: Recovery only bootstrap
+  include_role:
+    name: etcd
+    tasks_from: revert_recovery_only_bootstrap.yml
+  when: etcd and update_errors.components.pg and update_errors.types.pg.bootstrap
+
+- name: Recovery cluster etcd
+  include_role:
+    name: etcd
+    tasks_from: revert.yml
+  when: "etcd and (update_errors.components.etcd or update_errors.components.patroni \
+         or update_errors.components.pgbouncer or update_errors.components.haproxy)"
