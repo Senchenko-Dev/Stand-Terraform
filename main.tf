@@ -178,9 +178,9 @@ module "PGSE_standalone01" {
   vm_props = local.vm_props_default
   # для postgres nodes:
   cpu = 2
-  memory = 4*1024
+  memory = 8*1024
   vm_pg_disk_data = [
-    //        { size : "20G", mnt_dir : "/pgdata" },
+            { size : "20G", mnt_dir : "/pgdata" },
   ]
   # Ansible properties
   inventory_group_name = "Pangolin_alone-1"
@@ -189,6 +189,7 @@ module "PGSE_standalone01" {
 
   # Download
   pangolin_url = "https://dzo.sw.sbc.space/nexus-cd/repository/sbt_PROD/sbt_PROD/CI90000013_pangolin/D-04.006.00-010/CI90000013_pangolin-D-04.006.00-010-distrib.tar.gz"
+  unpack_exclude = ["installer"]
 
   # Install
   installation_type = "standalone"
