@@ -92,7 +92,6 @@ resource "vcd_vm" "Pangolin-postgres" {
                    EOF
   }
 
-
   // диски
   dynamic "disk" {
     for_each = { for disk_data in local.final_pg_disks_data: keys(disk_data)[0] => values(disk_data)[0] }
@@ -110,14 +109,13 @@ resource "vcd_vm" "Pangolin-postgres" {
     }
   )
 
-
-
   // данные хранятся в клауде
   metadata = {
     host_alias: each.value,
     pangolin_version = var.pangolin_url,
   }
 }
+
 
 resource "vcd_vm" "Pangolin-etcd" {
 
@@ -207,6 +205,8 @@ resource "local_file" "pangolin-inventory" {
     private_key = var.vm_props.private_key
     host = ""
   }
+
+
   // запуск ансибла по инвентарю (на группу!)
   provisioner "ansible" {
     // Ожидание доступности хостов
@@ -222,6 +222,7 @@ resource "local_file" "pangolin-inventory" {
       }
     }
 
+
     plays {
       playbook {
         file_path = "ansible/prepare_host_playbook.yml"
@@ -234,6 +235,7 @@ resource "local_file" "pangolin-inventory" {
       }
     }
 
+
     // Настройка install-deps
     plays {
       playbook {
@@ -243,6 +245,8 @@ resource "local_file" "pangolin-inventory" {
       inventory_file = local_file.pangolin-inventory.filename
       become = true
     }
+
+
     // Скачивание дистрибутива СПО
     plays {
       playbook {
