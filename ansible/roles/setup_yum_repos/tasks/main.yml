@@ -1,4 +1,11 @@
 ---
+- name: Удаление repo файлов (с бэкапом)
+  shell: mkdir -p backup && mv -f * backup/ || echo 'backup dir exists or no files to backup'
+  args:
+    chdir: /etc/yum.repos.d/
+#  when: yum_move_old_repos | default("false") | bool
+
+
 - name: Add custom repository
   copy:
     src: custom.repo
