@@ -13,16 +13,16 @@
         manager: "auto"
       no_log: "{{ nolog }}"
 
-    - name: add repos
-      yum_repository:
-        name:        "{{ item.name }}"
-        description: "{{ item.name }}"
-        file:        "{{ item.file }}"
-        baseurl:     "{{ item.baseurl }}"
-        enabled:      yes
-        gpgcheck:     no
-      with_items: "{{ linux_repos }}"
-      when: (ansible_os_family == "RedHat") and item.enabled
+#    - name: add repos
+#      yum_repository:
+#        name:        "{{ item.name }}"
+#        description: "{{ item.name }}"
+#        file:        "{{ item.file }}"
+#        baseurl:     "{{ item.baseurl }}"
+#        enabled:      yes
+#        gpgcheck:     no
+#      with_items: "{{ linux_repos }}"
+#      when: (ansible_os_family == "RedHat") and item.enabled
 
     - name: include vars
       include_vars:
