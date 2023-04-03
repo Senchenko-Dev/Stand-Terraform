@@ -9,20 +9,6 @@
     #      tags: always
     #      no_log: yes todo
 
-    - shell: id -u && id -g
-      register: user_uid_gid
-
-    - set_fact:
-        user: user_uid_gid.stdout_lines
-
-    - name: Create directory for download distrib
-      file:
-        path: "{{ download_dest.split('/')[:-1] | join('/') }}"
-        owner: "{{ user[0] | int }}" #"jenkins"
-        group: "{{ user[1] | int }}"
-        mode: "0755"
-        state: directory
-
     - name: Download distr to {{ download_dest }}
       get_url:
         url: "{{ download_url }}"
@@ -34,7 +20,6 @@
       when:
         - download_url is defined
         - download_url != ""
-
 
     - name: Debug
       shell: ls -a {{ download_dest }}

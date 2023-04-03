@@ -79,3 +79,8 @@ variable "unpack_exclude" {
 variable "vault_file" {
   description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
 }
+
+variable "custom_playbooks" {
+  description = "Список путей до дополнительных плэйбуков. LIST of STRINGS. "
+  default = []
+}

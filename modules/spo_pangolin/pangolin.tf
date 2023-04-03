@@ -71,26 +71,6 @@ resource "vcd_vm" "Pangolin-postgres" {
     type = var.vm_props.network_type
     ip_allocation_mode = var.vm_props.ip_allocation_mode
   }
-  // Кастомизация ОС
-  customization {
-    force                      = true        #Применить параметры кастомизации
-    allow_local_admin_password = true        #Наличие локального пароля админа
-    auto_generate_password     = false       #Отмена автогенерации пароля
-    admin_password             = "123qwe123" #Пароль администратора
-    initscript = <<EOF
-                  #!/bin/sh
-                  adduser ansible
-                  echo "ansible  ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-                  mkdir -p /home/ansible/.ssh
-                  echo "${var.vm_props.guest_properties.ansible_auth_pub_key}" >> /home/ansible/.ssh/authorized_keys
-                  echo "${var.vm_props.stand_name}-${var.inventory_group_name}-vm" > /etc/hostname
-                  sed -i "s/127\.0\.1\.1.*/127\.0\.1\.1  ${var.vm_props.stand_name}-${var.inventory_group_name}-vm/g" /etc/hosts
-                  echo "nameserver ${var.vm_props.guest_properties.dnsserver}" > /etc/resolv.conf
-                  sed -i "s/PermitRootLogin no/PermitRootLogin yes/g" /etc/ssh/sshd_config
-                  systemctl restart sshd
-                  EOF
-  }
-
 
   // диски
   dynamic "disk" {
@@ -108,6 +88,27 @@ resource "vcd_vm" "Pangolin-postgres" {
       "fqdn": "${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${each.value}"
     }
   )
+
+  // Кастомизация ОС
+  customization {
+    force                      = true        #Применить параметры кастомизации
+    allow_local_admin_password = true        #Наличие локального пароля админа
+    auto_generate_password     = false       #Отмена автогенерации пароля
+    admin_password             = "123qwe123" #Пароль администратора
+    initscript = <<EOF
+                   #!/bin/sh
+                   adduser ansible
+                   echo "ansible  ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+                   mkdir -p /home/ansible/.ssh
+                   echo "${var.vm_props.guest_properties.ansible_auth_pub_key}" >> /home/ansible/.ssh/authorized_keys
+                   hostnamectl set-hostname "${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}"
+                   echo "127.0.1.1  ${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}" >> /etc/hosts
+                   echo "nameserver ${var.vm_props.guest_properties.dnsserver}" > /etc/resolv.conf
+                   sed -i "s/PermitRootLogin no/PermitRootLogin yes/g" /etc/ssh/sshd_config
+                   systemctl restart sshd
+                   EOF
+  }
+
 
   // данные хранятся в клауде
   metadata = {
@@ -165,7 +166,6 @@ resource "null_resource" "copy_group_vars" {
   triggers = {
     always = timestamp(),
   }
-  // Использует основные group_vars копировать в директорию с плейбуком не обязательно
   provisioner "local-exec" {
     interpreter = ["bash", "-c"]
     //    command = "cp -rf ${abspath(path.root)}/inventory/group_vars ${abspath(path.root)}/inventory/"
@@ -233,39 +233,37 @@ resource "local_file" "pangolin-inventory" {
     }
 
     // Настройка install-deps
-#    plays {
-#      playbook {
-#        file_path = "${local.playbook_path}/playbook_install_deps.yaml"
-#      }
-#      extra_vars = {}
-#      inventory_file = local_file.pangolin-inventory.filename
-#      become = true
-#    }
+    plays {
+      playbook {
+        file_path = "${local.playbook_path}/playbook_install_deps.yaml"
+      }
+      extra_vars = {}
+      inventory_file = local_file.pangolin-inventory.filename
+      become = true
+    }
     // Скачивание дистрибутива СПО
-    // Закоментировал так как роль не по стандарту std11 и затирает изменения по получению серкетов из валта
-    # plays {
-    #   playbook {
-    #     file_path = "ansible/download_unpack.yml"
-    #   }
-    #   verbose = true
-    #   extra_vars = {
-    #     download_url: var.pangolin_url # filename
-    #     download_dest: "${abspath(path.root)}/ansible/ext-pangolin/distr/${basename(var.pangolin_url)}" # filename
-    #     unpack_dest: "${abspath(path.root)}/ansible/ext-pangolin/"
-    #     unpack_exclude: jsonencode(var.unpack_exclude)
-    #     //       unarchive:
-    #     //        src: "{{ download_dest }}"
-    #     //        dest: "{{ unpack_dest }}"
-    #     vault_file: var.vault_file
-    #   }
-    #   vault_id = ["${abspath(path.root)}/ansible/login.sh"]
-    #   inventory_file = local_file.pangolin-inventory.filename
-    # }
+    plays {
+      playbook {
+        file_path = "ansible/download_unpack.yml"
+      }
+      verbose = true
+      extra_vars = {
+        download_url: var.pangolin_url # filename
+        download_dest: "${abspath(path.root)}/ansible/ext-pangolin/distr/${basename(var.pangolin_url)}" # filename
+        unpack_dest: "${abspath(path.root)}/ansible/ext-pangolin/"
+        unpack_exclude: jsonencode(var.unpack_exclude)
+        //       unarchive:
+        //        src: "{{ download_dest }}"
+        //        dest: "{{ unpack_dest }}"
+        vault_file: var.vault_file
+      }
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
+      inventory_file = local_file.pangolin-inventory.filename
+    }
     // Установка СПО
     plays {
       playbook {
-        # file_path = "${abspath(path.root)}/ansible/pangolin.yml"
-        file_path = "${abspath(path.root)}/ansible/ext-pangolin/installer/playbook.yaml"
+        file_path = "${abspath(path.root)}/ansible/pangolin.yml"
 //        tags = []
         tags = ["always", var.installation_subtype]
       }
@@ -280,6 +278,7 @@ resource "local_file" "pangolin-inventory" {
         custom_config = "${abspath(path.root)}/ansible/additional/pg_custom_config.yml"  # group_vars/custom_dev.yml # todo мне думается, лучше задавать в group_vars и сам файл располагать там же.
         manual_run = "yes"
         local_distr_path = "../"
+//        local_distr_path = "${abspath(path.root)}/ext-pangolin/" todo check
         etcd_cluster_name = "${var.vm_props.stand_name}-${var.inventory_group_name}_etcd"
         clustername = "${var.vm_props.stand_name}-${var.inventory_group_name}"
         vault_file = var.vault_file
@@ -301,6 +300,29 @@ resource "local_file" "pangolin-inventory" {
   }
 }
 
+resource "null_resource" "custom-playbooks" {
+  depends_on = [local_file.pangolin-inventory]
+  connection {
+    user = "ansible"
+    type = "ssh"
+    private_key = var.vm_props.private_key
+    host = ""
+  }
+
+  for_each = toset(var.custom_playbooks)
+  provisioner "ansible" {
+    ansible_ssh_settings {
+      insecure_no_strict_host_key_checking = true
+    }
+
+    plays {
+      inventory_file = local_file.pangolin-inventory.filename
+      playbook {
+        file_path = each.value
+      }
+    }
+  }
+}
 
 resource "local_file" "efs-inventory" {
   depends_on = [local_file.pangolin-inventory]
