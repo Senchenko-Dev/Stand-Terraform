@@ -1,4 +1,4 @@
-#1234567
+#12345678
 locals {
   stand_name = "Bystrov" # TODO Имя стенда
   network_name = "main_VDC02"
