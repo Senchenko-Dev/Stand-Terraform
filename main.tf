@@ -23,8 +23,8 @@ locals {
 #    catalog_name = "Linux Templates"
 
     #--------------CentOs7.3-----------------#
-    template_name = "SBT-SPO-REDOS73-latest"
-    catalog_name = "SBT_CREATOR_TEMPLATES"
+    template_name = "avs-test-app"
+    catalog_name = "RHOSE_ALT"
 
     network_type = "org"
     ip_allocation_mode = "POOL"
