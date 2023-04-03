@@ -12,8 +12,8 @@ pam_hba: host all +all-sa-pam-group 0.0.0.0/0 ldap ldapserver=sigma.sbrf.ru ldap
 other_hba: ['host all +{{ as_group }}, +as_admin_read 0.0.0.0/0 ldap ldapserver="sigma.sbrf.ru" ldapport=3268
             ldapbasedn="" ldapbinddn="cn={{ ldap_bind_tuz_name }},OU=Service Accounts,OU=SBT,OU=Sberbank,dc=sigma,dc=sbrf,dc=ru"
             ldapbindpasswd="{{ secrets.postgres.ldap_bind_tuz_password }}" ldapsearchfilter="(&(objectCategory=person)(objectClass=user)(cn=$username))"',
-           'host all all 0.0.0.0/0 md5'
-           ] # example ['rule 1', 'rule 2']
+    'host all all 0.0.0.0/0 md5'
+] # example ['rule 1', 'rule 2']
 ldap_tls: false                              # whether to switch tls in ldap autentification
 cert_dir: "{{ '' | default('TBF', true) }}" # example /etc/pki/ca-trust/source/anchors
 openldap_config: /etc/openldap/ldap.conf
@@ -66,7 +66,7 @@ linux_repos:
   - name:     EPEL7
     file:     mirror
     baseurl:  https://mirror.yandex.ru/epel/7/x86_64/
-#    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-server-rhscl-7-rpms/
+    #    baseurl:  http://sp-prod-reprhel-infra-10.stands-vdc04.solution.sbt/repo/rhel-server-rhscl-7-rpms/
     enabled:  "{{ ansible_os_family == 'RedHat' and segment == 'sbercloud' }}"
 
   - name:     rhel-server-rhscl-7-rpms
