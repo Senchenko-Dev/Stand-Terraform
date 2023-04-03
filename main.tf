@@ -15,16 +15,12 @@ locals {
 #    catalog_name = "SBT_CREATOR_TEMPLATES"
 
     #-------------CentOs-7.9----------------#
-#    template_name = "SBT-SPO-RHEL79-latest"
-#    catalog_name = "RHEL7"
+    template_name = "SBT-SPO-RHEL79-latest"
+    catalog_name = "RHEL7"
 
     #--------------CentOs7------------------#
 #    template_name = "CentOS7_64-bit"
 #    catalog_name = "Linux Templates"
-
-    #--------------CentOs7.3-----------------#
-    template_name = "avs-test-app"
-    catalog_name = "RHOSE_ALT"
 
     network_type = "org"
     ip_allocation_mode = "POOL"
