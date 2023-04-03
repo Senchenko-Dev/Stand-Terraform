@@ -18,9 +18,9 @@
         state: present
         update_cache: yes
       with_items:
-        - python2-setuptools
+        - python-setuptools
         - libffi-devel
-        - python2-ipaddress
+        - python-ipaddress
 
     # Idempotent way to build a /etc/hosts file with Ansible using your Ansible hosts inventory for a source.
     # Will include all hosts the playbook is run on.

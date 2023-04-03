@@ -11,8 +11,8 @@ locals {
   # параметры для VCD_VM
   vm_props_default = {
     #-------------CentOs-8.4----------------#
-    template_name = "SBT-SPO-RHEL84-latest"
-    catalog_name = "SBT_CREATOR_TEMPLATES"
+#    template_name = "SBT-SPO-RHEL84-latest"
+#    catalog_name = "SBT_CREATOR_TEMPLATES"
 
     #-------------CentOs-7.9----------------#
 #    template_name = "SBT-SPO-RHEL79-latest"
@@ -21,6 +21,10 @@ locals {
     #--------------CentOs7------------------#
 #    template_name = "CentOS7_64-bit"
 #    catalog_name = "Linux Templates"
+
+    #--------------CentOs7.3-----------------#
+    template_name = "SBT-SPO-REDOS73-latest"
+    catalog_name = "SBT_CREATOR_TEMPLATES"
 
     network_type = "org"
     ip_allocation_mode = "POOL"
