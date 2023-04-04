@@ -24,9 +24,9 @@
       include_role:
         name: EDR
 
-#    - name: setup mirror for yum
-#      include_role:
-#        name: setup_yum_repos
+    - name: setup mirror for yum
+      include_role:
+        name: setup_yum_repos
 
     - name: Disable firewalld
       service:
