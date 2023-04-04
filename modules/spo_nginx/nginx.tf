@@ -156,13 +156,13 @@ resource "local_file" "nginx-inventory" {
 #   namespace   = "tfstate-team-polyakov1"
 # }
 
-#module "config_awx_ansible" {
-#  count = "${length(var.awx_props) != 0 ? 1 : 0}"
-#  source = "../awx_config_group"
-#  inventory_path = local_file.nginx-inventory.filename
-#  inventory_group_name = var.inventory_group_name
-#  spo_role_name = var.spo_role_name
-#  awx_props = var.awx_props
-#  vault_file = var.vault_file
-#  hosts = vcd_vm.VM-nginx
-#}
+module "config_awx_ansible" {
+  count = "${length(var.awx_props) != 0 ? 1 : 0}"
+  source = "../awx_config_group"
+  inventory_path = local_file.nginx-inventory.filename
+  inventory_group_name = var.inventory_group_name
+  spo_role_name = var.spo_role_name
+  awx_props = var.awx_props
+  vault_file = var.vault_file
+  hosts = vcd_vm.VM-nginx
+}
