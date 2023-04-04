@@ -100,7 +100,7 @@ module "Nginx" {
   # VM properties
   count = 1
 
-  vm_count = 5
+  vm_count = 1
   cpu = 10
   memory = 12*1024
   vm_disk_data = [
