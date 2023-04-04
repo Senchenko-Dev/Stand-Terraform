@@ -2,7 +2,7 @@
 - name: Copy EDR to host
   copy:
     src: bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
-    dest: /root
+    dest: /root/bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
     mode: 0644
     owner: root
     group: root
