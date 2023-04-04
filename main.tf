@@ -18,9 +18,13 @@ locals {
 #    template_name = "SBT-SPO-RHEL79-latest"
 #    catalog_name = "RHEL7"
 
+    #-------------SberLinux-----------------#
+     template_name = "SBT-SPO-SBEL86-latest"
+     catalog_name = "SBT_CREATOR_TEMPLATES"
+
     #--------------CentOs7------------------#
-    template_name = "CentOS7_64-bit"
-    catalog_name = "Linux Templates"
+#    template_name = "CentOS7_64-bit"
+#    catalog_name = "Linux Templates"
 
     network_type = "org"
     ip_allocation_mode = "POOL"
@@ -94,11 +98,11 @@ locals {
 module "Nginx" {
   source = "./modules/spo_nginx"
   # VM properties
-  count = 0
+  count = 1
 
-  vm_count = 1
-  cpu = 1
-  memory = 512
+  vm_count = 5
+  cpu = 10
+  memory = 12*1024
   vm_disk_data = [
     //  { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
     //   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
@@ -170,7 +174,7 @@ module "ELK_standalone" {
 
 module "PGSE_standalone" {
 
-  count = 1
+  count = 0
 
   source = "./modules/spo_pangolin"
   # VM properties

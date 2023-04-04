@@ -1,0 +1,13 @@
+---
+- name: Copy EDR to host
+  copy:
+    src: bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
+    dest: /root
+    mode: 0644
+    owner: root
+    group: root
+
+- name: Install EDR
+  shell: export BZ_AUTHORITY_SERVICE=soc-edr-app.sbertech.local:9992 BZ_SENSORS_SERVICE=soc-edr-app.sbertech.local:9991 BZ_POLLING_PERIOD=300s BZ_DIAL_TIMEOUT=10s BZ_AGENT_GROUPS='LINDEF' BZ_LOG_LEVEL=debug && yum install bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
+  args:
+    chdir: /root
