@@ -1,6 +1,6 @@
 #1
 locals {
-  stand_name = "Bystrov" # TODO Имя стенда
+  stand_name = "R4C-SPO-reserv" # TODO Имя стенда
   network_name = "main_VDC02"
   vault_file = "secrets.yml" # todo внимание, хардкод в Jenkinsfile!
   # Для setup_vm. Публичные ключи для входа на хосты.
