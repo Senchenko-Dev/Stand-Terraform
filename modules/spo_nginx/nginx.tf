@@ -90,36 +90,36 @@ resource "vcd_vm" "VM-nginx" {
   
 
 }
-#
-#resource "local_file" "nginx-inventory" {
-#  content    = templatefile("tf_templates/nginx_inventory.tpl",
-#  {
-#    ans_hosts    = vcd_vm.VM-nginx,
-#    ansible_user = "ansible",
-#    group_name = var.inventory_group_name
-#    force_ansible_run = var.force_ansible_run
-#  })
-#  filename = "ansible/inventory/nginx_${var.inventory_group_name}.ini"
-#
-#  connection {
-#    user = "ansible"
-#    type = "ssh"
-#    private_key = var.vm_props.private_key
-#    host = ""
-#  }
-#
-#  provisioner "ansible" {
-#    plays {
-#      playbook {
-#        file_path = "ansible/prepare_host_playbook.yml"
-#      }
-#      inventory_file = local_file.nginx-inventory.filename
-#      extra_vars = {
-#        ssh_keys_list: jsonencode(var.vm_props.ssh_keys_list)
-#        disks = jsonencode(var.vm_disk_data)
-#      }
-#    }
-#
+
+resource "local_file" "nginx-inventory" {
+  content    = templatefile("tf_templates/nginx_inventory.tpl",
+  {
+    ans_hosts    = vcd_vm.VM-nginx,
+    ansible_user = "ansible",
+    group_name = var.inventory_group_name
+    force_ansible_run = var.force_ansible_run
+  })
+  filename = "ansible/inventory/nginx_${var.inventory_group_name}.ini"
+
+  connection {
+    user = "ansible"
+    type = "ssh"
+    private_key = var.vm_props.private_key
+    host = ""
+  }
+
+  provisioner "ansible" {
+    plays {
+      playbook {
+        file_path = "ansible/prepare_host_playbook.yml"
+      }
+      inventory_file = local_file.nginx-inventory.filename
+      extra_vars = {
+        ssh_keys_list: jsonencode(var.vm_props.ssh_keys_list)
+        disks = jsonencode(var.vm_disk_data)
+      }
+    }
+
 #    plays {
 #      playbook {
 #        file_path = "ansible/spo_install_playbook.yml"
@@ -132,12 +132,12 @@ resource "vcd_vm" "VM-nginx" {
 #      }
 #      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
 #    }
-#
-#    ansible_ssh_settings {
-#      insecure_no_strict_host_key_checking = true
-#    }
-#  }
-#}
+
+    ansible_ssh_settings {
+      insecure_no_strict_host_key_checking = true
+    }
+  }
+}
 
 #resource "helm_release" "nginx" {
 #  name        = "nginx"
