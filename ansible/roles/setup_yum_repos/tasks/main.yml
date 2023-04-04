@@ -1,11 +1,11 @@
 ---
 - name: reset repos when reset_repos defined and true
   block:
-#    - name: remove old repos setting
-#      shell: mkdir -p backup && mv -f * backup/ || echo 'backup dir exists or no files to backup'
-#      args:
-#        chdir: /etc/yum.repos.d/
-#      when: yum_move_old_repos | default("true") | bool
+    - name: remove old repos setting
+      shell: mkdir -p backup && mv -f * backup/ || echo 'backup dir exists or no files to backup'
+      args:
+        chdir: /etc/yum.repos.d/
+      when: yum_move_old_repos | default("true") | bool
 #          ignore_errors: yes
 
     - name: Add custom repository
