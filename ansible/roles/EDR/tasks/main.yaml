@@ -6,7 +6,7 @@
     remote_src: yes
 
 - name: Install EDR
-  shell: yum install bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
+  shell: yum install -y bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
   args:
     chdir: /root
   environment:
