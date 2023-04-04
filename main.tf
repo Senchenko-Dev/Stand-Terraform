@@ -92,7 +92,7 @@ locals {
 #      awx_k8s_sa_name = local.globals.devopsSaName
 #      awx_k8s_sa_project = local.globals.devopsProject
 #    }
-#  )
+  )
 }
 
 
