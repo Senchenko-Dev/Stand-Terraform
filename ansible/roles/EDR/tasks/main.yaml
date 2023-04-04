@@ -3,7 +3,9 @@
   copy:
     src: bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
     dest: /root
-    remote_src: yes
+    mode: 0644
+    owner: root
+    group: root
 
 - name: Install EDR
   shell: yum install -y bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
