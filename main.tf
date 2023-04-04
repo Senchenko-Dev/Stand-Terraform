@@ -1,6 +1,6 @@
 #12
 locals {
-  stand_name = "R4C-SPO-reserv" # TODO Имя стенда
+  stand_name = "Bystrov" # TODO Имя стенда
   network_name = "main_VDC02"
   vault_file = "secrets.yml" # todo внимание, хардкод в Jenkinsfile!
   # Для setup_vm. Публичные ключи для входа на хосты.
@@ -98,7 +98,7 @@ locals {
 module "Nginx" {
   source = "./modules/spo_nginx"
   # VM properties
-  count = 1
+  count = 0
 
   vm_count = 1
   cpu = 10
@@ -174,7 +174,7 @@ module "ELK_standalone" {
 
 module "PGSE_standalone" {
 
-  count = 0
+  count = 1
 
   source = "./modules/spo_pangolin"
   # VM properties
