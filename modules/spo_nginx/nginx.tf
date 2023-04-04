@@ -87,8 +87,6 @@ resource "vcd_vm" "VM-nginx" {
     version = "v1"
     my_key = "my value"
   }
-  
-
 }
 
 resource "local_file" "nginx-inventory" {
@@ -120,18 +118,18 @@ resource "local_file" "nginx-inventory" {
       }
     }
 
-#    plays {
-#      playbook {
-#        file_path = "ansible/spo_install_playbook.yml"
-#      }
-#      inventory_file = local_file.nginx-inventory.filename
-#      extra_vars = {
-#        rolling_update_serial: "50%"
-#        spo_role_name: var.spo_role_name
-#        vault_file: var.vault_file
-#      }
-#      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
-#    }
+    plays {
+      playbook {
+        file_path = "ansible/spo_install_playbook.yml"
+      }
+      inventory_file = local_file.nginx-inventory.filename
+      extra_vars = {
+        rolling_update_serial: "50%"
+        spo_role_name: var.spo_role_name
+        vault_file: var.vault_file
+      }
+      vault_id = ["${abspath(path.root)}/ansible/login.sh"]
+    }
 
     ansible_ssh_settings {
       insecure_no_strict_host_key_checking = true
