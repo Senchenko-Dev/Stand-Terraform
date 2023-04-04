@@ -101,8 +101,8 @@ module "Nginx" {
   count = 1
 
   vm_count = 1
-  cpu = 10
-  memory = 12*1024
+  cpu = 1
+  memory = 2*1024
   vm_disk_data = [
     //  { size: "3G", mnt_dir: "/opt/nginx" , owner: "nginx"},
     //   { size: "1G", mnt_dir: "/var/log/nginx" , owner: "nginx", group: "nginx", mode: "0755"}
