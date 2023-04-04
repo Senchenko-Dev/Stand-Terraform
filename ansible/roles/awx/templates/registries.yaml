@@ -1,13 +1,13 @@
 mirrors:
   docker.io:
     endpoint:
-      - "http://{{ socket }}"
-  "{{ socket }}":
+      - "{{docker_registry}}"
+  "{{socket}}":
     endpoint:
-      - "http://{{ socket }}"
+      - "{{docker_registry}}"
   quay.io:
     endpoint:
-      - "http://{{ socket }}"
+      - "{{docker_registry}}"
   gcr.io:
     endpoint:
-      - "http://{{ socket }}"
+      - "{{docker_registry}}"

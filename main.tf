@@ -67,8 +67,8 @@ locals {
 }
 
 module "AWX" {
-   count = 0
-   vm_count = 0
+   count = 1
+   vm_count = 1
   # TF path to the module
   source = "./modules/awx"
   # VM settings
@@ -85,12 +85,12 @@ module "AWX" {
 locals {
   //  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
   awx_props = merge(local.install_awx_props,
-#    {
-#      awx_host = module.AWX.awx_host_ip
-#      awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
-#      awx_k8s_sa_name = local.globals.devopsSaName
-#      awx_k8s_sa_project = local.globals.devopsProject
-#    }
+    {
+      awx_host = module.AWX.awx_host_ip
+      awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
+      awx_k8s_sa_name = local.globals.devopsSaName
+      awx_k8s_sa_project = local.globals.devopsProject
+    }
   )
 }
 
@@ -118,7 +118,7 @@ module "Nginx" {
 }
 
 module "KAFKA_Corex_standalone" {
-  count = 1
+  count = 0
 
   vm_count = 1
   # TF module properties

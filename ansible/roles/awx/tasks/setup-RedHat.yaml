@@ -48,26 +48,25 @@
       - selinux-policy-base
     state: present
 
- - name: Enable Docker
-   systemd:
-     name: docker
-     enabled: yes
+- name: Enable Docker
+  systemd:
+    name: docker
+    enabled: yes
 
- - name: Start Docker
-   systemd:
-     name: docker
-     state: started
-
+- name: Start Docker
+  systemd:
+    name: docker
+    state: started
 
 - name: Download k3s
   get_url:
-    url: "http://10.42.4.125/mirror/docker/images/k3s/k3s"
+    url: "{{ share }}/mirror/docker/images/k3s/k3s"
     dest: /usr/bin
     mode: '0777'
 
 - name: Download k3s-selinux
   get_url:
-    url: "http://10.42.4.125/mirror/docker/images/k3s/k3s-selinux-0.4-1.el7.noarch.rpm"
+    url: "{{ share }}/mirror/docker/images/k3s/k3s-selinux-0.4-1.el7.noarch.rpm"
     dest: /usr/bin
     mode: '0777'
 
@@ -78,7 +77,7 @@
 
 - name: Download install.sh
   get_url:
-    url: "http://10.42.4.125/mirror/docker/images/k3s/install.sh"
+    url: "{{ share }}/mirror/docker/images/k3s/install.sh"
     dest: /usr/bin
     mode: '0777'
 
@@ -90,46 +89,25 @@
     INSTALL_K3S_BIN_DIR: /usr/bin
     INSTALL_K3S_SKIP_DOWNLOAD: "true"
 
-- name: settings docker
+- name: Copy daemon.json
   template:
-    src: daemon.json.j2
+    src: daemon.json
     dest: /etc/docker/daemon.json
 
+- name: Copy registries.yaml
+  template:
+    src: registries.yaml
+    dest: /etc/rancher/k3s/registries.yaml
 
-- name: Create file register.yaml
-  file:
-    path: /etc/rancher/k3s/registries.yaml
-    state: touch
+- name: Restart Docker
+  systemd:
+    name: docker
+    state: restarted
 
-
-
-- name: add in file register.yaml settings
-  blockinfile:
-    path: /etc/rancher/k3s/registries.yaml
-    block: |
-      mirrors:
-        docker.io:
-          endpoint:
-            - "http://{{ socket }}"
-        "{{ socket }}":
-          endpoint:
-            - "http://{{ socket }}"
-        quay.io:
-          endpoint:
-            - "http://{{ socket }}"
-        gcr.io:
-          endpoint:
-            - "http://{{ socket }}"
-
-# - name: Restart Docker
-#   systemd:
-#     name: docker
-#     state: restarted
-
-# - name: Restart k3s
-#   systemd:
-#     name: k3s
-#     state: restarted
+- name: Restart k3s
+  systemd:
+    name: k3s
+    state: restarted
 
 - name: cluster name
   shell: kubectl get nodes | awk '{print $1}' | sed 's/NAME//' |  tr -d '\n'
@@ -138,10 +116,9 @@
 - debug:
     msg: "Имя кластера: {{node.stdout}}"
 
-
 - name: Download AWX
   get_url:
-    url: "http://10.42.4.125/mirror/docker/images/awx/other/awx-operator.zip"
+    url: "{{ share }}/mirror/docker/images/awx/other/awx-operator.zip"
     dest: /root
 
 - name: unzip awx-operator
@@ -157,33 +134,14 @@
 
 - name: Download kustomize
   get_url:
-    url: "http://10.42.4.125/mirror/docker/images/k3s/kustomize"
+    url: "{{ share }}/mirror/docker/images/k3s/kustomize"
     dest: /usr/bin
     mode: '0777'
 
-- name: Crete file kustomization.yaml
-  file:
-    path: /root/awx-operator/kustomization.yaml
-    state: touch
-
-- name: Add in file kustomization.yaml
-  blockinfile:
-    path: /root/awx-operator/kustomization.yaml
-    block: |
-      apiVersion: kustomize.config.k8s.io/v1beta1
-      kind: Kustomization
-      resources:
-        - config/default/
-      images:
-        - name: 10.42.4.125:5000/ansible/awx-operator
-          newTag: 0.21.0
-      namespace: awx
-
-- name: Delete string
-  lineinfile:
-    dest: /root/awx-operator/kustomization.yaml
-    state: absent
-    regexp: "#"
+- name: Copy kustomization.yaml
+  template:
+    src: kustomization.yaml
+    dest: /root/awx-operator
 
 - name: Kustomize Build
   shell: kustomize build . > 111.yml
@@ -197,16 +155,6 @@
 
 - name: namespace for kubectl
   shell: kubectl config set-context --current --namespace=awx
-
-- name: Check it is Apply
-  stat:
-    path: /root/awx-operator/awx-deploy.yaml
-  register: awx
-
-- name: Create file awx-deploy.yaml
-  file:
-    path: /root/awx-operator/awx-deploy.yaml
-    state: touch
 
 - name: Apply
   shell: |
@@ -224,34 +172,17 @@
         requests:
           storage: 5Gi
     EOF
-  when: awx.stat.exists == false
 
-- name:  Add in file awx-deploy.yaml
-  blockinfile:
-    path: /root/awx-operator/awx-deploy.yaml
-    block: |
-      ---
-      apiVersion: awx.ansible.com/v1beta1
-      kind: AWX
-      metadata:
-        name: awx
-      spec:
-        service_type: nodeport
-        nodeport_port: {{ awx_port }}
-        projects_persistence: true
-        projects_storage_access_mode: ReadWriteOnce
-        web_extra_volume_mounts: |
-          - name: static-data
-            mountPath: /var/lib/projects
-        extra_volumes: |
-          - name: static-data
-            persistentVolumeClaim:
-              claimName: static-data-pvc
+- name: Copy awx-deploy.yaml
+  template:
+    src: awx-deploy.yaml
+    dest: /root/awx-operator
 
 - name: kubectl apply -f awx-deploy.yaml
   shell: kubectl apply -f awx-deploy.yaml
   args:
     chdir: /root/awx-operator
+
 
 - name: Create POD Nginx
   shell: |
@@ -341,16 +272,15 @@
       selector:
         name: nginx
     EOF
-  ignore_errors: yes
 
-- name: Wait for WEB UI come up ~700 seconds left....
+- name: Wait for WEB UI come up ~300 seconds left....
   uri:
     url: "http://{{ip}}:{{ awx_port }}/api/"
     follow_redirects: none
     method: GET
   register: result
   until: result.status == 200
-  retries: 70 # 70*10=700 sec
+  retries: 30 # 30*10=300 sec
   delay: 10
 
 - name: Create Admin Password
