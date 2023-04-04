@@ -1,4 +1,4 @@
-#1
+#12
 locals {
   stand_name = "R4C-SPO-reserv" # TODO Имя стенда
   network_name = "main_VDC02"
