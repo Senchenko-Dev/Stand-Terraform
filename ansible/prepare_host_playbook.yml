@@ -20,6 +20,14 @@
       when: hostvars[item].ansible_host is defined
       with_items: "{{ groups.all }}"
 
+
+    - name: env
+      shell: env
+      register: result
+
+    - debug:
+        var: result
+
     - name: EDR
       include_role:
         name: EDR
