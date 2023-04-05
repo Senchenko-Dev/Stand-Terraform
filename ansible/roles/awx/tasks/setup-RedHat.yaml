@@ -60,32 +60,32 @@
 - name: Download k3s
   get_url:
     url: "{{ share }}/mirror/docker/images/k3s/k3s"
-    dest: /usr/bin
+    dest: /usr/local/bin
     mode: '0777'
 
 - name: Download k3s-selinux
   get_url:
     url: "{{ share }}/mirror/docker/images/k3s/k3s-selinux-0.4-1.el7.noarch.rpm"
-    dest: /usr/bin
+    dest: /usr/local/bin
     mode: '0777'
 
 - name: Install k3s-selinux
   shell: rpm -ivh --nodeps --force k3s-selinux-0.4-1.el7.noarch.rpm
   args:
-    chdir: /usr/bin
+    chdir: /usr/local/bin
 
 - name: Download install.sh
   get_url:
     url: "{{ share }}/mirror/docker/images/k3s/install.sh"
-    dest: /usr/bin
+    dest: /usr/local/bin
     mode: '0777'
 
 - name: INSTALL k3s
   shell: ./install.sh
   args:
-    chdir: /usr/bin
+    chdir: /usr/local/bin
   environment:
-    INSTALL_K3S_BIN_DIR: /usr/bin
+    INSTALL_K3S_BIN_DIR: /usr/local/bin
     INSTALL_K3S_SKIP_DOWNLOAD: "true"
 
 - name: Copy daemon.json
@@ -134,7 +134,7 @@
 - name: Download kustomize
   get_url:
     url: "{{ share }}/mirror/docker/images/k3s/kustomize"
-    dest: /usr/bin
+    dest: /usr/local/bin
     mode: '0777'
 
 - name: Copy kustomization.yaml
