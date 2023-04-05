@@ -272,14 +272,14 @@
         name: nginx
     EOF
 
-- name: Wait for WEB UI come up ~400 seconds left....
+- name: Wait for WEB UI come up ~700 seconds left....
   uri:
     url: "http://{{ip}}:{{ awx_port }}/api/"
     follow_redirects: none
     method: GET
   register: result
   until: result.status == 200
-  retries: 40 # 40*10=400 sec
+  retries: 70  #70*10=400 sec
   delay: 10
 
 - name: Create Admin Password
