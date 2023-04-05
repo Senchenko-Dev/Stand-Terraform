@@ -87,8 +87,8 @@ locals {
   //  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
   awx_props = merge(local.install_awx_props,
     {
-    #  awx_host = module.AWX.awx_host_ip
-    #  awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
+      awx_host = module.AWX.awx_host_ip
+      awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
       awx_k8s_sa_name = local.globals.devopsSaName
       awx_k8s_sa_project = local.globals.devopsProject
     }
