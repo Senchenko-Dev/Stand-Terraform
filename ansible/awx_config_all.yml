@@ -12,7 +12,7 @@
       include_vars: "{{ vault_file }}"
       when: vault_file is defined
       tags: always
-#      no_log: yes todo !!!!!!
+    #      no_log: yes todo !!!!!!
 
     - name: Ожидание доступности API AWX ~700 seconds....
       uri:
@@ -25,15 +25,9 @@
       delay: 10
       tags: always
 
-    - debug:
-        var: scm_branch
-      tags: always
-
     - name: Настройка AWX
       import_role:
         name: awx-config
-      vars:
-        vault_file: "{{ vault_file }}"
       environment:
         CONTROLLER_HOST: "{{ awx_url }}"
         CONTROLLER_USERNAME: "{{ awx_login }}"
