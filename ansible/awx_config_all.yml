@@ -24,6 +24,7 @@
       retries: 70 # 70*10=700 sec
       delay: 10
       tags: always
+      ignore_errors: yes
 
     - name: Настройка AWX
       import_role:
