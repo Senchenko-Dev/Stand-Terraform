@@ -6,7 +6,7 @@
 
 - name: Copy EDR to host
   copy:
-    src: /root/EDR/roles/EDR/file/bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
+    src: bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
     dest: /root/bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
     remote_src: yes
   when: not pack.stat.exists
