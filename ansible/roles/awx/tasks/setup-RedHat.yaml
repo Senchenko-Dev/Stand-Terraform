@@ -182,6 +182,7 @@
   args:
     chdir: /root/awx-operator
 
+
 - name: Create POD Nginx
   shell: |
     cat <<EOF | kubectl create -f -
