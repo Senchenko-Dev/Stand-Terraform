@@ -92,11 +92,17 @@
   copy:
     src: daemon.json
     dest: /etc/docker/daemon.json
+    mode: 0644
+    owner: root
+    group: root
 
 - name: Copy registries.yaml
   copy:
     src: registries.yaml
     dest: /etc/rancher/k3s/registries.yaml
+    mode: 0644
+    owner: root
+    group: root
 
 - name: Restart Docker
   systemd:
@@ -141,6 +147,9 @@
   copy:
     src: kustomization.yaml
     dest: /root/awx-operator
+    mode: 0644
+    owner: root
+    group: root
 
 - name: Kustomize Build
   shell: kustomize build . > 111.yml
@@ -176,6 +185,9 @@
   copy:
     src: awx-deploy.yaml
     dest: /root/awx-operator
+    mode: 0644
+    owner: root
+    group: root
 
 - name: kubectl apply -f awx-deploy.yaml
   shell: kubectl apply -f awx-deploy.yaml
