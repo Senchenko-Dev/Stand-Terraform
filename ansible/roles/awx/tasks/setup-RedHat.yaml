@@ -9,9 +9,9 @@
 
 - name: Start and enable firewalld.
   service:
-     name: firewalld
-     state: started
-     enabled: true
+    name: firewalld
+    state: started
+    enabled: true
 
 - name: Settings firewall
   firewalld:
@@ -19,14 +19,14 @@
     permanent: yes
     state: enabled
   loop:
-     - 6443/tcp
-     - 2379-2380/tcp
-     - 10250/tcp
-     - 10251/tcp
-     - 10252/tcp
-     - 10255/tcp
-     - 8472/udp
-     - 30000-32767/tcp
+    - 6443/tcp
+    - 2379-2380/tcp
+    - 10250/tcp
+    - 10251/tcp
+    - 10252/tcp
+    - 10255/tcp
+    - 8472/udp
+    - 30000-32767/tcp
 
 - firewalld:
     masquerade: yes
@@ -89,20 +89,14 @@
     INSTALL_K3S_SKIP_DOWNLOAD: "true"
 
 - name: Copy daemon.json
-  copy:
+  template:
     src: daemon.json
     dest: /etc/docker/daemon.json
-    mode: 0644
-    owner: root
-    group: root
 
 - name: Copy registries.yaml
-  copy:
+  template:
     src: registries.yaml
     dest: /etc/rancher/k3s/registries.yaml
-    mode: 0644
-    owner: root
-    group: root
 
 - name: Restart Docker
   systemd:
@@ -144,12 +138,9 @@
     mode: '0777'
 
 - name: Copy kustomization.yaml
-  copy:
+  template:
     src: kustomization.yaml
     dest: /root/awx-operator
-    mode: 0644
-    owner: root
-    group: root
 
 - name: Kustomize Build
   shell: kustomize build . > 111.yml
@@ -182,12 +173,9 @@
     EOF
 
 - name: Copy awx-deploy.yaml
-  copy:
+  template:
     src: awx-deploy.yaml
     dest: /root/awx-operator
-    mode: 0644
-    owner: root
-    group: root
 
 - name: kubectl apply -f awx-deploy.yaml
   shell: kubectl apply -f awx-deploy.yaml
@@ -284,14 +272,14 @@
         name: nginx
     EOF
 
-- name: Wait for WEB UI come up ~700 seconds left....
+- name: Wait for WEB UI come up ~400 seconds left....
   uri:
     url: "http://{{ip}}:{{ awx_port }}/api/"
     follow_redirects: none
     method: GET
   register: result
   until: result.status == 200
-  retries: 70  #70*10=700 sec
+  retries: 40 # 40*10=400 sec
   delay: 10
 
 - name: Create Admin Password
