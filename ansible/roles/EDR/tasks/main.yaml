@@ -8,7 +8,9 @@
   copy:
     src: bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
     dest: /root/bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
-    remote_src: yes
+    mode: 0644
+    owner: root
+    group: root
   when: not pack.stat.exists
 
 - name: Install EDR

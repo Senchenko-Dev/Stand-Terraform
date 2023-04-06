@@ -137,6 +137,7 @@ resource "local_file" "nginx-inventory" {
   }
 }
 
+
 #resource "helm_release" "nginx" {
 #  name        = "nginx"
 #  chart       = "nginx"
