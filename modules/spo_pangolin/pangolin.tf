@@ -87,6 +87,8 @@ resource "vcd_vm" "Pangolin-postgres" {
                   echo "${var.vm_props.stand_name}-${var.inventory_group_name}-vm" > /etc/hostname
                   sed -i "s/127\.0\.1\.1.*/127\.0\.1\.1  ${var.vm_props.stand_name}-${var.inventory_group_name}-vm/g" /etc/hosts
                   echo "nameserver ${var.vm_props.guest_properties.dnsserver}" > /etc/resolv.conf
+                  sed -i "s/PermitRootLogin no/PermitRootLogin yes/g" /etc/ssh/sshd_config
+                  systemctl restart sshd
                   EOF
   }
 

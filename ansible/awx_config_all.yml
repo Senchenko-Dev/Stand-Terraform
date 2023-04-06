@@ -14,21 +14,21 @@
       tags: always
     #      no_log: yes todo !!!!!!
 
-#    - name: Ожидание доступности API AWX ~700 seconds....
-#      uri:
-#        url: "{{ awx_url }}/api/"
-#        follow_redirects: none
-#        method: GET
-#      register: result
-#      until: result.status == 200
-#      retries: 70 # 70*10=700 sec
-#      delay: 10
-#      tags: always
-#
-#    - name: Настройка AWX
-#      import_role:
-#        name: awx-config
-#      environment:
-#        CONTROLLER_HOST: "{{ awx_url }}"
-#        CONTROLLER_USERNAME: "{{ awx_login }}"
-#        CONTROLLER_PASSWORD: "{{ awx_password }}"
+    - name: Ожидание доступности API AWX ~700 seconds....
+      uri:
+        url: "{{ awx_url }}/api/"
+        follow_redirects: none
+        method: GET
+      register: result
+      until: result.status == 200
+      retries: 70 # 70*10=700 sec
+      delay: 10
+      tags: always
+
+    - name: Настройка AWX
+      import_role:
+        name: awx-config
+      environment:
+        CONTROLLER_HOST: "{{ awx_url }}"
+        CONTROLLER_USERNAME: "{{ awx_login }}"
+        CONTROLLER_PASSWORD: "{{ awx_password }}"
