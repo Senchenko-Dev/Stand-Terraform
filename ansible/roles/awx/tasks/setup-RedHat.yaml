@@ -134,7 +134,7 @@
 - name: Download kustomize
   get_url:
     url: "{{ share }}/mirror/docker/images/k3s/kustomize"
-    dest: /usr/local/bin
+    dest: /usr/bin
     mode: '0777'
 
 - name: Copy kustomization.yaml
