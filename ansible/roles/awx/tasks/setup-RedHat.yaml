@@ -155,6 +155,16 @@
 - name: namespace for kubectl
   shell: kubectl config set-context --current --namespace=awx
 
+- name: Check it is Apply
+  stat:
+    path: /root/awx-operator/awx-deploy.yaml
+  register: awx
+
+- name: Create file awx-deploy.yaml
+  file:
+    path: /root/awx-operator/awx-deploy.yaml
+    state: touch
+
 - name: Apply
   shell: |
     cat <<EOF | kubectl create -f -
@@ -171,11 +181,31 @@
         requests:
           storage: 5Gi
     EOF
+  when: awx.stat.exists == false
 
-- name: Copy awx-deploy.yaml
-  template:
-    src: awx-deploy.yaml
-    dest: /root/awx-operator
+
+- name:  Add in file awx-deploy.yaml
+  blockinfile:
+    path: /root/awx-operator/awx-deploy.yaml
+    block: |
+      ---
+      apiVersion: awx.ansible.com/v1beta1
+      kind: AWX
+      metadata:
+        name: awx
+      spec:
+        service_type: nodeport
+        nodeport_port: {{awx_port}}
+        projects_persistence: true
+        projects_storage_access_mode: ReadWriteOnce
+        web_extra_volume_mounts: |
+          - name: static-data
+            mountPath: /var/lib/projects
+        extra_volumes: |
+          - name: static-data
+            persistentVolumeClaim:
+              claimName: static-data-pvc
+
 
 - name: kubectl apply -f awx-deploy.yaml
   shell: kubectl apply -f awx-deploy.yaml
