@@ -310,7 +310,7 @@
     method: GET
   register: result
   until: result.status == 200
-  retries: 40 # 40*10=400 sec
+  retries: 70 # 70*10=700 sec
   delay: 10
 
 - name: Create Admin Password

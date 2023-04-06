@@ -1,4 +1,4 @@
-#1234
+#12345
 locals {
   stand_name = "Bystrov" # TODO Имя стенда
   network_name = "main_VDC02"
@@ -10,21 +10,9 @@ locals {
   ]
   # параметры для VCD_VM
   vm_props_default = {
-    #-------------CentOs-8.4----------------#
-#    template_name = "SBT-SPO-RHEL84-latest"
-#    catalog_name = "SBT_CREATOR_TEMPLATES"
-
     #-------------CentOs-7.9----------------#
     template_name = "SBT-SPO-RHEL79-latest"
     catalog_name = "RHEL7"
-
-    #-------------SberLinux-----------------#
-#     template_name = "SBT-SPO-SBEL86-latest"
-#     catalog_name = "SBT_CREATOR_TEMPLATES"
-
-    #--------------CentOs7------------------#
-#    template_name = "CentOS7_64-bit"
-#    catalog_name = "Linux Templates"
 
     network_type = "org"
     ip_allocation_mode = "POOL"
@@ -118,6 +106,7 @@ module "Nginx" {
   spo_role_name = "nginx"
   vault_file = local.vault_file
 }
+
 
 module "KAFKA_Corex_standalone" {
   count = 1
