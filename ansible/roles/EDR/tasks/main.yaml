@@ -1,12 +1,15 @@
 ---
+- name: Check
+  stat:
+    path: /root/bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
+  register: pack
+
 - name: Copy EDR to host
   copy:
-    src: bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
+    src: /root/EDR/roles/EDR/file/bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
     dest: /root/bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
-    mode: 0644
-    owner: root
-    group: root
-    register: package
+    remote_src: yes
+  when: not pack.stat.exists
 
 - name: Install EDR
   shell: yum install -y bz_sensors_agent-v2.13.1-x64-bz_soc.rpm
@@ -19,4 +22,4 @@
     BZ_DIAL_TIMEOUT: 10s
     BZ_AGENT_GROUPS: 'LINDEF'
     BZ_LOG_LEVEL: debug
-  when: package.stat.exists == false
+  when: not pack.stat.exists
