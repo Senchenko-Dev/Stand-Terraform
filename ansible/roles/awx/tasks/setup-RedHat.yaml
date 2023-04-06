@@ -103,10 +103,10 @@
     name: docker
     state: restarted
 
-#- name: Restart k3s
-#  systemd:
-#    name: k3s
-#    state: restarted
+- name: Restart k3s
+  systemd:
+    name: k3s
+    state: restarted
 
 - name: cluster name
   shell: kubectl get nodes | awk '{print $1}' | sed 's/NAME//' |  tr -d '\n'
