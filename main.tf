@@ -100,7 +100,7 @@ module "AWX" {
 module "Nginx" {
   source = "./modules/spo_nginx"
   # VM properties
-  count = 0
+  count = 1
 
   vm_count = 1
   cpu = 1
