@@ -59,8 +59,6 @@ resource "vcd_vm" "VM-awx" {
                    echo "ansible  ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
                    mkdir -p /home/ansible/.ssh
                    echo "${var.vm_props.guest_properties.ansible_auth_pub_key}" >> /home/ansible/.ssh/authorized_keys
-                   hostnamectl set-hostname "${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}"
-                   echo "nameserver ${var.vm_props.guest_properties.dnsserver}" > /etc/resolv.conf
                    sed -i "s/PermitRootLogin no/PermitRootLogin yes/g" /etc/ssh/sshd_config
                    systemctl restart sshd
                    EOF
