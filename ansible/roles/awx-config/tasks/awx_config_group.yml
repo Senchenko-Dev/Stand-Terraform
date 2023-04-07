@@ -19,7 +19,7 @@
     source: scm
     source_project: "{{ org_name }}-project"
     source_path: "{{ inventory_path }}"
-    #    update_on_launch: yes
+#    update_on_launch: yes
     update_on_project_update : yes
   register: result
   until: result is not failed
@@ -27,13 +27,13 @@
   delay: 3
 
 - set_fact:
-    #    found_tags: "{{ awx_tags.split(' ') | difference(exclude_tags.split(' ')) }}"
+#    found_tags: "{{ awx_tags.split(' ') | difference(exclude_tags.split(' ')) }}"
     spo_role_defaults: "{{ lookup('file', 'roles/' + spo_role_name + '/defaults/main.yml') | from_yaml }}"
 
 - set_fact:
     awx_tags: "{{ spo_role_defaults.awx_tags | default([]) }}"
 
-- debug:
+- debug: 
     var: awx_tags
 
 #- name: Ожидание загрузки проекта
@@ -44,7 +44,7 @@
 - name: Создание шаблонов JOBs согласно тэгам
   awx.awx.job_template:
     name: "{{ spo_role_name }}_{{ item }}" # если инвентарь на выбор
-    #    name: "{{ group_name }}_{{ item }}" # если инвентарь фиксированный
+#    name: "{{ group_name }}_{{ item }}" # если инвентарь фиксированный
     job_type: "run"
     organization: "{{ org_name }}"
     ask_inventory_on_launch: yes
