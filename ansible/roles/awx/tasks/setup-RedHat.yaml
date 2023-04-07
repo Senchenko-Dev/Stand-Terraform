@@ -303,7 +303,7 @@
     EOF
 
 
-- name: Wait for WEB UI come up ~400 seconds left....
+- name: Wait for WEB UI come up ~700 seconds left....
   uri:
     url: "http://{{ip}}:{{ awx_port }}/api/"
     follow_redirects: none
