@@ -55,6 +55,20 @@ locals {
 #  description = "Набор параметров для настройки AWX. Для новой установки задайте local.install_awx_props. Для внешнего AWX задайте local.external_awx_props"
 #}
 
+variable "scm_branch" {}
+
+variable "scm_url" {}
+
+variable "org_name" {}
+
+variable "scm_password" {}
+
+variable "scm_username" {}
+
+variable "scm_cred_name" {}
+
+variable "machine_cred_username" {}
+
 variable "vault_file" {
   description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
 }
