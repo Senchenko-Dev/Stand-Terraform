@@ -54,7 +54,6 @@ locals {
   }
 }
 
-
 locals {
   //  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
   awx_props = merge(local.install_awx_props,
@@ -67,14 +66,11 @@ locals {
   )
 }
 
-module "AWX" {
 
-  count = 1
+module "AWX" {
 
   # TF path to the module
   source = "./modules/awx"
-
-  vm_count = 1
 
   # VM properties
   vm_props = local.vm_props_default
@@ -82,6 +78,8 @@ module "AWX" {
   inventory_group_name = "awx-group" // для связи с group_vars/group_name.yml
   awx_props = local.install_awx_props
   vault_file = local.vault_file
+
+
 }
 
 
@@ -109,6 +107,8 @@ module "Nginx" {
   spo_role_name = "nginx"
   vault_file = local.vault_file
 }
+
+
 
 
 module "KAFKA_Corex_standalone" {

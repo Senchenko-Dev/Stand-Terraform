@@ -10,11 +10,11 @@ terraform {
 
 locals {
   final_disks_data = flatten([
-    for vm_index in range(var.vm_count) : [
-      for disk in var.vm_disk_data : {
-        "${var.vm_props.stand_name}-${var.inventory_group_name}-vm-${vm_index}-disk-${index(var.vm_disk_data, disk)}" = disk
-      }
-    ]
+  for vm_index in range(var.vm_count) : [
+  for disk in var.vm_disk_data : {
+    "${var.vm_props.stand_name}-${var.inventory_group_name}-vm-${vm_index}-disk-${index(var.vm_disk_data, disk)}" = disk
+  }
+  ]
   ])
 }
 
@@ -46,6 +46,7 @@ resource "vcd_vm" "VM-awx" {
     type = var.vm_props.network_type
     ip_allocation_mode = var.vm_props.ip_allocation_mode
   }
+  // диски
 
   // Кастомизация ОС
   customization {
@@ -67,7 +68,6 @@ resource "vcd_vm" "VM-awx" {
                   EOF
   }
 
-  // диски
   dynamic "disk" {
     for_each = { for disk_data in local.final_disks_data : keys(disk_data)[0] => values(disk_data)[0] }
     content {
@@ -77,7 +77,7 @@ resource "vcd_vm" "VM-awx" {
     }
   }
 
-#+---------------------------------------------------------+
+  #+---------------------------------------------------------+
   guest_properties = merge(
     var.vm_props.guest_properties,
     {
@@ -95,7 +95,7 @@ resource "vcd_vm" "VM-awx" {
 
 // создание инвентори для одной группы (модуля)
 resource "local_file" "awx-inventory" {
-  # count = "${ var.vm_count != 0 ? 1 : 0 }"
+  count = "${ var.vm_count != 0 ? 1 : 0 }"
   filename = "ansible/inventory/awx_${var.inventory_group_name}.ini"
   content  = templatefile("tf_templates/awx-inventory.tpl",
     {
@@ -119,8 +119,7 @@ resource "local_file" "awx-inventory" {
       playbook {
         file_path = "ansible/prepare_host_playbook.yml"
       }
-      # inventory_file = local_file.awx-inventory[0].filename
-      inventory_file = local_file.awx-inventory.filename
+      inventory_file = local_file.awx-inventory[0].filename
       extra_vars     = {
         ssh_keys_list : jsonencode(var.vm_props.ssh_keys_list)
         disks = jsonencode(var.vm_disk_data)
@@ -131,14 +130,12 @@ resource "local_file" "awx-inventory" {
       playbook {
         file_path = "ansible/spo_install_playbook.yml"
       }
-      inventory_file = local_file.awx-inventory.filename
-      # inventory_file = local_file.awx-inventory[0].filename
+      inventory_file = local_file.awx-inventory[0].filename
       extra_vars     = {
         spo_role_name : var.spo_role_name
         vault_file : var.vault_file
         awx_port : var.awx_props.awx_port
-        pod_nginx_port : var.awx_props.pod_nginx_port
-        docker_registry_host: "10.42.4.125"
+        //        pod_nginx_port : var.awx_props.pod_nginx_port
       }
       vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
@@ -178,7 +175,7 @@ resource "null_resource" "awx-config-stand" {
     private_key = var.vm_props.private_key
     host        = ""
   }
-    // Подготовка стенда
+  // Подготовка стенда
   provisioner "ansible" {
     plays {
       playbook {
@@ -192,7 +189,7 @@ resource "null_resource" "awx-config-stand" {
         vault_file : var.vault_file
         spo_role_name : var.spo_role_name
       },
-      var.awx_props
+        var.awx_props
       )
       vault_id = [
         "${abspath(path.root)}/ansible/login.sh"]
