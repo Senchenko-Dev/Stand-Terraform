@@ -19,10 +19,6 @@ variable "spo_role_name" {
   default = "awx"
 }
 
-variable "awx_port" {}
-
-variable "pod_nginx_port" {}
-
 variable "memory" {
   description = "RAM of Virtual Machine"
   type = number
@@ -51,27 +47,9 @@ locals {
 //  default = "password"
 //}
 
-#variable "awx_props" {
-#  description = "Набор параметров для настройки AWX. Для новой установки задайте local.install_awx_props. Для внешнего AWX задайте local.external_awx_props"
-#}
-
-variable "stand_admin_username" {}
-
-variable "stand_admin_email" {}
-
-variable "scm_branch" {}
-
-variable "scm_url" {}
-
-variable "org_name" {}
-
-variable "scm_password" {}
-
-variable "scm_username" {}
-
-variable "scm_cred_name" {}
-
-variable "machine_cred_username" {}
+variable "awx_props" {
+  description = "Набор параметров для настройки AWX. Для новой установки задайте local.install_awx_props. Для внешнего AWX задайте local.external_awx_props"
+}
 
 variable "vault_file" {
   description = "Имя файла с зашифрованными переменными, расположенного по пути ./ansible/"
