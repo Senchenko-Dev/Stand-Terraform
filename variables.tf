@@ -46,28 +46,13 @@ variable "vault_password" {
   default = "" # "P@ssw0rd!,"
 }
 
-variable "hashicorp_vault_url" {
-  type = string
-  sensitive = false
-  default = "" 
-}
-
-variable "hashicorp_vault_token" {
-  type = string
-  sensitive = false
-  default = ""
-}
-
 variable "managment_system_type" {
   type = string
   default = "openshift"
 }
 
-variable "vm_count" {
-  default = 0
+variable "vcd_token" {
+  default = ""
 }
-
-
-#variable "vcd_username" {}
 #
 #variable "vcd_password" {}
