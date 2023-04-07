@@ -10,11 +10,11 @@ terraform {
 
 locals {
   final_disks_data = flatten([
-  for vm_index in range(var.vm_count) : [
-  for disk in var.vm_disk_data : {
-    "${var.vm_props.stand_name}-${var.inventory_group_name}-vm-${vm_index}-disk-${index(var.vm_disk_data, disk)}" = disk
-  }
-  ]
+    for vm_index in range(var.vm_count) : [
+      for disk in var.vm_disk_data : {
+        "${var.vm_props.stand_name}-${var.inventory_group_name}-vm-${vm_index}-disk-${index(var.vm_disk_data, disk)}" = disk
+      }
+    ]
   ])
 }
 
@@ -47,27 +47,7 @@ resource "vcd_vm" "VM-awx" {
     ip_allocation_mode = var.vm_props.ip_allocation_mode
   }
   // диски
-
-  // Кастомизация ОС
-  customization {
-    force                      = true        #Применить параметры кастомизации
-    allow_local_admin_password = true        #Наличие локального пароля админа
-    auto_generate_password     = false       #Отмена автогенерации пароля
-    admin_password             = "123qwe123" #Пароль администратора
-    initscript = <<EOF
-                  #!/bin/sh
-                  adduser ansible
-                  echo "ansible  ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-                  mkdir -p /home/ansible/.ssh
-                  echo "${var.vm_props.guest_properties.ansible_auth_pub_key}" >> /home/ansible/.ssh/authorized_keys
-                  echo "${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}" > /etc/hostname
-                  sed -i "s/127\.0\.1\.1.*/127\.0\.1\.1  ${var.vm_props.stand_name}-${var.inventory_group_name}-vm_${count.index}/g" /etc/hosts
-                  echo "nameserver ${var.vm_props.guest_properties.dnsserver}" > /etc/resolv.conf
-                  sed -i "s/PermitRootLogin no/PermitRootLogin yes/g" /etc/ssh/sshd_config
-                  systemctl restart sshd
-                  EOF
-  }
-
+ 
   dynamic "disk" {
     for_each = { for disk_data in local.final_disks_data : keys(disk_data)[0] => values(disk_data)[0] }
     content {
@@ -77,7 +57,7 @@ resource "vcd_vm" "VM-awx" {
     }
   }
 
-  #+---------------------------------------------------------+
+#+---------------------------------------------------------+
   guest_properties = merge(
     var.vm_props.guest_properties,
     {
@@ -135,7 +115,7 @@ resource "local_file" "awx-inventory" {
         spo_role_name : var.spo_role_name
         vault_file : var.vault_file
         awx_port : var.awx_props.awx_port
-        //        pod_nginx_port : var.awx_props.pod_nginx_port
+//        pod_nginx_port : var.awx_props.pod_nginx_port
       }
       vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
@@ -175,7 +155,7 @@ resource "null_resource" "awx-config-stand" {
     private_key = var.vm_props.private_key
     host        = ""
   }
-  // Подготовка стенда
+    // Подготовка стенда
   provisioner "ansible" {
     plays {
       playbook {
@@ -189,7 +169,7 @@ resource "null_resource" "awx-config-stand" {
         vault_file : var.vault_file
         spo_role_name : var.spo_role_name
       },
-        var.awx_props
+      var.awx_props
       )
       vault_id = [
         "${abspath(path.root)}/ansible/login.sh"]

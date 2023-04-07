@@ -9,9 +9,9 @@ variable "vault_file" {
 }
 
 resource "null_resource" "awx-k8s-templates-config" {
-  //triggers = {
-  //  timestamp = timestamp()
-  //}
+  triggers = {
+    timestamp = timestamp()
+  }
   // параметры подключения для ансибла
   connection {
     host = "localhost"

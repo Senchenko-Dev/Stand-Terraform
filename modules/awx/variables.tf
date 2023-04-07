@@ -19,8 +19,6 @@ variable "spo_role_name" {
   default = "awx"
 }
 
-
-
 variable "memory" {
   description = "RAM of Virtual Machine"
   type = number
