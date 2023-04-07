@@ -13,6 +13,7 @@ locals {
     #-------------CentOs-7.9----------------#
     template_name = "SBT-SPO-RHEL79-latest"
     catalog_name = "RHEL7"
+   #----------------------------------------#
 
     network_type = "org"
     ip_allocation_mode = "POOL"
@@ -35,37 +36,37 @@ locals {
 }
 
 # AWX
-locals {
-  install_awx_props = {
-    awx_port = 30800
-    pod_nginx_port = 30900
-    vault_file = local.vault_file
-    scm_cred_name = "${local.stand_name} SCM Credential"
-    scm_username = var.scm_username
-    scm_password = var.scm_password
-    machine_cred_username = "ansible"
+#locals {
+#  install_awx_props = {
+#    awx_port = 30800
+#    pod_nginx_port = 30900
+#    vault_file = local.vault_file
+#    scm_cred_name = "${local.stand_name} SCM Credential"
+#    scm_username = var.scm_username
+#    scm_password = var.scm_password
+#    machine_cred_username = "ansible"
+#
+#    stand_admin_username = "${local.stand_name}-admin"
+#
+#    stand_admin_email = "{{ '' | default('email@default.com', true) }}"
+#    org_name = local.stand_name
+#    scm_url = var.scm_url
+#    scm_branch = var.scm_branch
+#  }
+#}
 
-    stand_admin_username = "${local.stand_name}-admin"
 
-    stand_admin_email = "{{ '' | default('email@default.com', true) }}"
-    org_name = local.stand_name
-    scm_url = var.scm_url
-    scm_branch = var.scm_branch
-  }
-}
-
-
-locals {
-  //  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
-  awx_props = merge(local.install_awx_props,
-    {
-#      awx_host = module.AWX.awx_host_ip
-#      awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
-      awx_k8s_sa_name = local.globals.devopsSaName
-      awx_k8s_sa_project = local.globals.devopsProject
-    }
-  )
-}
+#locals {
+#  //  awx_props = local.external_awx_props  #  При использовании внешнего AWX прописать хост и урл в явном виде.
+#  awx_props = merge(local.install_awx_props,
+#    {
+##      awx_host = module.AWX.awx_host_ip
+##      awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
+#      awx_k8s_sa_name = local.globals.devopsSaName
+#      awx_k8s_sa_project = local.globals.devopsProject
+#    }
+#  )
+#}
 
 module "AWX" {
 
@@ -80,8 +81,20 @@ module "AWX" {
   vm_props = local.vm_props_default
   # Ansible properties
   inventory_group_name = "awx-group" // для связи с group_vars/group_name.yml
-  awx_props = local.install_awx_props
   vault_file = local.vault_file
+  awx_port = 30800
+  pod_nginx_port = 30900
+  scm_cred_name = "${local.stand_name} SCM Credential"
+  scm_username = var.scm_username
+  scm_password = var.scm_password
+  machine_cred_username = "ansible"
+
+  stand_admin_username = "${local.stand_name}-admin"
+
+  stand_admin_email = "{{ '' | default('email@default.com', true) }}"
+  org_name = local.stand_name
+  scm_url = var.scm_url
+  scm_branch = var.scm_branch
 }
 
 

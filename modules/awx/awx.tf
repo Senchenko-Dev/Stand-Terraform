@@ -136,8 +136,8 @@ resource "local_file" "awx-inventory" {
       extra_vars     = {
         spo_role_name : var.spo_role_name
         vault_file : var.vault_file
-        awx_port : var.awx_props.awx_port
-        pod_nginx_port : var.awx_props.pod_nginx_port
+        awx_port : var.awx_port
+        pod_nginx_port : var.pod_nginx_port
         docker_registry_host: "10.42.4.125"
       }
       vault_id = ["${abspath(path.root)}/ansible/login.sh"]
@@ -153,12 +153,9 @@ resource "local_file" "awx-inventory" {
       extra_vars = merge({
         vault_file : var.vault_file
         spo_role_name : var.spo_role_name
+        awx_host : vcd_vm.VM-awx[0].network[0].ip
+        awx_url : "http://${vcd_vm.VM-awx[0].network[0].ip}:${var.awx_port}"
       },
-        var.awx_props,
-        {
-          awx_host : vcd_vm.VM-awx[0].network[0].ip
-          awx_url : "http://${vcd_vm.VM-awx[0].network[0].ip}:${var.awx_props.awx_port}"
-        }
       )
       vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
@@ -192,7 +189,7 @@ resource "null_resource" "awx-config-stand" {
         vault_file : var.vault_file
         spo_role_name : var.spo_role_name
       },
-      var.awx_props
+#      var.awx_props
       )
       vault_id = [
         "${abspath(path.root)}/ansible/login.sh"]
