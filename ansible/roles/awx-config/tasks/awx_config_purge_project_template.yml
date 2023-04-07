@@ -1,19 +1,5 @@
-#- name: "Get sa token"
-#  shell: "kubectl -n {{ awx_k8s_sa_project }} get sa {{ awx_k8s_sa_name }} -o jsonpath='{.secrets[1].name}'"
-#  register: kek1
-
-#- debug:
-#    msg: "KEK1 {{ kek1 }}"
-
-#- name: "Get sa token"
-#  shell: "kubectl -n {{ awx_k8s_sa_project }} get secret {{ kek1.stdout }} -o jsonpath='{.data.token}' | base64 --decode"
-#  register: kek2
-
-#- debug:
-#    msg: "KEK2 {{ kek2 }}"
-
 - name: "Get sa token"
-  shell: "kubectl -n {{ awx_k8s_sa_project }} get secret $(kubectl -n {{ awx_k8s_sa_project }} get sa {{ awx_k8s_sa_name }} -o jsonpath='{.secrets[1].name}') -o jsonpath='{.data.token}' | base64 --decode"
+  shell: "kubectl -n {{ awx_k8s_sa_project }} get secret $(kubectl -n {{ awx_k8s_sa_project }} get sa {{ awx_k8s_sa_name }} -o jsonpath='{.secrets[*].name}'|grep -o \"[^\ ]*token[^\ ]*\") -o jsonpath='{.data.token}' | base64 --decode"
   register: kubectl_token_output
 
 - set_fact:
@@ -55,7 +41,7 @@
       - "K8S Credential"
     state: "present"
     become_enabled: yes
-    timeout: 37
+    timeout: 1200
     survey_enabled: true
     survey_spec:
       name: ""

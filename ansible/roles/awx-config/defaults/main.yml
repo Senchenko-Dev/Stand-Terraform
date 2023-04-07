@@ -1,7 +1,7 @@
-# org_name: FROM_ANSIBLE
+org_name: FROM_ANSIBLE
 scm_cred_name: FROM_ANSIBLE SCM Credential
-# scm_username: ""
-# scm_password: ""
+scm_username: ""
+scm_password: ""
 machine_cred_name: FROM_ANSIBLE Machine Credential
 machine_cred_username: ansible
 
