@@ -1,68 +1,148 @@
+- name: Создание организации
+  awx.awx.organization:
+    name: "{{ org_name }}"
+    description: "Organization as a wrapper of stand"
+    state: present
+  register: result
+  until: result is not failed
+  retries: 5
+  delay: 3
+
+- name: Создание пользователя - администратора организации
+  awx.awx.user:
+    username: "{{ stand_admin_username }}"
+    password: "{{ stand_admin_password }}"
+    email: "{{ stand_admin_email }}"
+    organization: "{{ org_name }}"
+    state: present
+  register: result
+  until: result is not failed
+  retries: 5
+  delay: 3
+
+- name: Назначение роли администратора организации
+  awx.awx.role:
+    user: "{{ stand_admin_username }}"
+    organizations: "{{ org_name }}"
+    role: admin
+    state: present
+  register: result
+  until: result is not failed
+  retries: 5
+  delay: 3
+
+- name: Создание credential типа SCM
+  awx.awx.credential:
+    name: "{{ scm_cred_name }}"
+    organization: "{{ org_name }}"
+    state: present
+    credential_type: Source Control
+    inputs:
+      username: "{{ scm_username }}"
+      password: "{{ scm_password }}"
+  register: result
+  until: result is not failed
+  retries: 5
+  delay: 3
+
+- name: Создание credentials типа machine
+  awx.awx.credential:
+    name: "{{ machine_cred_name }}"
+    organization: "{{ org_name }}"
+    state: present
+    credential_type: Machine
+    inputs:
+      username: "{{ machine_cred_username }}"
+      #          ssh_key_data: "{{ lookup('file', 'key.rsa') }}"
+      ssh_key_data: "{{ machine_cred_ssh_key_data }}"
+  register: result
+  until: result is not failed
+  retries: 5
+  delay: 3
+
+- name: Создание проекта
+  awx.awx.project:
+    name: "{{ org_name }}-project"
+    description: "Project as inventory source"
+    organization: "{{ org_name }}"
+    credential: "{{ scm_cred_name }}"
+    scm_branch: "{{ scm_branch }}"
+    scm_clean: yes
+    scm_type: git
+    #scm_update_on_launch: yes todo почему закомментировано?
+    scm_url: "{{ scm_url }}"
+    update_project: yes
+    state: present
+  register: result
+  until: result is not failed
+  retries: 5
+  delay: 3
+
+- name: Создание kubeconfig типа кредов
+  awx.awx.credential_type:
+    name: kubeconfig
+    kind: cloud
+    description: kubeconfig file
+    inputs:
+      fields:
+        - id: kube_config
+          type: string
+          label: kubeconfig
+          secret: true
+          multiline: true
+      required:
+        - kube_config
+    injectors:
+      env:
+        K8S_AUTH_KUBECONFIG: "{% raw %}{{ tower.filename.kubeconfig }}{% endraw %}"
+        KUBECONFIG: "{% raw %}{{ tower.filename.kubeconfig }}{% endraw %}"
+      file:
+        template.kubeconfig: "{% raw %}{{ kube_config }}{% endraw %}"
+    state: present
+    validate_certs: false
+
 - name: Создание инвентаря
   awx.awx.inventory:
-    name: "{{ org_name }}-{{ group_name }}"
-    description: "Инвентарь группы {{ group_name }}"
+    name: "Local"
+    description: "Инвентарь localhost"
     organization: "{{ org_name }}"
+  register: result
+  until: result is not failed
+  retries: 5
+  delay: 3
+
+- name: Добавление хоста
+  awx.awx.host:
+    name: localhost
+    description: "Local Host Group"
+    inventory: "Local"
+    state: present
     variables:
-  register: result
-  until: result is not failed
-  retries: 5
-  delay: 3
+      ansible_connection: local
 
-- name: Создание источника инвентаря
-  awx.awx.inventory_source:
-    name: "Источник инвентаря группы {{ group_name }}"
-    inventory: "{{ org_name }}-{{ group_name }}"
-    organization: "{{ org_name }}"
-    overwrite: yes
-    overwrite_vars: yes
-    source: scm
-    source_project: "{{ org_name }}-project"
-    source_path: "{{ inventory_path }}"
-    #    update_on_launch: yes
-    update_on_project_update : yes
-  register: result
-  until: result is not failed
-  retries: 5
-  delay: 3
-
-- set_fact:
-    #    found_tags: "{{ awx_tags.split(' ') | difference(exclude_tags.split(' ')) }}"
-    spo_role_defaults: "{{ lookup('file', 'roles/' + spo_role_name + '/defaults/main.yml') | from_yaml }}"
-
-- set_fact:
-    awx_tags: "{{ spo_role_defaults.awx_tags | default([]) }}"
+- name: Add kubectl EE to the controller instance
+  awx.awx.execution_environment:
+    name: "kubectl-ee"
+    image: 10.42.4.125:5000/ansible/awx-ee-kubectl
 
 - debug:
-    var: awx_tags
+    var: stand_admin_username
 
-#- name: Ожидание загрузки проекта
-#  wait_for:
-#    path: ansible/spo_install_playbook.yml
-#    timeout: 90
+- debug:
+    var: email_notify_username
 
-- name: Создание шаблонов JOBs согласно тэгам
-  awx.awx.job_template:
-    name: "{{ spo_role_name }}_{{ item }}" # если инвентарь на выбор
-    #    name: "{{ group_name }}_{{ item }}" # если инвентарь фиксированный
-    job_type: "run"
+- name: Создание уведомлений на почту
+  awx.awx.notification_template:
+    name: "{{ org_name }}-notification"
     organization: "{{ org_name }}"
-    ask_inventory_on_launch: yes
-    #        inventory: "{{ org_name }}-{{ group_name }}"
-    project: "{{ org_name }}-project"
-    playbook: "ansible/spo_install_playbook.yml"
-    job_tags: "{{ item }}"
-    credentials:
-      - "{{ machine_cred_name }}"
-    state: "present"
-    become_enabled: yes
-    timeout: 1200
-    extra_vars:
-      spo_role_name: "{{ spo_role_name }}"
-      awx_host: "{{ awx_host }}"
-      pod_nginx_port: "{{pod_nginx_port}}"
-  loop: "{{ awx_tags }}"
-  register: result
-  until: result is not failed
-  retries: 20
-  delay: 5
+    notification_type: email
+    notification_configuration:
+      username: "{{ email_notify_username }}"
+      password: "{{ email_notify_password }}"
+      sender: "{{ email_notify_username }}@{{ email_notify_domain }}"
+      recipients: "{{ email_notify_recipients }}"
+      host: "{{ email_notify_host }}"
+      port: 25
+      use_tls: no
+      use_ssl: no
+    state: present
