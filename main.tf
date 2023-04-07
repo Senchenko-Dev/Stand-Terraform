@@ -86,6 +86,9 @@ module "AWX" {
 
 
 module "Nginx" {
+
+  depends_on = [module.AWX]
+
   source = "./modules/spo_nginx"
   # VM properties
   count = 1
@@ -109,6 +112,7 @@ module "Nginx" {
 
 
 module "KAFKA_Corex_standalone" {
+
   count = 0
 
   vm_count = 1
