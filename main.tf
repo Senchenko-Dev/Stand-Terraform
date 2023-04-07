@@ -88,9 +88,7 @@ module "AWX" {
   scm_username = var.scm_username
   scm_password = var.scm_password
   machine_cred_username = "ansible"
-
   stand_admin_username = "${local.stand_name}-admin"
-
   stand_admin_email = "{{ '' | default('email@default.com', true) }}"
   org_name = local.stand_name
   scm_url = var.scm_url

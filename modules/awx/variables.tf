@@ -57,6 +57,8 @@ locals {
 
 variable "stand_admin_username" {}
 
+variable "stand_admin_email" {}
+
 variable "scm_branch" {}
 
 variable "scm_url" {}
