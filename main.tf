@@ -13,6 +13,7 @@ locals {
     #-------------CentOs-7.9----------------#
     template_name = "SBT-SPO-RHEL79-latest"
     catalog_name = "RHEL7"
+    #---------------------------------------#
 
     network_type = "org"
     ip_allocation_mode = "POOL"
@@ -78,14 +79,10 @@ module "AWX" {
   inventory_group_name = "awx-group" // для связи с group_vars/group_name.yml
   awx_props = local.install_awx_props
   vault_file = local.vault_file
-
-
 }
 
 
 module "Nginx" {
-
-  depends_on = [module.AWX]
 
   source = "./modules/spo_nginx"
   # VM properties
