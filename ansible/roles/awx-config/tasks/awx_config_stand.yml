@@ -69,7 +69,7 @@
     scm_branch: "{{ scm_branch }}"
     scm_clean: yes
     scm_type: git
-    scm_update_on_launch: True
+    scm_update_on_launch: True #изменение
     scm_url: "{{ scm_url }}"
     update_project: yes
     state: present
