@@ -150,28 +150,28 @@ locals {
   }
 }
 
-module "diOpenshiftgroup1" {
-  source = "./modules/ansible_group_project_init"
-  depends_on = [module.diOpenshiftServiceCore]
-  //  count = 0
-  for_each = {} #local.group1
-  managment_system_type = var.managment_system_type
-  #  awx_props = local.awx_props
-  kubeconfig = local.oc_kubeconfig
-  group = each.key
-  specs = each.value
-  globals = local.globals
-  vault_password = var.vault_password
-}
-
-module "config_awx_k8s_templates" {
-  depends_on = [module.AWX, module.diOpenshiftgroup1]
-  count = 0
-  # count = "${length(local.awx_props) != 0 ? 1 : 0}"
-  meta = fileset(path.root, "ansible/project_vars/*.yml")
-  source = "./modules/awx_config_k8s_templates"
-  kubeconfig = local.oc_kubeconfig
-  awx_props = local.awx_props
-  vault_file = local.vault_file
-}
+#module "diOpenshiftgroup1" {
+#  source = "./modules/ansible_group_project_init"
+#  depends_on = [module.diOpenshiftServiceCore]
+#  //  count = 0
+#  for_each = {} #local.group1
+#  managment_system_type = var.managment_system_type
+#  #  awx_props = local.awx_props
+#  kubeconfig = local.oc_kubeconfig
+#  group = each.key
+#  specs = each.value
+#  globals = local.globals
+#  vault_password = var.vault_password
+#}
+#
+#module "config_awx_k8s_templates" {
+#  depends_on = [module.AWX, module.diOpenshiftgroup1]
+#  count = 0
+#  # count = "${length(local.awx_props) != 0 ? 1 : 0}"
+#  meta = fileset(path.root, "ansible/project_vars/*.yml")
+#  source = "./modules/awx_config_k8s_templates"
+#  kubeconfig = local.oc_kubeconfig
+#  awx_props = local.awx_props
+#  vault_file = local.vault_file
+#}
 
