@@ -41,7 +41,7 @@
       - "K8S Credential"
     state: "present"
     become_enabled: yes
-    timeout: 1200
+    timeout: 1500
     survey_enabled: true
     survey_spec:
       name: ""
@@ -60,5 +60,5 @@
           type: "text"
   register: result
   until: result is not failed
-  retries: 5
-  delay: 3
+  retries: 10
+  delay: 5

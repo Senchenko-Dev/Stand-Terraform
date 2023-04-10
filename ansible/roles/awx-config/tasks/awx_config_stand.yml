@@ -5,8 +5,8 @@
     state: present
   register: result
   until: result is not failed
-  retries: 5
-  delay: 3
+  retries: 10
+  delay: 5
 
 - name: Создание пользователя - администратора организации
   awx.awx.user:
@@ -17,8 +17,8 @@
     state: present
   register: result
   until: result is not failed
-  retries: 5
-  delay: 3
+  retries: 10
+  delay: 5
 
 - name: Назначение роли администратора организации
   awx.awx.role:
@@ -28,8 +28,8 @@
     state: present
   register: result
   until: result is not failed
-  retries: 5
-  delay: 3
+  retries: 10
+  delay: 5
 
 - name: Создание credential типа SCM
   awx.awx.credential:
@@ -42,8 +42,8 @@
       password: "{{ scm_password }}"
   register: result
   until: result is not failed
-  retries: 5
-  delay: 3
+  retries: 10
+  delay: 5
 
 - name: Создание credentials типа machine
   awx.awx.credential:
@@ -57,8 +57,8 @@
       ssh_key_data: "{{ machine_cred_ssh_key_data }}"
   register: result
   until: result is not failed
-  retries: 5
-  delay: 3
+  retries: 10
+  delay: 5
 
 - name: Создание проекта
   awx.awx.project:
@@ -69,14 +69,14 @@
     scm_branch: "{{ scm_branch }}"
     scm_clean: yes
     scm_type: git
-    scm_update_on_launch: yes
+    scm_update_on_launch: yes #изменеия
     scm_url: "{{ scm_url }}"
     update_project: yes
     state: present
   register: result
   until: result is not failed
-  retries: 5
-  delay: 3
+  retries: 10
+  delay: 5
 
 - name: Создание kubeconfig типа кредов
   awx.awx.credential_type:
@@ -108,8 +108,8 @@
     organization: "{{ org_name }}"
   register: result
   until: result is not failed
-  retries: 5
-  delay: 3
+  retries: 10
+  delay: 5
 
 - name: Добавление хоста
   awx.awx.host:
