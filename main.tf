@@ -61,25 +61,25 @@ locals {
     {
 #      awx_host = module.AWX.awx_host_ip
 #      awx_url = "http://${module.AWX.awx_host_ip}:${local.install_awx_props.awx_port}"
-      awx_k8s_sa_name = local.globals.devopsSaName
-      awx_k8s_sa_project = local.globals.devopsProject
-    }
+#      awx_k8s_sa_name = local.globals.devopsSaName
+#      awx_k8s_sa_project = local.globals.devopsProject
+#    }
   )
 }
 
 
-module "AWX" {
-  count = 0
-  # TF path to the module
-  source = "./modules/awx"
-
-  # VM properties
-  vm_props = local.vm_props_default
-  # Ansible properties
-  inventory_group_name = "awx-group" // для связи с group_vars/group_name.yml
-  awx_props = local.install_awx_props
-  vault_file = local.vault_file
-}
+#module "AWX" {
+#  count = 0
+#  # TF path to the module
+#  source = "./modules/awx"
+#
+#  # VM properties
+#  vm_props = local.vm_props_default
+#  # Ansible properties
+#  inventory_group_name = "awx-group" // для связи с group_vars/group_name.yml
+#  awx_props = local.install_awx_props
+#  vault_file = local.vault_file
+#}
 
 
 module "Nginx" {
