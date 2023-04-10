@@ -301,7 +301,7 @@
       selector:
         name: nginx
     EOF
-
+  when: awx.stat.exists == false
 
 - name: Wait for WEB UI come up ~700 seconds left....
   uri:
