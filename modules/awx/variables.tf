@@ -4,7 +4,7 @@ variable "inventory_group_name" {
   type = string
 }
 variable "vm_count" {
-  default = 0
+  #default = 1
   description = "Установить '0' при использовании внешнего AWX, для его настройки на стенд. Иначе установить '1' или не указывать."
 }
 variable "vm_props" {
