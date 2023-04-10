@@ -5,7 +5,7 @@
 - name: Get apis
   shell:  "kubectl api-resources --namespaced=true --verbs=delete | awk '{print $1}'"
   register: apis
-    
+
 - name: Delete with selector
   shell: "kubectl delete {{ item }} -l {{ selector }} -n {{ project }} 2>/dev/null | grep -v 'No resources found'"
   register: delete_result

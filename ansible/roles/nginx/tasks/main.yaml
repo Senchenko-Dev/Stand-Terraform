@@ -20,68 +20,58 @@
 
 - name: import install-deps
   import_tasks: install-deps.yaml
-  become: yes
   tags:
     - install
 
 - name: import install-nginx
   import_tasks: install.yaml
-  become: yes
   tags:
     - install
 
 - name: import configure
   import_tasks: configure.yaml
-  become: yes
   tags:
     - install
     - configure
 
 - name: import control-start
   import_tasks: control-start.yaml
-  become: yes
   tags:
     - install
     - control-start
 
 - name: import control-stop
   import_tasks: control-stop.yaml
-  become: yes
   tags:
     - control-stop
     - never
 
 - name: import control-restart
   import_tasks: control-restart.yaml
-  become: yes
   tags:
     - control-restart
     - never
 
 - name: import get_logs
   import_tasks: get_logs.yaml
-  become: yes
   tags:
     - get_logs
     - never
 
 - name: import cleanup_logs
   import_tasks: cleanup_logs.yaml
-  become: yes
   tags:
     - cleanup_logs
     - never
 
 - name: import health_check
   import_tasks: health_check.yaml
-  become: yes
   tags:
     - health_check
     - never
 
 - name: import control
   import_tasks: control.yaml # todo запуск сервисов перенести сюда
-  become: yes
   tags:
     - install
     - control
