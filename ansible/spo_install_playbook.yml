@@ -1,5 +1,6 @@
 ---
-- hosts: all
+- name: SPO install
+  hosts: all
   become: yes
   serial: "{{ rolling_update_serial | default('100%') }}"
   gather_facts: no
@@ -7,21 +8,12 @@
   tasks:
 
     - debug:
-        var: vault_file 
+        var: vault_file
+      when: vault_file is defined
 
-    # - shell: ls -la "{{ vault_file }}"
-    #   delegate_to: localhost
-    #   register: ll
-
-    # - debug:
-    #     var: ll.stdout_lines
-
-    - name: "{{ spo_role_name | upper }} Import secrets" 
+    - name: Import secrets
       include_vars: "{{ vault_file }}"
       tags: always
-      delegate_to: localhost
-      become: no
-      #no_log: yes # todo !!!!!!
       when: vault_file is defined
 
     - name: Collect facts
@@ -30,7 +22,6 @@
 
     - import_role:
         name: "{{ spo_role_name }}"
-      # become: yes
 
     - name: Copy additional files
       copy:
@@ -41,7 +32,6 @@
         group: "{{item.group }}"
       loop: "{{ list_maps_custom_files | default([]) }}"
       notify: restart_service
-      become: yes
 
     - name: Copy additional templated files
       template:
@@ -53,7 +43,6 @@
         group: "{{ item.group }}"
       loop: "{{ list_maps_custom_templates | default([]) }}"
       notify: restart_service
-      become: yes
 
     - name: Execute destination file if requested
       shell: "{{item.dest}}"
@@ -61,27 +50,16 @@
       when:
         - item.execute is defined
         - item.execute|bool
-      become: yes
 
 
-  # post_tasks:
-  #   - include_vars: "{{ 'roles/' + spo_role_name + '/defaults/remove.yml' }}"
-  #   - name: Remove data after ended tasks
-  #     file:
-  #       path: "{{ item }}"
-  #       state: absent
-  #     loop:
-  #       - "{{ remove_data }}"
-  #     ignore_errors: true
 
-################-test-#################
+    ################-test-#################
     - name: execute bash script
       shell: "{{item.dest}}"
       loop: "{{ list_maps_custom_files | default([]) + list_maps_custom_templates | default([]) }}"
       when:
         - item.execute is defined
         - item.execute|bool
-      become: yes
 
 
 
