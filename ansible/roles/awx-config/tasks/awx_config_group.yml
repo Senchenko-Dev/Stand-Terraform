@@ -56,7 +56,7 @@
       - "{{ machine_cred_name }}"
     state: "present"
     become_enabled: yes
-    timeout: 1500
+    timeout: 1200
     extra_vars:
       spo_role_name: "{{ spo_role_name }}"
       awx_host: "{{ awx_host }}"
