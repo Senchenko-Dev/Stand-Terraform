@@ -5,8 +5,8 @@ scm_password: ""
 machine_cred_name: FROM_ANSIBLE Machine Credential
 machine_cred_username: ansible
 
-#stand_admin_username:
-#stand_admin_password:
+stand_admin_username: 
+stand_admin_password: 
 stand_admin_email: "{{ '' | default('email@default.com', true) }}"
 
 default_tags:
@@ -17,8 +17,8 @@ default_tags:
   - backup
   - get_logs
 
-#email_notify_username:
-#email_notify_password:
+email_notify_username:
+email_notify_password: 
 email_notify_domain: "sber-tech.com"
 email_notify_host: "10.44.10.146"
 email_notify_recipients:

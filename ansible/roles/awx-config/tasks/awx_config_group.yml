@@ -6,8 +6,8 @@
     variables:
   register: result
   until: result is not failed
-  retries: 10
-  delay: 5
+  retries: 5
+  delay: 3
 
 - name: Создание источника инвентаря
   awx.awx.inventory_source:
@@ -19,12 +19,12 @@
     source: scm
     source_project: "{{ org_name }}-project"
     source_path: "{{ inventory_path }}"
-    #update_on_launch: yes
+#    update_on_launch: yes
     update_on_project_update : yes
   register: result
   until: result is not failed
-  retries: 10
-  delay: 5
+  retries: 5
+  delay: 3
 
 - set_fact:
 #    found_tags: "{{ awx_tags.split(' ') | difference(exclude_tags.split(' ')) }}"
@@ -56,7 +56,7 @@
       - "{{ machine_cred_name }}"
     state: "present"
     become_enabled: yes
-    timeout: 1200
+    timeout: 37
     extra_vars:
       spo_role_name: "{{ spo_role_name }}"
       awx_host: "{{ awx_host }}"

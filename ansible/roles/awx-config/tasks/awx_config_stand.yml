@@ -5,20 +5,20 @@
     state: present
   register: result
   until: result is not failed
-  retries: 10
-  delay: 5
+  retries: 5
+  delay: 3
 
 - name: Создание пользователя - администратора организации
   awx.awx.user:
     username: "{{ stand_admin_username }}"
-    password: "{{ stand_admin_password }}"
+    password: "{{ secrets.awx.stand_admin_password }}"
     email: "{{ stand_admin_email }}"
     organization: "{{ org_name }}"
     state: present
   register: result
   until: result is not failed
-  retries: 10
-  delay: 5
+  retries: 5
+  delay: 3
 
 - name: Назначение роли администратора организации
   awx.awx.role:
@@ -28,8 +28,8 @@
     state: present
   register: result
   until: result is not failed
-  retries: 10
-  delay: 5
+  retries: 5
+  delay: 3
 
 - name: Создание credential типа SCM
   awx.awx.credential:
@@ -42,8 +42,8 @@
       password: "{{ scm_password }}"
   register: result
   until: result is not failed
-  retries: 10
-  delay: 5
+  retries: 5
+  delay: 3
 
 - name: Создание credentials типа machine
   awx.awx.credential:
@@ -54,11 +54,11 @@
     inputs:
       username: "{{ machine_cred_username }}"
       #          ssh_key_data: "{{ lookup('file', 'key.rsa') }}"
-      ssh_key_data: "{{ machine_cred_ssh_key_data }}"
+      ssh_key_data: "{{ secrets.awx.machine_cred_ssh_key_data }}"
   register: result
   until: result is not failed
-  retries: 10
-  delay: 5
+  retries: 5
+  delay: 3
 
 - name: Создание проекта
   awx.awx.project:
@@ -69,14 +69,14 @@
     scm_branch: "{{ scm_branch }}"
     scm_clean: yes
     scm_type: git
-    scm_update_on_launch: True #изменение
+    #scm_update_on_launch: yes todo почему закомментировано?
     scm_url: "{{ scm_url }}"
     update_project: yes
     state: present
   register: result
   until: result is not failed
-  retries: 10
-  delay: 5
+  retries: 5
+  delay: 3
 
 - name: Создание kubeconfig типа кредов
   awx.awx.credential_type:
@@ -108,8 +108,8 @@
     organization: "{{ org_name }}"
   register: result
   until: result is not failed
-  retries: 10
-  delay: 5
+  retries: 5
+  delay: 3
 
 - name: Добавление хоста
   awx.awx.host:
@@ -125,21 +125,15 @@
     name: "kubectl-ee"
     image: 10.42.4.125:5000/ansible/awx-ee-kubectl
 
-- debug:
-    var: stand_admin_username
-
-- debug:
-    var: email_notify_username
-
 - name: Создание уведомлений на почту
   awx.awx.notification_template:
     name: "{{ org_name }}-notification"
     organization: "{{ org_name }}"
     notification_type: email
     notification_configuration:
-      username: "{{ email_notify_username }}"
-      password: "{{ email_notify_password }}"
-      sender: "{{ email_notify_username }}@{{ email_notify_domain }}"
+      username: "{{ secrets.awx.email_notify_username }}"
+      password: "{{ secrets.awx.email_notify_password }}"
+      sender: "{{ secrets.awx.email_notify_username }}@{{ email_notify_domain }}"
       recipients: "{{ email_notify_recipients }}"
       host: "{{ email_notify_host }}"
       port: 25
