@@ -64,5 +64,5 @@
   loop: "{{ awx_tags }}"
   register: result
   until: result is not failed
-  retries: 20
-  delay: 5
+  retries: 30
+  delay: 10
