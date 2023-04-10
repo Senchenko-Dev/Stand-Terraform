@@ -47,7 +47,7 @@ resource "vcd_vm" "VM-awx" {
     ip_allocation_mode = var.vm_props.ip_allocation_mode
   }
 
-  // Кастомизация ОС
+  // Кастомизация ОС (подготовка образа ОС)
   customization {
     force                      = true        #Применить параметры кастомизации
     allow_local_admin_password = true        #Наличие локального пароля админа
