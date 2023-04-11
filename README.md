@@ -53,6 +53,12 @@ d) Merge
           NODE=spinnaker-testing
           COLLECTIVE_TERRAFORM_WORKSPACE=senchenko
           TERRAFORM_PG_REMOTE_CONN_STR="10.42.4.126/terraform_backend?sslmode=disable"
+          
+          HASHICORP=false
+          HASHICORP_URL='http://10.33.8.248:8200'
+          HASHICORP_PATH='/v1/DEV/PILP/R4/KV'
+          
+          
   с) Use Groovy Sandbox
   d) Build with BitBucket Push and Pull Request Plugin
      * Bitbucket Server Pull Request
