@@ -110,7 +110,7 @@ module "Nginx" {
 
 module "KAFKA_Corex_standalone" {
 
-  count = 1
+  count = 0
 
   vm_count = 1
   # TF module properties
@@ -139,7 +139,7 @@ module "KAFKA_Corex_standalone" {
 
 module "ELK_standalone" {
 
-  count = 1
+  count = 0
 
   vm_count = 1
   # TF module properties
@@ -166,7 +166,7 @@ module "ELK_standalone" {
 
 module "PGSE_standalone" {
 
-  count = 1
+  count = 0
 
   source = "./modules/spo_pangolin"
   # VM properties
