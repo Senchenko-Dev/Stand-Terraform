@@ -8,11 +8,12 @@ git clone https://dzo.sw.sbc.space/bitbucket-ci/scm/insteip/terra_project_prepar
 ```
 # 3. Переименовать папку с проектом
 ```
-mv старое_имя  новое_имя
-cd новое_имя
-git remote set-url origin https://ссылка_на_созданный_репозитрой
-git push -u origin --all
-git push origin --tags
+mv старое_имя новое_имя 
+cd новое_имя 
+git fetch origin Jenkinsfile:Jenkinsfile 
+git remote set-url origin ssh://ссылка_на_созданный_репозитрой 
+git push -u origin --all 
+git push origin --tags 
 ```
 # 4. Настроить WebHooks
 ```
