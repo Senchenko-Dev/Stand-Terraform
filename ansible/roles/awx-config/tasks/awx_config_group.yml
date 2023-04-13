@@ -60,7 +60,7 @@
     extra_vars:
       spo_role_name: "{{ spo_role_name }}"
       awx_host: "{{ awx_host }}"
-      pod_nginx_port: "{{pod_nginx_port}}"
+      pod_nginx_port: "{{ pod_nginx_port }}"
   loop: "{{ awx_tags }}"
   register: result
   until: result is not failed

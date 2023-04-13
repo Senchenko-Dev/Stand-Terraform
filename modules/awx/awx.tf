@@ -136,7 +136,7 @@ resource "local_file" "awx-inventory" {
         spo_role_name : var.spo_role_name
         vault_file : var.vault_file
         awx_port : var.awx_props.awx_port
-//        pod_nginx_port : var.awx_props.pod_nginx_port
+        pod_nginx_port : var.awx_props.pod_nginx_port
       }
       vault_id = ["${abspath(path.root)}/ansible/login.sh"]
     }
