@@ -1,4 +1,3 @@
-
 node(env.NODE) {
     def gitUrl = scm.userRemoteConfigs[0].url
 //    def ocHome = tool(name: 'oc-4.5.0', type: 'oc')
